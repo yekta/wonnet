@@ -355,7 +355,7 @@ final class ThreadRowView: NSTableRowView {
             let outline = NSBezierPath(roundedRect: face.insetBy(dx: 0.5, dy: 0.5), xRadius: Radius.sm, yRadius: Radius.sm)
             outline.lineWidth = 1
             outline.setLineDash([4, 3], count: 2, phase: 0)
-            Tokens.backgroundAccent.platform.setStroke()
+            Tokens.backgroundAccentStronger.platform.setStroke()
             outline.stroke()
         }
         if isChecked {
