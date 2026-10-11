@@ -239,8 +239,8 @@ private struct AccountsPage: View {
     }
 }
 
-/// An account: what it is, its colour, its notifications, and the way to remove it. It goes back
-/// once the account is gone.
+/// An account: what it is, its colour, its notifications, its signature, and the way to remove
+/// it. It goes back once the account is gone.
 private struct AccountPage: View {
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -262,6 +262,7 @@ private struct AccountPage: View {
                 } footer: {
                     Text("New mail makes a notification and counts on the badge.")
                 }
+                SignatureSection(account: account)
                 Section {
                     Button("Remove Account", role: .destructive) { removing = true }
                         .foregroundStyle(Tokens.destructive.color)
@@ -278,6 +279,59 @@ private struct AccountPage: View {
         .onChange(of: store.accounts.contains { $0.id == id }) { _, there in
             if !there { dismiss() }
         }
+    }
+}
+
+/// The signature put under what the account sends, and Edit, which opens it in a box to change.
+private struct SignatureSection: View {
+    @Environment(MailStore.self) private var store
+    let account: AccountView
+    /// The text being written, while the box is open.
+    @State private var draft: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let own = store.ownSignature(account)
+        let provided = store.providedSignature(account)
+        let shown = own.isEmpty ? provided : own
+        Section {
+            if let draft {
+                TextField("Best,\n\(account.address)", text: Binding(get: { self.draft ?? "" }, set: { self.draft = $0 }), axis: .vertical)
+                    .lineLimit(4...12)
+                    .focused($focused)
+                    .onAppear { focused = true }
+                HStack(spacing: 0) {
+                    Button("Cancel") { self.draft = nil }
+                        .buttonStyle(.borderless)
+                    Spacer(minLength: 0)
+                    Button("Save") {
+                        store.setSignature(draft.trimmingCharacters(in: .whitespacesAndNewlines), for: account)
+                        self.draft = nil
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(draft == (shown ?? ""))
+                }
+            } else {
+                if let shown {
+                    Text(shown).foregroundStyle(Tokens.mutedForeground.color).textSelection(.enabled)
+                } else {
+                    Text("No signature").foregroundStyle(Tokens.mutedStrongerForeground.color)
+                }
+                Button { self.draft = shown ?? "" } label: {
+                    SettingsActionLabel(title: shown == nil ? "Add Signature" : "Edit Signature", symbol: shown == nil ? .plus : .pencil)
+                }
+            }
+        } header: {
+            Text("Signature")
+        } footer: {
+            Text(footer(own: own, provided: provided))
+        }
+    }
+
+    private func footer(own: String, provided: String?) -> String {
+        guard provided != nil, own.isEmpty || draft != nil else { return "Put under what you write from this account." }
+        guard draft == nil else { return "Left empty, the one kept by \(store.providerName(account)) is used." }
+        return "Kept by \(store.providerName(account)), until you write your own."
     }
 }
 
@@ -507,23 +561,6 @@ private struct WritingPage: View {
         }
         .id("sending")
         Section {
-            ForEach(store.accounts) { account in
-                NavigationLink {
-                    SignaturePage(account: account)
-                } label: {
-                    SettingsItem(title: account.address, detail: signatureSummary(account)) {
-                        Circle().fill(Theme.accountColor(account.color).color).frame(width: 10, height: 10)
-                            .frame(width: SettingsTile.size, height: SettingsTile.size)
-                    }
-                }
-            }
-        } header: {
-            Text("Signatures")
-        } footer: {
-            Text("Put under what you write from each account.")
-        }
-        .id("signatures")
-        Section {
             ForEach(snippets) { snippet in
                 NavigationLink {
                     SnippetPage(snippet: snippet)
@@ -543,55 +580,6 @@ private struct WritingPage: View {
             Text("Type ; and a name while writing to put one in. {first_name} becomes the first recipient's first name.")
         }
         .id("snippets")
-    }
-
-    private func signatureSummary(_ account: AccountView) -> String {
-        let own = store.ownSignature(account)
-        guard own.isEmpty else { return own.replacingOccurrences(of: "\n", with: " ") }
-        guard store.providedSignature(account) != nil else { return "None" }
-        return account.provider == "gmail" ? "Gmail's" : "The provider's"
-    }
-}
-
-/// An account's own signature, kept as it is typed.
-private struct SignaturePage: View {
-    @Environment(MailStore.self) private var store
-    let account: AccountView
-    @State private var text = ""
-    @State private var loaded = false
-    @State private var edited = false
-
-    var body: some View {
-        let provided = store.providedSignature(account)
-        SettingsList {
-            Section {
-                TextField(provided ?? "No signature", text: Binding(get: { text }, set: { text = $0; edited = true }), axis: .vertical)
-                    .lineLimit(6...16)
-            } footer: {
-                if provided != nil {
-                    Text("While this is empty, the signature kept by \(account.provider == "gmail" ? "Gmail" : "your provider") is used.")
-                }
-            }
-        }
-        .navigationTitle("Signature")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            guard !loaded else { return }
-            text = store.ownSignature(account)
-            loaded = true
-        }
-        .task(id: text) {
-            try? await Task.sleep(for: .milliseconds(800))
-            guard !Task.isCancelled else { return }
-            keep()
-        }
-        .onDisappear(perform: keep)
-    }
-
-    private func keep() {
-        guard loaded, edited else { return }
-        edited = false
-        store.setSignature(text, for: account)
     }
 }
 

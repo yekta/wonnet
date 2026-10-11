@@ -41,7 +41,7 @@ struct Card<Content: View>: View {
     }
 }
 
-/// Save and Cancel under a form.
+/// Cancel and Save under a form.
 struct FormButtons: View {
     var save = "Save"
     var saveDisabled = false
@@ -50,8 +50,8 @@ struct FormButtons: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ActionButton(title: save, variant: .primary, action: onSave).disabled(saveDisabled)
             ActionButton(title: "Cancel", variant: .ghost, action: onCancel).keyboardShortcut(.cancelAction)
+            ActionButton(title: save, variant: .primary, action: onSave).disabled(saveDisabled)
         }
     }
 }

@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// A text field on a hairline, with its label above. With `lines` above one it is a text box
+/// A text field on a hairline, with its label above if it has one. With `lines` above one it is a text box
 /// that many lines tall, where Return starts a new line.
 struct InputField: View {
-    let label: String
+    var label: String?
     @Binding var text: String
     var placeholder = ""
     var secure = false
@@ -13,7 +13,9 @@ struct InputField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            Text(label).textStyle(.footnote).fontWeight(.medium)
+            if let label {
+                Text(label).textStyle(.footnote).fontWeight(.medium)
+            }
             Group {
                 if secure {
                     SecureField(placeholder, text: $text)

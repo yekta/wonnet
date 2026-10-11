@@ -250,6 +250,9 @@ private struct AccountSettings: View {
                     } trailing: {
                         Switch(title: "Notifications", isOn: store.notifies(account))
                     }
+                    SettingsDivider()
+                    SignatureRow(account: account)
+                        .id(account.id == store.accounts.first?.id ? "signatures" : account.id)
                 }
             }
             ActionButton(title: "Add account", symbol: .plus, variant: .outline) { adding = true }
@@ -265,6 +268,68 @@ private struct AccountSettings: View {
                 ActionButton(title: "Sign out", symbol: .logOut, variant: .destructive) { store.confirmSigningOut() }
             }
         }
+    }
+}
+
+/// The signature put under what the account sends, and Edit, which opens it in a box to change.
+private struct SignatureRow: View {
+    @Environment(MailStore.self) private var store
+    let account: AccountView
+    /// The text being written, while the box is open.
+    @State private var draft: String?
+
+    var body: some View {
+        let own = store.ownSignature(account)
+        let provided = store.providedSignature(account)
+        let shown = own.isEmpty ? provided : own
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsRow {
+                SettingsLabel(title: "Signature", detail: draft == nil ? summary(own: own, provided: provided) : nil)
+            } trailing: {
+                if draft == nil {
+                    ActionButton(title: shown == nil ? "Add" : "Edit", symbol: shown == nil ? .plus : .pencil, variant: .ghost) {
+                        draft = shown ?? ""
+                    }
+                }
+            }
+            if let draft {
+                editor(draft, start: shown ?? "", provided: provided)
+            } else if let shown {
+                Text(shown)
+                    .textStyle(.label, color: Tokens.mutedForeground.color)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Space.m)
+                    .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Tokens.backgroundSecondary.color))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Tokens.borderCard.color, lineWidth: Theme.hairline))
+                    .padding([.horizontal, .bottom], Space.l)
+            }
+        }
+    }
+
+    private func editor(_ text: String, start: String, provided: String?) -> some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            InputField(text: Binding(get: { draft ?? "" }, set: { draft = $0 }), placeholder: "Best,\n\(account.address)", lines: 5, autofocus: true)
+            if provided != nil {
+                Notice(text: "Left empty, the one kept by \(store.providerName(account)) is used.")
+            }
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                FormButtons(saveDisabled: text == start) {
+                    store.setSignature(text.trimmingCharacters(in: .whitespacesAndNewlines), for: account)
+                    draft = nil
+                } onCancel: {
+                    draft = nil
+                }
+            }
+        }
+        .padding([.horizontal, .bottom], Space.l)
+    }
+
+    private func summary(own: String, provided: String?) -> String? {
+        guard own.isEmpty else { return nil }
+        guard provided != nil else { return "None. It goes under what you write from this account." }
+        return "Kept by \(store.providerName(account)), until you write your own."
     }
 }
 
@@ -473,12 +538,6 @@ private struct WritingSettings: View {
                 Segmented(options: MailStore.undoDelays, selection: $store.undoDelay, title: MailStore.undoDelayName)
             }
         }
-        SettingsGroup(id: "signatures", title: "Signatures", detail: "Put under what you write from each account. While one is empty, the provider's is used.") {
-            ForEach(store.accounts) { account in
-                SignatureEditor(account: account)
-                if account.id != store.accounts.last?.id { SettingsDivider() }
-            }
-        }
         let snippets = store.snippets
         SettingsGroup(
             id: "snippets", title: "Snippets",
@@ -504,43 +563,6 @@ private struct WritingSettings: View {
         .sheet(item: $editing) { snippet in
             SnippetSheet(snippet: snippet).environment(store)
         }
-    }
-}
-
-/// An account's own signature, kept as it is typed.
-private struct SignatureEditor: View {
-    @Environment(MailStore.self) private var store
-    let account: AccountView
-    @State private var text = ""
-    @State private var loaded = false
-    @State private var edited = false
-
-    var body: some View {
-        let provided = store.providedSignature(account)
-        VStack(alignment: .leading, spacing: Space.xs) {
-            InputField(label: account.address, text: Binding(get: { text }, set: { text = $0; edited = true }), placeholder: provided ?? "No signature", lines: 4)
-            if provided != nil, text.isEmpty {
-                Notice(text: "The signature kept by \(account.provider == "gmail" ? "Gmail" : "your provider") is used.")
-            }
-        }
-        .padding(Space.l)
-        .onAppear {
-            guard !loaded else { return }
-            text = store.ownSignature(account)
-            loaded = true
-        }
-        .task(id: text) {
-            try? await Task.sleep(for: .milliseconds(800))
-            guard !Task.isCancelled else { return }
-            keep()
-        }
-        .onDisappear(perform: keep)
-    }
-
-    private func keep() {
-        guard loaded, edited else { return }
-        edited = false
-        store.setSignature(text, for: account)
     }
 }
 
