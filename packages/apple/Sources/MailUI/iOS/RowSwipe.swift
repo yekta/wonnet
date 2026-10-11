@@ -283,10 +283,6 @@ final class SwipeButton: UIControl {
         }
     }
 
-    override var isHighlighted: Bool {
-        didSet { face.alpha = isHighlighted ? Opacity.pressed.value(for: traitCollection.userInterfaceStyle == .dark ? .dark : .light) : 1 }
-    }
-
     private func paint() {
         guard let tint = command?.swipeTint else { return }
         face.backgroundColor = armed ? tint.fill.platform : tint.fill.opacity(Opacity.colorTintStronger).platform
