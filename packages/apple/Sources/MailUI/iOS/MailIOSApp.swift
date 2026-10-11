@@ -19,7 +19,7 @@ public struct MailIOSApp: App {
         WindowGroup {
             IOSRoot()
                 .environment(Self.store)
-                .preferredColorScheme(Self.store.appearance.scheme)
+                .onAppear { Self.store.appearance.apply() }
                 .onOpenURL { url in Task { await Self.store.finishSignIn(url) } }
         }
     }
@@ -81,7 +81,6 @@ struct IOSShell: View {
         DrawerView(isOpen: $drawerOpen, enabled: path.isEmpty && !editing) {
             SidebarView(showSettings: showSettings, picked: { _ in close() })
                 .environment(store)
-                .preferredColorScheme(store.appearance.scheme)
         } content: {
             NavigationStack(path: $path) {
                 MailboxScreen(path: $path, editing: $editing, openDrawer: { drawerOpen = true })
@@ -94,7 +93,6 @@ struct IOSShell: View {
             }
             .tint(Tokens.primary.color)
             .environment(store)
-            .preferredColorScheme(store.appearance.scheme)
         }
         .onChange(of: store.requestedThread) { _, thread in
             guard let thread else { return }

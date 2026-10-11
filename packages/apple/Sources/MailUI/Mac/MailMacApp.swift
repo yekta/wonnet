@@ -19,8 +19,8 @@ public struct MailMacApp: App {
         WindowGroup("Mail") {
             MacRoot()
                 .environment(store)
-                .preferredColorScheme(store.appearance.scheme)
                 .onAppear {
+                    store.appearance.apply()
                     delegate.store = store
                     store.start(defaultServer: defaultServer)
                 }

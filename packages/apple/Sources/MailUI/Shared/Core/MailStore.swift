@@ -127,7 +127,10 @@ public final class MailStore {
         didSet { UserDefaults.standard.set(undoDelay, forKey: "undoDelay") }
     }
     var appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
-        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "appearance")
+            appearance.apply()
+        }
     }
 
     // Compose, the thread page and preferences.

@@ -152,12 +152,25 @@ enum Appearance: String, CaseIterable, Identifiable {
         }
     }
 
-    var scheme: ColorScheme? {
-        switch self {
+    /// Puts every window in this appearance at once. `preferredColorScheme` reaches an open
+    /// sheet only when it is next presented.
+    @MainActor func apply() {
+        #if os(macOS)
+        NSApp.appearance = switch self {
         case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+        #else
+        let style: UIUserInterfaceStyle = switch self {
+        case .system: .unspecified
         case .light: .light
         case .dark: .dark
         }
+        for window in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows) {
+            window.overrideUserInterfaceStyle = style
+        }
+        #endif
     }
 }
 
