@@ -103,6 +103,9 @@ struct HeaderBar<Leading: View, Center: View, Trailing: View>: View {
     var title: String?
     /// The space between the bar's edges and its first and last control.
     var inset: CGFloat = Space.l
+    /// More space before the leading side, which the center doesn't move for: it stays in the
+    /// middle of the whole bar.
+    var leadingInset: CGFloat = 0
     let leading: Leading
     let center: Center?
     let trailing: Trailing
@@ -110,22 +113,24 @@ struct HeaderBar<Leading: View, Center: View, Trailing: View>: View {
     /// Leading at the left, trailing at the right, and `center` in the middle of the bar: it takes
     /// its own width and the sides split the rest.
     init(
-        title: String? = nil, inset: CGFloat = Space.l, @ViewBuilder leading: () -> Leading,
+        title: String? = nil, inset: CGFloat = Space.l, leadingInset: CGFloat = 0, @ViewBuilder leading: () -> Leading,
         @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) {
         self.title = title
         self.inset = inset
+        self.leadingInset = leadingInset
         self.leading = leading()
         self.center = center()
         self.trailing = trailing()
     }
 
     init(
-        title: String? = nil, inset: CGFloat = Space.l, @ViewBuilder leading: () -> Leading,
+        title: String? = nil, inset: CGFloat = Space.l, leadingInset: CGFloat = 0, @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) where Center == EmptyView {
         self.title = title
         self.inset = inset
+        self.leadingInset = leadingInset
         self.leading = leading()
         self.center = nil
         self.trailing = trailing()
@@ -134,11 +139,13 @@ struct HeaderBar<Leading: View, Center: View, Trailing: View>: View {
     var body: some View {
         HStack(spacing: Space.s + 2) {
             if let center {
-                HStack(spacing: Space.s + 2) { leading }.frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: Space.s + 2) { leading }
+                    .padding(.leading, leadingInset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 center.layoutPriority(1)
                 HStack(spacing: Space.s + 2) { trailing }.frame(maxWidth: .infinity, alignment: .trailing)
             } else {
-                leading
+                HStack(spacing: Space.s + 2) { leading }.padding(.leading, leadingInset)
                 Spacer()
                 trailing
             }
