@@ -156,20 +156,37 @@ async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
     let settled: Vec<String> = settled.into_iter().collect();
     for device in devices {
         let Some(key) = state.sealer.open(&device.key).and_then(|key| <[u8; KEY_LEN]>::try_from(key).ok()) else {
+            tracing::warn!("device {} of user {user_id} has a key that doesn't open", short(&device.token));
             continue;
         };
         let mut pushes: Vec<Push> = fresh.iter().take(MOST_ALERTS).rev().map(|mail| alert(&key, mail, badge)).collect();
         if !settled.is_empty() || (fresh.is_empty() && badge_changed) {
             pushes.push(background(&key, &settled, badge));
         }
+        let token = short(&device.token);
+        let (alerts, total) = (fresh.len().min(MOST_ALERTS), pushes.len());
+        let mut sent = 0;
         for push in pushes {
-            if apns.send(&device, &push).await == Sent::Gone {
-                sqlx::query("DELETE FROM devices WHERE token = $1").bind(&device.token).execute(db).await?;
-                break;
+            match apns.send(&device, &push).await {
+                Sent::Ok => sent += 1,
+                Sent::Failed => {}
+                Sent::Gone => {
+                    sqlx::query("DELETE FROM devices WHERE token = $1").bind(&device.token).execute(db).await?;
+                    tracing::warn!("forgot device {token} of user {user_id}: APNs no longer takes its token");
+                    break;
+                }
             }
         }
+        tracing::info!(
+            "pushed {sent} of {total} to device {token} of user {user_id} ({alerts} new mail, badge {badge})"
+        );
     }
     Ok(())
+}
+
+/// The start of a device token, enough to tell devices apart in the logs.
+pub fn short(token: &str) -> &str {
+    token.get(..8).unwrap_or(token)
 }
 
 /// A thread as the core names it.
@@ -304,15 +321,24 @@ impl Apns {
         }
         let body: Value = response.json().await.unwrap_or_default();
         let reason = body["reason"].as_str().unwrap_or_default();
+        let environment = if device.sandbox { "sandbox" } else { "production" };
         match reason {
-            "BadDeviceToken" | "DeviceTokenNotForTopic" | "Unregistered" => return Sent::Gone,
+            "BadDeviceToken" | "DeviceTokenNotForTopic" | "Unregistered" => {
+                tracing::warn!(
+                    "APNs ({environment}, {}) refused device {}: {reason}",
+                    device.topic,
+                    short(&device.token)
+                );
+                return Sent::Gone;
+            }
             "ExpiredProviderToken" => *self.token.lock().unwrap() = None,
             _ => {}
         }
         if status == reqwest::StatusCode::GONE {
+            tracing::warn!("APNs ({environment}) says device {} is gone: {status} {reason}", short(&device.token));
             return Sent::Gone;
         }
-        tracing::warn!("APNs refused a push: {status} {reason}");
+        tracing::warn!("APNs ({environment}, {}) refused a push: {status} {reason}", device.topic);
         Sent::Failed
     }
 }
