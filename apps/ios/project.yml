@@ -38,6 +38,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         MailServerURL: $(MAIL_SERVER_URL)
+        NSContactsUsageDescription: Wonnet shows the names and photos you gave people in your contacts, and suggests them when you write.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yekta.mail.ios

@@ -6,6 +6,9 @@
 //! from the messages as they are written, so a list, a person's threads and every mailbox's
 //! counts are each one indexed read.
 //!
+//! `address_book` is the names the user gave people in the device's contacts, which win over
+//! the names their mail came with.
+//!
 //! The copy is a cache: when `SCHEMA_VERSION` changes it is made again, empty, and synced from
 //! the start, keeping the server and the session.
 
@@ -27,7 +30,7 @@ use crate::api::{AccountView, Filter, LabelChip, Mailbox, NewMail, Person, Split
 use crate::render::{dates, drafts, rows};
 use crate::search::{self, Condition, Query};
 
-const SCHEMA_VERSION: &str = "3";
+const SCHEMA_VERSION: &str = "4";
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -62,6 +65,7 @@ CREATE TABLE contacts (email TEXT PRIMARY KEY, name TEXT, sent INTEGER NOT NULL,
     last INTEGER NOT NULL);
 CREATE INDEX contacts_by_rank ON contacts((sent * 4 + received) DESC, last DESC);
 CREATE TABLE contact_words (word TEXT NOT NULL, email TEXT NOT NULL, PRIMARY KEY (word, email)) WITHOUT ROWID;
+CREATE TABLE address_book (email TEXT PRIMARY KEY, name TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE saved_drafts (id TEXT PRIMARY KEY, account_id TEXT NOT NULL, thread TEXT, draft TEXT NOT NULL,
     updated INTEGER NOT NULL);
@@ -398,7 +402,7 @@ impl Store {
         self.db.execute_batch(
             "DELETE FROM accounts; DELETE FROM labels; DELETE FROM messages; DELETE FROM threads;
              DELETE FROM thread_labels; DELETE FROM counts; DELETE FROM thread_people; DELETE FROM contacts;
-             DELETE FROM contact_words; DELETE FROM preferences; DELETE FROM saved_drafts; DELETE FROM originals;
+             DELETE FROM contact_words; DELETE FROM address_book; DELETE FROM preferences; DELETE FROM saved_drafts; DELETE FROM originals;
              DELETE FROM bodies; DELETE FROM outbox; DELETE FROM bases; DELETE FROM search;
              DELETE FROM meta WHERE key IN ('token', 'cursor', 'caught_up');",
         )?;
@@ -528,7 +532,7 @@ impl Store {
                     mail: NewMail {
                         thread: thread.clone(),
                         account_id: message.account_id.clone(),
-                        from: message.from.display().to_string(),
+                        from: named(&tx, &message.from)?.display().to_string(),
                         subject: message.subject.clone(),
                         snippet: message.snippet.clone(),
                     },
@@ -934,7 +938,15 @@ impl Store {
             .db
             .prepare_cached(&format!("SELECT {MESSAGE_COLUMNS} FROM messages WHERE thread = ?1 ORDER BY date"))?;
         let rows = statement.query_map([thread], message_from_row)?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+        let mut messages: Vec<Message> = rows.collect::<rusqlite::Result<_>>()?;
+        for message in &mut messages {
+            message.from = named(&self.db, &message.from)?;
+            let recipients = &mut message.recipients;
+            for address in recipients.to.iter_mut().chain(&mut recipients.cc).chain(&mut recipients.bcc) {
+                *address = named(&self.db, address)?;
+            }
+        }
+        Ok(messages)
     }
 
     pub fn message(&self, id: &str) -> Result<Option<Message>> {
@@ -1089,7 +1101,8 @@ impl Store {
         let mut found = Vec::new();
         let Some(first) = words.first() else {
             let mut statement = self.db.prepare_cached(
-                "SELECT email, name, sent FROM contacts ORDER BY (sent * 4 + received) DESC, last DESC LIMIT ?1",
+                "SELECT c.email, COALESCE(b.name, c.name), c.sent FROM contacts c LEFT JOIN address_book b USING (email)
+                 ORDER BY (c.sent * 4 + c.received) DESC, c.last DESC LIMIT ?1",
             )?;
             let rows = statement.query_map([(limit * 4) as i64], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
             for row in rows {
@@ -1102,7 +1115,7 @@ impl Store {
             return Ok(found);
         };
         let mut statement = self.db.prepare_cached(
-            "SELECT c.email, c.name, c.sent FROM contacts c
+            "SELECT c.email, COALESCE(b.name, c.name), c.sent FROM contacts c LEFT JOIN address_book b USING (email)
              WHERE c.email IN (SELECT email FROM contact_words WHERE word >= ?1 AND word < ?2)
              ORDER BY (c.sent * 4 + c.received) DESC, c.last DESC",
         )?;
@@ -1133,7 +1146,11 @@ impl Store {
         let email = email.trim().to_lowercase();
         let name: Option<String> = self
             .db
-            .query_row("SELECT name FROM contacts WHERE email = ?1", [&email], |row| row.get(0))
+            .query_row(
+                "SELECT COALESCE(b.name, c.name) FROM contacts c LEFT JOIN address_book b USING (email) WHERE c.email = ?1",
+                [&email],
+                |row| row.get(0),
+            )
             .optional()?
             .flatten();
         let address = Address::new(name.as_deref(), &email);
@@ -1147,6 +1164,56 @@ impl Store {
             email,
             threads: rows_of(&self.db, &threads, now)?,
         })
+    }
+
+    /// Keeps the names of the device's contacts, and writes again the rows of the threads with
+    /// the people whose name changed.
+    pub fn set_address_book(&mut self, people: &[Address]) -> Result<Touched> {
+        let wanted: HashMap<String, String> = people
+            .iter()
+            .filter_map(|person| {
+                let address = Address::new(person.name.as_deref(), &person.email);
+                Some((address.email, address.name?))
+            })
+            .collect();
+        let tx = self.db.transaction()?;
+        let known: HashMap<String, String> = tx
+            .prepare("SELECT email, name FROM address_book")?
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        let gone: Vec<&String> = known.keys().filter(|email| !wanted.contains_key(*email)).collect();
+        let renamed: Vec<(&String, &String)> =
+            wanted.iter().filter(|(email, name)| known.get(*email) != Some(name)).collect();
+        for email in &gone {
+            tx.execute("DELETE FROM address_book WHERE email = ?1", [email])?;
+            tx.execute("DELETE FROM contacts WHERE email = ?1 AND sent = 0 AND received = 0", [email])?;
+        }
+        for (email, name) in &renamed {
+            tx.execute("INSERT OR REPLACE INTO address_book (email, name) VALUES (?1, ?2)", [email, name])?;
+            tx.execute(
+                "INSERT OR IGNORE INTO contacts (email, name, sent, received, last) VALUES (?1, ?2, 0, 0, 0)",
+                [email, name],
+            )?;
+            let mut statement =
+                tx.prepare_cached("INSERT OR IGNORE INTO contact_words (word, email) VALUES (?1, ?2)")?;
+            for word in contact_words(email, Some(name)) {
+                statement.execute(params![word, email])?;
+            }
+        }
+        let mut touched = Touched::default();
+        {
+            let mut statement = tx.prepare_cached("SELECT thread FROM thread_people WHERE email = ?1")?;
+            for email in gone.into_iter().chain(renamed.into_iter().map(|(email, _)| email)) {
+                let threads = statement.query_map([email], |row| row.get::<_, String>(0))?;
+                touched.threads.extend(threads.collect::<rusqlite::Result<Vec<_>>>()?);
+            }
+        }
+        let context = context(&tx)?;
+        for thread in &touched.threads {
+            recompute(&tx, thread, &context)?;
+        }
+        tx.commit()?;
+        Ok(touched)
     }
 
     pub fn labels_named(&self, ids: &[String]) -> Result<Vec<LabelChip>> {
@@ -1298,6 +1365,18 @@ where
 /// Addresses that send but don't read: left out of suggestions unless the user wrote to them.
 fn is_robot(email: &str) -> bool {
     ["noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon"].iter().any(|robot| email.contains(robot))
+}
+
+/// The address with the name the user gave it in their contacts, when they did.
+fn named(db: &Connection, address: &Address) -> Result<Address> {
+    let name: Option<String> = db
+        .prepare_cached("SELECT name FROM address_book WHERE email = ?1")?
+        .query_row([&address.email], |row| row.get(0))
+        .optional()?;
+    Ok(match name {
+        Some(name) => Address { name: Some(name), email: address.email.clone() },
+        None => address.clone(),
+    })
 }
 
 /// The words a contact is found by: its address, the address's parts, its name's words.
@@ -1706,7 +1785,7 @@ fn recompute(tx: &Transaction, thread: &str, context: &Context) -> Result<()> {
     let mut people: HashMap<String, i64> = HashMap::new();
     match (messages.first(), messages.last()) {
         (Some(first), Some(last)) => {
-            let from: Vec<Address> = messages.iter().map(|message| message.from.clone()).collect();
+            let from: Vec<Address> = messages.iter().map(|message| named(tx, &message.from)).collect::<Result<_>>()?;
             let subject = messages
                 .iter()
                 .map(|message| message.subject.as_str())

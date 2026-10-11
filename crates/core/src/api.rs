@@ -266,6 +266,11 @@ pub enum Command {
         #[serde(default = "default_contacts")]
         limit: usize,
     },
+    /// Everyone in the device's contacts with a name and an address, one `Address` for each of
+    /// their addresses. Their names replace the ones mail came with. `{}`.
+    SetAddressBook {
+        people: Vec<Address>,
+    },
     /// A `Person`: someone, and the latest threads with them.
     Person {
         email: String,

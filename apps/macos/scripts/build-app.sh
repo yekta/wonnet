@@ -62,13 +62,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
         <key>CFBundleURLName</key><string>com.yekta.mail.auth</string>
         <key>CFBundleURLSchemes</key><array><string>mailapp</string></array>
     </dict></array>
+    <key>NSContactsUsageDescription</key><string>Wonnet shows the names and photos you gave people in your contacts, and suggests them when you write.</string>
     <key>MailServerURL</key><string>${MAIL_SERVER_URL:-https://api.wonnet.app}</string>
 </dict>
 </plist>
 PLIST
 
 if [ -n "${MAIL_SIGN_IDENTITY:-}" ]; then
-    codesign --force --options runtime --timestamp --sign "$MAIL_SIGN_IDENTITY" "$APP"
+    codesign --force --options runtime --timestamp --entitlements Resources/Wonnet.entitlements \
+        --sign "$MAIL_SIGN_IDENTITY" "$APP"
 else
     codesign --force --deep --sign - "$APP" >/dev/null
 fi
