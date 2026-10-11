@@ -19,8 +19,11 @@ enum Platform {
     #if os(macOS)
     /// How much larger than on the Mac text and the controls around it are.
     static let scale: CGFloat = 1
+    /// Whether a selected tab's or row's text is drawn in the stronger weight.
+    static let strongSelection = false
     #else
     static let scale: CGFloat = 1.15
+    static let strongSelection = true
     #endif
 
     static func open(_ url: URL) {

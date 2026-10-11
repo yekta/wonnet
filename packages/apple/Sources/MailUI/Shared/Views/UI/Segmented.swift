@@ -30,7 +30,7 @@ private struct Segment: View {
 
     var body: some View {
         Text(title)
-            .textStyle(chosen ? .labelStrong : .label, color: chosen || hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
+            .textStyle(chosen && Platform.strongSelection ? .labelStrong : .label, color: chosen || hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
             .padding(.horizontal, Space.m)
             .frame(height: ControlSize.small.height * Platform.scale)
             .background(RoundedRectangle(cornerRadius: Radius.xs).fill(chosen ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear))
