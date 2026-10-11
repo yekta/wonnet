@@ -142,6 +142,9 @@ final class MovableStack: NSView {
 
     override var acceptsFirstResponder: Bool { false }
 
+    /// In the window's title bar, a row pulled is lifted, not the window.
+    override var mouseDownCanMoveWindow: Bool { false }
+
     /// Every click in the stack is the stack's: the rows don't take any.
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let superview, bounds.contains(convert(point, from: superview)) else { return nil }
