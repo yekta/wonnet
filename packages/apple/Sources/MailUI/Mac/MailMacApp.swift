@@ -79,6 +79,7 @@ struct MacRoot: View {
             .contentShape(Rectangle())
             .onTapGesture { showSidebar(false) }
             .transition(.opacity)
+            .zIndex(1)
         VStack(spacing: 0) {
             Color.clear.frame(height: 38)
             SidebarView(
@@ -93,10 +94,12 @@ struct MacRoot: View {
         .background(Tokens.background.color)
         .rule(.trailing)
         .transition(.move(edge: .leading))
+        // Above the page while it leaves too, or the ZStack slides it out underneath.
+        .zIndex(2)
     }
 
     private func showSidebar(_ open: Bool) {
-        withAnimation(.easeOut(duration: 0.2)) { store.sidebarOpen = open }
+        withAnimation(Theme.sidebarSlide) { store.sidebarOpen = open }
     }
 
     private var content: some View {
