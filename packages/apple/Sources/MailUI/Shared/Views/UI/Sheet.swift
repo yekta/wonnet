@@ -49,7 +49,7 @@ struct Sheet<Content: View, Trailing: View>: View {
             } trailing: {
                 trailing
             }
-            Rule(color: background == Tokens.background ? Tokens.border : Tokens.cardBorder)
+            Rule(color: background == Tokens.background ? Tokens.border : Tokens.borderCard)
             content
         }
         .frame(width: size.frame.width, height: size.frame.height)

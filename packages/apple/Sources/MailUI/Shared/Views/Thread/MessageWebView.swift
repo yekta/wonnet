@@ -97,7 +97,8 @@ private final class HeightReporter: NSObject, WKScriptMessageHandler {
 final class MessageWKWebView: WKWebView, WKNavigationDelegate {
     var onHeight: ((CGFloat) -> Void)?
     var loaded: String?
-    /// The page shown as its sender made it: the `dark` class the core put on its body taken off.
+    /// The page shown as its sender made it: the `dark` class the core put on its body taken off,
+    /// and a paper card kept in the light scheme.
     var original = false { didSet { if original != oldValue { applyOriginal() } } }
 
     func show(_ html: String) {
@@ -107,7 +108,14 @@ final class MessageWKWebView: WKWebView, WKNavigationDelegate {
     }
 
     private func applyOriginal() {
-        let script = "document.body && document.body.classList.toggle('dark', \(original ? "false" : "true"));"
+        let script = """
+            (() => {
+                const body = document.body;
+                if (!body) return;
+                body.classList.toggle('dark', \(!original));
+                if (body.classList.contains('paper')) body.classList.toggle('light', \(original));
+            })();
+            """
         evaluateJavaScript(script, in: nil, in: .defaultClient) { _ in }
     }
 

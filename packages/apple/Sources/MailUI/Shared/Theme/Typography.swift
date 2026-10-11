@@ -55,7 +55,7 @@ enum TextStyle {
     var color: Color {
         switch self {
         case .display, .title, .heading, .subheading, .body, .bodyStrong, .label, .labelStrong: Tokens.foreground.color
-        case .caption, .footnote, .footnoteStrong, .overline: Tokens.mutedMoreForeground.color
+        case .caption, .footnote, .footnoteStrong, .overline: Tokens.mutedStrongerForeground.color
         case .mono: Tokens.mutedForeground.color
         }
     }

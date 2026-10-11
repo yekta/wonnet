@@ -16,20 +16,18 @@ const TOKENS: &str = include_str!("../../../../packages/theme/tokens.css");
 
 const STYLE: &str = r#"
 html, body { margin: 0; padding: 0; background: transparent; }
-body { font: 15px/1.55 "Avenir", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: var(--card-foreground);
+body { font: 15px/1.55 "Avenir", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: var(--foreground);
   -webkit-text-size-adjust: 100%; overflow-wrap: break-word; box-sizing: border-box; }
 a { color: var(--primary); }
 img { max-width: 100%; height: auto; }
 .plain { white-space: pre-wrap; }
-blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(--card-border); color: var(--muted-foreground); }
+blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(--border-card); color: var(--muted-foreground); }
 details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 0 8px; margin: 6px 0;
-  border-radius: 9px; background: var(--muted); color: var(--muted-foreground); font-size: 12px; line-height: 18px; letter-spacing: 1px; }
+  border-radius: 9px; background: var(--background-secondary); color: var(--muted-foreground); font-size: 12px; line-height: 18px; letter-spacing: 1px; }
 details.quote > summary::-webkit-details-marker { display: none; }
-body.paper { background: #ffffff; color: #222222; color-scheme: light; border-radius: var(--radius); padding: 12px; }
-body.paper a { color: #1a5fd0; }
+body.paper { background: var(--card); color: var(--emphasized-foreground); color-scheme: light; border-radius: var(--radius-sm); padding: 12px; }
 @media (prefers-color-scheme: dark) {
-  body.paper.dark { background: var(--card); color: var(--card-foreground); color-scheme: dark; }
-  body.paper.dark a { color: var(--primary); }
+  body.paper.dark { color: var(--foreground); color-scheme: dark; }
 }
 table { max-width: 100%; }
 "#;
@@ -51,10 +49,12 @@ pub fn page(body: &Body, show_images: bool, dark: bool) -> Page {
     };
     let palette = palette.css();
     let images = if show_images { "data: cid: https: http:" } else { "data: cid:" };
-    let mut class = String::from(if paper { "paper" } else { "themed" });
-    if dark {
-        class.push_str(" dark");
-    }
+    let class = match (paper, dark) {
+        (true, true) => "paper dark",
+        (true, false) => "paper light",
+        (false, true) => "themed dark",
+        (false, false) => "themed",
+    };
     let html = format!(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
@@ -148,14 +148,14 @@ pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette
 }
 
 const PRINT_STYLE: &str = r#"
-body { font: 13px/1.5 "Avenir", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #111; background: #fff;
+body { font: 13px/1.5 "Avenir", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: var(--emphasized-foreground); background: var(--background);
   margin: 24px; overflow-wrap: break-word; }
 h1 { font-size: 18px; margin: 0 0 16px; }
-.message { border-top: 1px solid #ccc; padding: 12px 0; }
-.headers { color: #555; margin-bottom: 12px; }
-.headers b { color: #111; }
+.message { border-top: 1px solid var(--border); padding: 12px 0; }
+.headers { color: var(--muted-foreground); margin-bottom: 12px; }
+.headers b { color: var(--emphasized-foreground); }
 .plain { white-space: pre-wrap; }
-blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid #ccc; color: #555; }
+blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(--border); color: var(--muted-foreground); }
 details.quote > summary { display: none; }
 img { max-width: 100%; height: auto; }
 table { max-width: 100%; }
@@ -198,7 +198,7 @@ pub fn print(subject: &str, messages: &[Printed]) -> String {
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>{subject}</title>\
          <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'\">\
-         <style>{PRINT_STYLE}{}</style></head><body>{html}</body></html>",
+         <style>{TOKENS}{PRINT_STYLE}{}</style></head><body class=\"light\">{html}</body></html>",
         palette.css()
     )
 }
@@ -312,7 +312,7 @@ mod tests {
         assert!(dark.html.contains("bgcolor=\"#ffffff\""));
 
         let light = page(&mail, false, false);
-        assert!(light.html.contains("class=\"paper\""));
+        assert!(light.html.contains("class=\"paper light\""));
         assert!(!page(&html("<p>Hi</p>"), false, true).html.contains(":root{--c0"));
     }
 }

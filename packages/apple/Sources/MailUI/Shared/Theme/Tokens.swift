@@ -3,42 +3,54 @@
 import SwiftUI
 
 enum Tokens {
-    static let radius: CGFloat = 6
-
     static let background = ThemeColor(light: 0xfbfcfd, dark: 0x161819)
-    static let foreground = ThemeColor(light: 0x434b52, dark: 0xf1f1f1)
+    static let backgroundAccent = ThemeColor(light: 0xe6e8eb, dark: 0x282a2c)
+    static let backgroundAccentStronger = ThemeColor(light: 0xdee0e3, dark: 0x323436)
+    static let backgroundAccentStrongest = ThemeColor(light: 0xd6d8db, dark: 0x3c3e40)
+    static let backgroundAccentLarger = ThemeColor(light: 0xf0f1f3, dark: 0x1c1e1f)
+    static let backgroundAccentLargerStronger = ThemeColor(light: 0xe9ebed, dark: 0x222426)
+    static let backgroundSecondary = ThemeColor(light: 0xf3f3f3, dark: 0x191919)
+    static let backgroundSecondaryAccent = ThemeColor(light: 0xe9eaeb, dark: 0x232425)
+    static let backgroundSecondaryAccentStronger = ThemeColor(light: 0xe0e1e3, dark: 0x2c2d2f)
     static let card = ThemeColor(light: 0xfbfcfd, dark: 0x1a1c1e)
-    static let cardForeground = ThemeColor(light: 0x434b52, dark: 0xf1f1f1)
+    static let cardAccent = ThemeColor(light: 0xf0f1f3, dark: 0x222426)
     static let popover = ThemeColor(light: 0xffffff, dark: 0x232429)
-    static let popoverForeground = ThemeColor(light: 0x434b52, dark: 0xf1f1f1)
+    static let popoverAccent = ThemeColor(light: 0xeef0f2, dark: 0x2d2e33)
+    static let foreground = ThemeColor(light: 0x434b52, dark: 0xf1f1f1)
+    static let emphasizedForeground = ThemeColor(light: 0x22272b, dark: 0xffffff)
+    static let mutedForeground = ThemeColor(light: 0x717171, dark: 0xbbbbbb)
+    static let mutedStrongerForeground = ThemeColor(light: 0xa0a0a0, dark: 0x8a8a8a)
+    static let mutedStrongestForeground = ThemeColor(light: 0xc4c4c4, dark: 0x5c5c5c)
     static let primary = ThemeColor(light: 0x4f96f2, dark: 0x5ea2f5)
     static let primaryForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
-    static let muted = ThemeColor(light: 0xf3f3f3, dark: 0x191919)
-    static let mutedForeground = ThemeColor(light: 0x717171, dark: 0xbbbbbb)
-    static let mutedMoreForeground = ThemeColor(light: 0xa0a0a0, dark: 0x8a8a8a)
-    static let mutedMostForeground = ThemeColor(light: 0xc4c4c4, dark: 0x5c5c5c)
-    static let accent = ThemeColor(light: 0xe6e8eb, dark: 0x282a2c)
-    static let accentForeground = ThemeColor(light: 0x434b52, dark: 0xf1f1f1)
-    static let accentStronger = ThemeColor(light: 0xdee0e3, dark: 0x323436)
-    static let accentLarger = ThemeColor(light: 0xf0f1f3, dark: 0x1c1e1f)
-    static let accentLargerStronger = ThemeColor(light: 0xe9ebed, dark: 0x222426)
     static let destructive = ThemeColor(light: 0xdd5050, dark: 0xe06060)
     static let destructiveForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
     static let success = ThemeColor(light: 0x4a9d5f, dark: 0x5fab72)
     static let successForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
     static let warning = ThemeColor(light: 0xf0a21e, dark: 0xf2ad33)
     static let warningForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
+    static let pending = ThemeColor(light: 0xc08a00, dark: 0xd9a521)
+    static let pendingForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
+    static let process = ThemeColor(light: 0x2b9bd6, dark: 0x4cb0e8)
+    static let processForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
     static let star = ThemeColor(light: 0xf9775d, dark: 0xf9775d)
     static let border = ThemeColor(light: 0xe1e3e6, dark: 0x222425)
-    static let cardBorder = ThemeColor(light: 0xebecee, dark: 0x2a2c2f)
-    static let input = ThemeColor(light: 0xe1e3e6, dark: 0x2a2c2f)
+    static let borderCard = ThemeColor(light: 0xebecee, dark: 0x2a2c2f)
+    static let borderInput = ThemeColor(light: 0xe1e3e6, dark: 0x2a2c2f)
+    static let borderPopover = ThemeColor(light: 0xebecee, dark: 0x2a2c2f)
+    static let input = ThemeColor(light: 0xfbfcfd, dark: 0x1a1c1e)
     static let ring = ThemeColor(light: 0x4f96f2, dark: 0x5ea2f5)
     static let overlay = ThemeColor(light: 0x000000, dark: 0x000000)
     static let shadow = ThemeColor(light: 0x000000, dark: 0x000000)
-    static let shadowOpacity = ThemeNumber(light: 0.1, dark: 0.25)
-    static let shadowStrongerOpacity = ThemeNumber(light: 0.22, dark: 0.6)
-    static let colorTintOpacity = ThemeNumber(light: 0.12, dark: 0.08)
-    static let colorTintStrongerOpacity = ThemeNumber(light: 0.2, dark: 0.14)
+    static let chart1 = ThemeColor(light: 0x4f96f2, dark: 0x5ea2f5)
+    static let chart2 = ThemeColor(light: 0x4a9d5f, dark: 0x5fab72)
+    static let chart3 = ThemeColor(light: 0xf0a21e, dark: 0xf2ad33)
+    static let chart4 = ThemeColor(light: 0xa06cc4, dark: 0xbf8ae6)
+    static let chart5 = ThemeColor(light: 0x03999f, dark: 0x04bbc3)
+    static let googleBlue = ThemeColor(light: 0x4285f4, dark: 0x4285f4)
+    static let googleRed = ThemeColor(light: 0xea4335, dark: 0xea4335)
+    static let googleYellow = ThemeColor(light: 0xfbbc05, dark: 0xfbbc05)
+    static let googleGreen = ThemeColor(light: 0x34a853, dark: 0x34a853)
     static let account1 = ThemeColor(light: 0xcd605a, dark: 0xf07f77)
     static let account2 = ThemeColor(light: 0xc56c21, dark: 0xe78a45)
     static let account3 = ThemeColor(light: 0xa48100, dark: 0xc7a01e)
@@ -49,4 +61,53 @@ enum Tokens {
     static let account8 = ThemeColor(light: 0x777ad8, dark: 0x9499fa)
     static let account9 = ThemeColor(light: 0xa06cc4, dark: 0xbf8ae6)
     static let account10 = ThemeColor(light: 0xc35f92, dark: 0xe57db1)
+}
+
+/// How much of a colour or a view shows: every opacity in the apps is one of these.
+enum Opacity {
+    static let overlay = ThemeNumber(light: 0.15, dark: 0.15)
+    static let disabled = ThemeNumber(light: 0.4, dark: 0.4)
+    static let pressed = ThemeNumber(light: 0.6, dark: 0.6)
+    static let lit = ThemeNumber(light: 0.88, dark: 0.88)
+    static let shadow = ThemeNumber(light: 0.1, dark: 0.25)
+    static let shadowStronger = ThemeNumber(light: 0.22, dark: 0.6)
+    static let shadowStrongest = ThemeNumber(light: 0.32, dark: 0.75)
+    static let colorTint = ThemeNumber(light: 0.12, dark: 0.08)
+    static let colorTintStronger = ThemeNumber(light: 0.2, dark: 0.14)
+    static let colorTintChart = ThemeNumber(light: 0.25, dark: 0.2)
+    static let colorBorder = ThemeNumber(light: 0.6, dark: 0.6)
+    static let inputGlassTint = ThemeNumber(light: 0.8, dark: 0.8)
+}
+
+/// How round corners are: every radius in the apps is one of these.
+enum Radius {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 6
+    static let md: CGFloat = 8
+    static let lg: CGFloat = 12
+    static let xl: CGFloat = 16
+    static let xxl: CGFloat = 24
+}
+
+/// A shadow's size: how far down it falls and its blur.
+enum ShadowSize {
+    case sm, md, lg, xl
+
+    var down: CGFloat {
+        switch self {
+        case .sm: 2
+        case .md: 4
+        case .lg: 4
+        case .xl: 8
+        }
+    }
+
+    var blur: CGFloat {
+        switch self {
+        case .sm: 8
+        case .md: 12
+        case .lg: 16
+        case .xl: 24
+        }
+    }
 }

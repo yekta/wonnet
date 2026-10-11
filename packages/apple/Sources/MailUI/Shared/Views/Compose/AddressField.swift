@@ -17,7 +17,7 @@ struct AddressField<Accessory: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: Space.s + 2) {
-                Text(label).textStyle(.label, color: Tokens.mutedMoreForeground.color)
+                Text(label).textStyle(.label, color: Tokens.mutedStrongerForeground.color)
                     .frame(width: 56, height: Theme.chipHeight * Platform.scale, alignment: .leading)
                 FlowLayout(spacing: Space.xs + 2, lineSpacing: Space.xs + 2) {
                     ForEach(Array(addresses.enumerated()), id: \.offset) { index, address in
@@ -59,7 +59,7 @@ struct AddressField<Accessory: View>: View {
             .padding(.horizontal, Space.l)
             .padding(.vertical, Space.s)
             .frame(minHeight: Theme.searchHeight * Platform.scale)
-            Rule(color: Tokens.cardBorder).padding(.leading, Space.l)
+            Rule(color: Tokens.borderCard).padding(.leading, Space.l)
         }
         // Hangs below the field, over what follows it.
         .overlay(alignment: .bottomLeading) {

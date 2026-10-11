@@ -7,7 +7,7 @@ struct ToastView: View {
     var body: some View {
         if let toast = store.toast {
             HStack(spacing: Space.l) {
-                Text(toast.message).textStyle(.label, color: Tokens.popoverForeground.color)
+                Text(toast.message).textStyle(.label, color: Tokens.foreground.color)
                 if let action = toast.action {
                     PlainButton(action: store.toastTapped) {
                         Text(action).textStyle(.labelStrong, color: Tokens.primary.color)
@@ -16,7 +16,7 @@ struct ToastView: View {
             }
             .padding(.horizontal, Space.l + 2)
             .frame(height: Theme.searchHeight * Platform.scale)
-                        .background(Capsule().fill(Tokens.popover.color).shadow(color: Tokens.shadow.opacity(Tokens.shadowOpacity).color, radius: 12, y: 4))
+                        .background(Capsule().fill(Tokens.popover.color).shadow(.md))
             .overlay(Capsule().strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
             .padding(.bottom, Space.xl)
             .task(id: toast.id) {

@@ -320,11 +320,11 @@ final class ThreadRowView: NSTableRowView {
     override func drawBackground(in dirtyRect: NSRect) {
         let column = column
         if isCurrent || hovering {
-            Tokens.accentLarger.platform.setFill()
+            Tokens.backgroundAccentLarger.platform.setFill()
             column.fill()
         }
         if isChecked {
-            Tokens.primary.opacity(Tokens.colorTintOpacity).platform.setFill()
+            Tokens.primary.opacity(Opacity.colorTint).platform.setFill()
             column.fill()
         }
         // The frame around the list, and the line above every row but the first: the first
@@ -359,7 +359,7 @@ final class ThreadRowView: NSTableRowView {
         Self.drawLine(text.senders, x: left + Self.sendersX, width: Self.sendersWidth, middle: middle)
         var x = left + Self.sendersX + Self.sendersWidth + 14
         if row.attachment {
-            Self.drawSymbol(.paperclip, in: NSRect(x: x, y: middle - 7, width: 14, height: 14), color: Tokens.mutedMoreForeground.platform)
+            Self.drawSymbol(.paperclip, in: NSRect(x: x, y: middle - 7, width: 14, height: 14), color: Tokens.mutedStrongerForeground.platform)
         }
         x += 24
         let trailing: CGFloat
@@ -367,7 +367,7 @@ final class ThreadRowView: NSTableRowView {
             trailing = (actions.last?.2.minX ?? starRect.minX) - 16
             for (kind, symbol, rect) in actions {
                 let lit = hoveredHit == kind
-                if lit { Self.drawHover(around: rect, color: Tokens.accent.platform) }
+                if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccent.platform) }
                 Self.drawSymbol(symbol, in: rect, color: lit ? Tokens.foreground.platform : Tokens.mutedForeground.platform)
             }
         } else {
@@ -378,8 +378,8 @@ final class ThreadRowView: NSTableRowView {
         Self.drawLine(text.line, x: x, width: max(trailing - x, 0), middle: middle)
         guard row.draftId == nil else { return }
         let starLit = hoveredHit == .star
-        if starLit { Self.drawHover(around: starRect, color: Tokens.star.opacity(Tokens.colorTintOpacity).platform) }
-        let starColor = row.starred || starLit ? Tokens.star.platform : Tokens.input.platform
+        if starLit { Self.drawHover(around: starRect, color: Tokens.star.opacity(Opacity.colorTint).platform) }
+        let starColor = row.starred || starLit ? Tokens.star.platform : Tokens.mutedStrongestForeground.platform
         Self.drawSymbol(row.starred ? .starFilled : .star, in: starRect, color: starColor)
     }
 

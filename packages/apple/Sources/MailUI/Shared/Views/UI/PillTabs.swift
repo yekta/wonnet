@@ -16,7 +16,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
     var body: some View {
         MovableList(
             items: tabs, axis: .horizontal, group: { _ in reorder == nil ? nil : "tabs" },
-            rowInset: EdgeInsets(top: 0, leading: 1, bottom: 0, trailing: 1), rowRadius: Theme.radius + 4,
+            rowInset: EdgeInsets(top: 0, leading: 1, bottom: 0, trailing: 1), rowRadius: Radius.md,
             clicked: pick, moved: moved, menu: menu
         ) { tab in
             Face(symbol: symbol(tab), title: title(tab), count: count(tab), chosen: tab.id == selected)
@@ -41,18 +41,18 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
                 Image(symbol, size: ControlSize.regular.icon - 1).foregroundStyle(foreground)
                 Text(title).textStyle(chosen ? .labelStrong : .label, color: foreground).lineLimit(1)
                 if count > 0 {
-                    Text("\(count)").textStyle(.footnote, color: chosen ? foreground.opacity(0.6) : Tokens.mutedMoreForeground.color)
+                    Text("\(count)").textStyle(.footnote, color: chosen ? Tokens.mutedForeground.color : Tokens.mutedStrongerForeground.color)
                 }
             }
             .padding(.horizontal, Space.m * Platform.scale)
             .frame(height: ControlSize.regular.height * Platform.scale)
-            .background(RoundedRectangle(cornerRadius: Theme.radius + 4).fill(chosen ? Tokens.accentStronger.color : hovered ? Tokens.accent.color : .clear))
+            .background(RoundedRectangle(cornerRadius: Radius.md).fill(chosen ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear))
             .padding(.horizontal, 1)
             .contentShape(Rectangle())
         }
 
         private var foreground: Color {
-            if chosen { return Tokens.accentForeground.color }
+            if chosen { return Tokens.foreground.color }
             return hovered ? Tokens.foreground.color : Tokens.mutedForeground.color
         }
     }

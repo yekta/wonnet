@@ -102,10 +102,11 @@ events out through the callback given to `mail_core_start`) and a Rust library f
 
 ### packages/theme
 
-`tokens.json` is the source of every colour, in shadcn's names, measured from Newton Mail.
-`build.mjs` writes `tokens.css` (the core includes it in message pages; the server's error page
-too) and the Apple kit's `Tokens.swift`. Never edit either by hand: change `tokens.json` and run
-`node packages/theme/build.mjs`.
+`tokens.json` is the source of every colour, opacity, radius and shadow, in Motile's names, with
+Wonnet's values measured from Newton Mail. `build.mjs` writes `tokens.css` (the core includes it
+in message pages, where `.light` keeps an element in the light scheme; the server's error page
+too) and the Apple kit's `Tokens.swift` (`Tokens`, `Opacity`, `Radius`, `ShadowSize`). Never edit
+either by hand: change `tokens.json` and run `node packages/theme/build.mjs`.
 
 ### packages/apple (Swift: SwiftUI, with AppKit and UIKit for the thread list)
 
@@ -168,8 +169,8 @@ from the apps' tokens. The screenshots come from `docs/screenshots`; the favicon
 - A button, a field or a toast in the apps comes from `Shared/Views/UI`. A view does not style
   a control by hand; what is missing is added to the component. The rules (sizes, spacing,
   hover, pending, sheets, errors) are in `packages/apple/DESIGN.md`.
-- Colours come from `packages/theme/tokens.json`, never a hex value in a view. Text sizes come
-  from `TextStyle`, distances from `Space`.
+- Colours, opacities, radii and shadows come from `packages/theme/tokens.json`, never a hex value
+  or a number of a view's own. Text sizes come from `TextStyle`, distances from `Space`.
 - The server holds people's mail. Credentials are sealed, tokens hashed, and a sign-in code
   works once and only with its secret. Anything that changes this needs a test in
   `apps/server/src/e2e`.

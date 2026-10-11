@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A hairline across or down: `border` on the page, `cardBorder` on a card, where `border` is
+/// A hairline across or down: `border` on the page, `borderCard` on a card, where `border` is
 /// too strong.
 struct Rule: View {
     var vertical = false

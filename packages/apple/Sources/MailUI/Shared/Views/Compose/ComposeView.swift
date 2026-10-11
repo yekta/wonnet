@@ -70,7 +70,7 @@ struct ComposeView: View {
             } trailing: {
                 actions
             }
-            Rule(color: Tokens.cardBorder)
+            Rule(color: Tokens.borderCard)
             page
         }
         .modifier(behaviour)
@@ -107,7 +107,7 @@ struct ComposeView: View {
             #if os(macOS)
             .background(Tokens.background.color)
             #endif
-            Rule(color: Tokens.cardBorder)
+            Rule(color: Tokens.borderCard)
             toolbar
         }
         .background(Tokens.card.color)
@@ -136,7 +136,7 @@ struct ComposeView: View {
                 .overlay(alignment: .bottomLeading) { view.snippetMenu }
                 .overlay {
                     if dropping {
-                        RoundedRectangle(cornerRadius: Theme.radius)
+                        RoundedRectangle(cornerRadius: Radius.sm)
                             .strokeBorder(Tokens.primary.color, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                             .padding(Space.xs + 2)
                             .allowsHitTesting(false)
@@ -260,16 +260,16 @@ struct ComposeView: View {
             )
             .frame(height: max(bodyHeight, 160))
             if let signature {
-                Text(signature).textStyle(.body, color: Tokens.mutedMoreForeground.color).textSelection(.enabled)
+                Text(signature).textStyle(.body, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
             }
             if let quote = compose.draft.quote, !quote.isEmpty {
                 Chip(title: "•••", help: showQuote ? "Hide the quoted text" : "Show the quoted text", action: { showQuote.toggle() })
                 if showQuote {
                     Text(quote)
-                        .textStyle(.label, color: Tokens.mutedMoreForeground.color)
+                        .textStyle(.label, color: Tokens.mutedStrongerForeground.color)
                         .textSelection(.enabled)
                         .padding(.leading, Space.m)
-                        .overlay(alignment: .leading) { Rectangle().fill(Tokens.cardBorder.color).frame(width: 2) }
+                        .overlay(alignment: .leading) { Rectangle().fill(Tokens.borderCard.color).frame(width: 2) }
                 }
             }
             if !compose.draft.attachments.isEmpty || compose.remindAt != nil {
@@ -341,14 +341,14 @@ struct ComposeView: View {
     private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.s + 2) {
-                Text(label).textStyle(.label, color: Tokens.mutedMoreForeground.color).frame(width: 56, alignment: .leading)
+                Text(label).textStyle(.label, color: Tokens.mutedStrongerForeground.color).frame(width: 56, alignment: .leading)
                 content()
             }
             .font(.ui(.body))
             .foregroundStyle(Tokens.foreground.color)
             .padding(.horizontal, Space.l)
             .frame(height: Theme.searchHeight * Platform.scale)
-            Rule(color: Tokens.cardBorder).padding(.leading, Space.l)
+            Rule(color: Tokens.borderCard).padding(.leading, Space.l)
         }
     }
 

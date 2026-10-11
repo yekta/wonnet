@@ -25,8 +25,8 @@ struct FloatingButton: View {
                 .frame(width: FloatingButton.side, height: FloatingButton.side)
                 .background(
                     Circle()
-                        .fill(hovered ? Tokens.accent.color : Tokens.background.color)
-                        .shadow(color: Tokens.shadow.opacity(Tokens.shadowOpacity).color, radius: 8, y: 2)
+                        .fill(hovered ? Tokens.backgroundAccent.color : Tokens.background.color)
+                        .shadow(.sm)
                 )
                 .overlay(Circle().strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
         }

@@ -118,7 +118,7 @@ struct GalleryView: View {
                                 NavRow(title: "Inbox", symbol: .inbox, count: 44, selected: true) {}
                                 NavRow(title: "Starred", symbol: .star, count: 8) {}
                                 NavRow(title: "isaac@example.com", dot: Tokens.account1.color) {} trailing: {
-                                    Image(.chevronRight, size: 12).foregroundStyle(Tokens.mutedMostForeground.color)
+                                    Image(.chevronRight, size: 12).foregroundStyle(Tokens.mutedStrongestForeground.color)
                                 }
                             }
                             .padding(-Space.l)

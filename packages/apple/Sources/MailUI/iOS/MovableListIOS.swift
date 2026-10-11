@@ -153,7 +153,7 @@ struct MovableList<Item: Identifiable, Row: View>: UIViewRepresentable {
             cell.generation = generation
             let content = list.row(item).environment(store)
             cell.configurationUpdateHandler = { cell, state in
-                cell.contentConfiguration = UIHostingConfiguration { content.opacity(state.isHighlighted ? 0.6 : 1) }
+                cell.contentConfiguration = UIHostingConfiguration { content.opacity(Opacity.pressed, when: state.isHighlighted) }
                     .margins(.all, 0)
                     .minSize(width: 0, height: 0)
             }
@@ -260,7 +260,7 @@ struct MovableList<Item: Identifiable, Row: View>: UIViewRepresentable {
             let inset = list.rowInset
             let rect = cell.bounds.inset(by: UIEdgeInsets(top: inset.top, left: inset.leading, bottom: inset.bottom, right: inset.trailing))
             parameters.visiblePath = UIBezierPath(roundedRect: rect, cornerRadius: list.rowRadius)
-            parameters.backgroundColor = Tokens.accent.platform
+            parameters.backgroundColor = Tokens.backgroundAccent.platform
             return parameters
         }
 

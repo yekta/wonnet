@@ -54,7 +54,7 @@ struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
         coordinator.list = self
         coordinator.store = store
         stack.fills = fills
-        stack.light = (inset: rowInset, radius: rowRadius, color: Tokens.accent.platform)
+        stack.light = (inset: rowInset, radius: rowRadius, color: Tokens.backgroundAccent.platform)
         coordinator.show(in: stack)
     }
 

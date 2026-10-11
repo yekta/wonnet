@@ -6,11 +6,15 @@ added to the component, not to the view.
 
 ## Rules
 
-- Colours come from `Tokens` (generated from `packages/theme/tokens.json`). Never a hex value,
-  never a system colour.
+- Colours come from `Tokens`, opacities from `Opacity`, corners from `Radius` and shadows from
+  `ShadowSize` (all generated from `packages/theme/tokens.json`). Never a hex value, a system
+  colour, a number for an opacity or a radius: `Tokens.primary.opacity(Opacity.lit)`,
+  `.opacity(Opacity.disabled, when: !enabled)`, `.shadow(.md)`. What is missing is added to
+  `tokens.json`.
 - The page is `background`: the bars, the sidebar, the list. An open thread, a message being
-  written and a form's card are `card` on it. A hairline on the page is `border`; inside a
-  card it is `cardBorder`.
+  written and a form's card are `card` on it; menus, popups and toasts are `popover`. A
+  hairline on the page is `border`; inside a card it is `borderCard`, around a popover
+  `borderPopover`. A field is filled with `input` and outlined in `borderInput`.
 - Text comes from the scale, `TextStyle`: `Text("…").textStyle(.caption)`. A view picks a
   style, never a size. A style carries its usual colour; `color:` overrides it.
 - Distances come from `Space`: `xs` 4, `s` 8, `m` 12, `l` 16, `xl` 20, `xxl` 28. Heights of
@@ -20,15 +24,19 @@ added to the component, not to the view.
 - Everything clickable has a hover state, shown at once: no animation on colours. A button's
   face reads `@Environment(\.hovered)`, set by `PressStyle`, which every button uses.
 - Hovered and selected things are filled from two pairs of tokens. Small things (buttons, tabs,
-  chips, segments, the sidebar's rows) hover in `accent` and are selected in `accentStronger`.
-  Large things (thread rows, choice rows, a banner) hover in `accentLarger` and are pressed
-  or highlighted in `accentLargerStronger`: the same steps dimmer, because a fill across a
-  whole row reads stronger than one behind a button. The thread row that is open stays in
-  `accentLarger`, the hover's fill, not the stronger one. From dimmest to strongest they go
-  `accentLarger`, `accentLargerStronger`, `accent`, `accentStronger`, so a small thing's hover
-  shows on a selected row. An accent is never thinned with an opacity: if a step is missing, add
-  a token for it. A control with a colour of its own (the star) hovers in a wash of it: the
-  colour at `colorTintOpacity`, lighter in the dark scheme.
+  segments, the sidebar's rows) hover in `backgroundAccent` and are selected in
+  `backgroundAccentStronger`. Large things (thread rows, choice rows, a banner) hover in
+  `backgroundAccentLarger` and are pressed or highlighted in `backgroundAccentLargerStronger`:
+  the same steps dimmer, because a fill across a whole row reads stronger than one behind a
+  button. The thread row that is open stays in `backgroundAccentLarger`, the hover's fill, not
+  the stronger one. From dimmest to strongest they go `backgroundAccentLarger`,
+  `backgroundAccentLargerStronger`, `backgroundAccent`, `backgroundAccentStronger`, so a small
+  thing's hover shows on a selected row. What sits on `backgroundSecondary` (a chip) hovers in
+  `backgroundSecondaryAccent`. An accent is never thinned with an opacity: if a step is
+  missing, add a token for it. A control with a colour of its own (the star) hovers in a wash
+  of it: the colour at `Opacity.colorTint`, lighter in the dark scheme. A pressed button shows
+  at `Opacity.pressed`, a disabled one at `Opacity.disabled`, a filled one lights at
+  `Opacity.lit`.
 - Things side by side have no gap between them: an `HStack(spacing: 0)` of buttons, rows with
   no spacing. The space is inside each control, so hover areas and hit areas touch. Buttons
   with a face (a circle, a pill) show `Theme.buttonGap` (2pt) between the faces; each button
@@ -85,7 +93,7 @@ added to the component, not to the view.
 | `Banner`, `ToastView` | A line across the window that stays, and the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
-| `Rule`, `.rule(edge)` | A hairline, in `border` or in `cardBorder` |
+| `Rule`, `.rule(edge)` | A hairline, in `border` or in `borderCard` |
 | `Sheet`, `HeaderBar` | Every sheet's shell, and the bar across the top of a page: the Mac's, and iOS's over the list; with a `center`, the sides split what it leaves; `inset` is the space to its edges |
 | `FlowLayout` | Wrapping layout for chips |
 

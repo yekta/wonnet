@@ -4,6 +4,10 @@ import SwiftUI
 struct ThemeNumber: Equatable {
     let light: Double
     let dark: Double
+
+    func value(for scheme: ColorScheme) -> Double {
+        scheme == .dark ? dark : light
+    }
 }
 
 /// A colour of `packages/theme/tokens.json`, light and dark.
@@ -19,7 +23,7 @@ struct ThemeColor: Equatable {
         )
     }
 
-    /// The colour at an opacity of the theme, such as `Tokens.shadow.opacity(Tokens.shadowOpacity)`.
+    /// The colour at an opacity of the theme, such as `Tokens.shadow.opacity(Opacity.shadow)`.
     func opacity(_ alpha: ThemeNumber) -> ThemeColor {
         ThemeColor(light: light, dark: dark, alpha: alpha)
     }
@@ -37,6 +41,28 @@ struct ThemeColor: Equatable {
     }
 
     var color: Color { Color(platform) }
+}
+
+private struct Thinned: ViewModifier {
+    let opacity: ThemeNumber
+    let on: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.opacity(on ? opacity.value(for: scheme) : 1)
+    }
+}
+
+extension View {
+    /// Thins the whole view to one of the opacities, while `on`.
+    func opacity(_ opacity: ThemeNumber, when on: Bool = true) -> some View {
+        modifier(Thinned(opacity: opacity, on: on))
+    }
+
+    /// A shadow of the size, in the colour shadow at one of its opacities.
+    func shadow(_ size: ShadowSize, _ strength: ThemeNumber = Opacity.shadow) -> some View {
+        shadow(color: Tokens.shadow.opacity(strength).color, radius: size.blur, y: size.down)
+    }
 }
 
 /// The distances between things. Views space with these, never a number of their own.
@@ -58,9 +84,6 @@ enum Space {
 /// The sizes the apps are drawn with, measured from Newton Mail. Those of controls are as on
 /// the Mac; the components enlarge them on iOS with `Platform.scale`.
 enum Theme {
-    static let radius = Tokens.radius
-    /// A card or a popup, which rounds a little more than a control.
-    static let cardRadius = Tokens.radius + 2
     /// A hairline: a rule, a border.
     static let hairline: CGFloat = 1
     /// Between the faces of buttons side by side. Each button pads half of it inside its hit

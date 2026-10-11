@@ -16,7 +16,7 @@ struct PersonView: View {
                 Avatar(initials: person?.initials ?? String(email.prefix(1)).uppercased(), email: email, size: 52)
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(name).textStyle(.heading)
-                    Text(email).textStyle(.label, color: Tokens.mutedMoreForeground.color).textSelection(.enabled)
+                    Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
                 }
                 ActionButton(title: "New message", symbol: .squarePen, variant: .outline, action: write)
                 if let threads = person?.threads, !threads.isEmpty {

@@ -23,7 +23,7 @@ struct SearchField: View {
 
     var body: some View {
         HStack(spacing: Space.s) {
-            Image(symbol, size: 14).foregroundStyle(Tokens.mutedMoreForeground.color)
+            Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.ui(style == .sheet ? 15 : 13))
@@ -37,14 +37,14 @@ struct SearchField: View {
                 #endif
             if !text.isEmpty {
                 PlainButton(help: "Clear", action: clearText) {
-                    Image(.x, size: 12).foregroundStyle(Tokens.mutedMoreForeground.color)
+                    Image(.x, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
                 }
             }
         }
         .padding(.horizontal, Space.m)
         .frame(height: (style == .sheet ? Theme.searchHeight : ControlSize.regular.height) * Platform.scale)
-        .background { if style == .bar { Capsule().strokeBorder(Tokens.input.color, lineWidth: Theme.hairline) } }
-        .overlay(alignment: .bottom) { if style == .sheet { Rule(color: Tokens.cardBorder) } }
+        .background { if style == .bar { Capsule().strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline) } }
+        .overlay(alignment: .bottom) { if style == .sheet { Rule(color: Tokens.borderCard) } }
         .onAppear { if autofocus { focused = true } }
         .onChange(of: focusTrigger) { focused = true }
     }
