@@ -75,6 +75,8 @@ public final class MailStore {
     /// The old rows stay on screen rather than a blank page.
     var listReady = true
     var total = 0
+    /// The next page of the list is being read, for the foot of the list to say so.
+    private(set) var loadingMore = false
     /// The thread on screen, when one is open.
     var conversation: Conversation?
     /// The row the keyboard is on (Mac).
@@ -146,6 +148,8 @@ public final class MailStore {
     @ObservationIgnored private var reloading = false
     /// A change came while the list was being read: read it again after.
     @ObservationIgnored private var staleWhileReloading = false
+    /// The list's end was reached while it was being read: read the next page after.
+    @ObservationIgnored private var moreWhileReloading = false
     @ObservationIgnored private var signIn: ASWebAuthenticationSession?
     @ObservationIgnored private let anchor = SignInAnchor()
     /// The threads whose bodies were asked for ahead of time.
@@ -545,11 +549,19 @@ public final class MailStore {
             }
         } while staleWhileReloading
         reloading = false
+        guard moreWhileReloading else { return }
+        moreWhileReloading = false
+        loadMore()
     }
 
     func loadMore() {
-        guard rows.count < total, !reloading else { return }
+        guard rows.count < total else { return }
+        guard !reloading else {
+            moreWhileReloading = true
+            return
+        }
         reloading = true
+        loadingMore = true
         let asked = (mailbox, filter)
         let offset = rows.count
         Task {
@@ -558,6 +570,8 @@ public final class MailStore {
                 total = page.total
             }
             reloading = false
+            loadingMore = false
+            moreWhileReloading = false
             guard staleWhileReloading else { return }
             await reloadThreads()
         }

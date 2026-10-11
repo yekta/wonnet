@@ -125,7 +125,7 @@ struct MailboxScreen: View {
         // is nothing to show, so it isn't made anew and the page never goes blank between.
         ThreadListIOS(
             store: store, rows: store.rows, editing: editing, checked: store.selection, ready: store.listReady,
-            headerHeight: ListHeader.shows(store) ? ListHeader.height : 0,
+            loadingMore: store.loadingMore, headerHeight: ListHeader.shows(store) ? ListHeader.height : 0,
             bottomInset: FloatingButton.side + Space.l * 2,
             refresh: store.checkMail,
             open: { thread in openThread(thread, path: $path, store: store) },

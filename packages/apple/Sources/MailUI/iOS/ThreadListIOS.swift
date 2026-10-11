@@ -14,6 +14,8 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     let ready: Bool
     /// Whether the list comes back to where it was left; the search's results don't.
     var keepsScroll = true
+    /// The next page is being read: the foot of the list says so.
+    var loadingMore = false
     /// Scrolls with the rows, at their head; 0 hides it.
     let headerHeight: CGFloat
     /// Room under the last row, for what floats over the list.
@@ -31,9 +33,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         table.rowHeight = Theme.iosRowHeight
         table.separatorStyle = .none
         table.backgroundColor = Tokens.background.platform
-        let bottom = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
-        bottom.backgroundColor = Tokens.border.platform
-        table.tableFooterView = bottom
+        table.tableFooterView = context.coordinator.foot
         table.contentInset.bottom = bottomInset
         table.verticalScrollIndicatorInsets.bottom = bottomInset
         table.allowsMultipleSelectionDuringEditing = true
@@ -61,7 +61,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         context.coordinator.open = open
         context.coordinator.refresh = refresh
         context.coordinator.head?.rootView = header()
-        context.coordinator.update(rows: rows, editing: editing, checked: checked, ready: ready, headerHeight: headerHeight)
+        context.coordinator.update(rows: rows, editing: editing, checked: checked, ready: ready, headerHeight: headerHeight, loadingMore: loadingMore)
     }
 
     @MainActor
@@ -71,6 +71,10 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         var refresh: (() async -> Void)?
         weak var table: UITableView?
         var head: UIHostingController<Header>?
+        /// Under the last row: a rule, and while the next page is being read, `LoadingMore`.
+        let foot = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
+        private let loadingFoot = UIHostingController(rootView: LoadingMore())
+        private var loadingMore = false
         private var rows: [ThreadRow] = []
         private var texts: [String: (ThreadRow, RowText)] = [:]
         private var ready = true
@@ -81,10 +85,27 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         init(store: MailStore, open: @escaping (String) -> Void) {
             self.store = store
             self.open = open
+            super.init()
+            let rule = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
+            rule.backgroundColor = Tokens.border.platform
+            rule.autoresizingMask = [.flexibleWidth]
+            foot.addSubview(rule)
+            loadingFoot.view.backgroundColor = .clear
+            loadingFoot.safeAreaRegions = []
+            loadingFoot.view.frame = CGRect(x: 0, y: Theme.hairline, width: 0, height: LoadingMore.height)
+            loadingFoot.view.autoresizingMask = [.flexibleWidth]
+            loadingFoot.view.isHidden = true
+            foot.addSubview(loadingFoot.view)
         }
 
-        func update(rows: [ThreadRow], editing: Bool, checked: Set<String>, ready: Bool, headerHeight: CGFloat) {
+        func update(rows: [ThreadRow], editing: Bool, checked: Set<String>, ready: Bool, headerHeight: CGFloat, loadingMore: Bool) {
             guard let table else { return }
+            if loadingMore != self.loadingMore {
+                self.loadingMore = loadingMore
+                loadingFoot.view.isHidden = !loadingMore
+                foot.frame.size.height = Theme.hairline + (loadingMore ? LoadingMore.height : 0)
+                table.tableFooterView = foot
+            }
             if let head, table.tableHeaderView?.frame.height != headerHeight {
                 head.view.frame = CGRect(x: 0, y: 0, width: table.bounds.width, height: headerHeight)
                 table.tableHeaderView = head.view
