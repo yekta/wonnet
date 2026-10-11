@@ -43,10 +43,32 @@ enum Platform {
     }
 
     /// Where the core keeps its database.
-    static var dataFolder: URL {
+    static let dataFolder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.yekta.mail", isDirectory: true)
+        let folder = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.yekta.mail", isDirectory: true)
+        #if os(macOS)
+        adoptOldMacInstall(into: folder, base: base)
+        #endif
+        return folder
+    }()
+
+    #if os(macOS)
+    /// The Mac app was `com.yekta.mail.mac` before it shared the iOS app's App ID: its mail,
+    /// session and settings move over, so nobody is signed out by the change.
+    private static func adoptOldMacInstall(into folder: URL, base: URL) {
+        let old = "com.yekta.mail.mac"
+        let oldFolder = base.appendingPathComponent(old, isDirectory: true)
+        guard Bundle.main.bundleIdentifier != old,
+              !FileManager.default.fileExists(atPath: folder.path),
+              FileManager.default.fileExists(atPath: oldFolder.path)
+        else { return }
+        try? FileManager.default.moveItem(at: oldFolder, to: folder)
+        guard let settings = UserDefaults.standard.persistentDomain(forName: old) else { return }
+        for (key, value) in settings where UserDefaults.standard.object(forKey: key) == nil {
+            UserDefaults.standard.set(value, forKey: key)
+        }
     }
+    #endif
 
     /// Avenir, which both systems ship, at an exact size. Its weights step from Medium straight
     /// to Heavy, so Medium is the semibold and Heavy the bold.

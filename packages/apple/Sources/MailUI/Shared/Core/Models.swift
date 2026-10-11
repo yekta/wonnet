@@ -337,6 +337,8 @@ struct NewMailItem: Codable, Hashable {
     let thread: String
     let accountId: String
     let from: String
+    let email: String
+    let initials: String
     let subject: String
     let snippet: String
 }

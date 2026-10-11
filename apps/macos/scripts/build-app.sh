@@ -4,12 +4,16 @@
 #   scripts/build-app.sh [--open]
 #
 # MAIL_SERVER_URL, if set, is the server a new install uses (default https://api.wonnet.app).
-# MAIL_SIGN_IDENTITY, if set, is the Developer ID certificate the app is signed with.
+# MAIL_SIGN_IDENTITY, if set, is the Developer ID certificate the app is signed with, and
+# MAIL_PROVISIONING_PROFILE the Developer ID profile embedded with it, which allows notifications
+# from a sender, with their avatar.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$(cd ../.. && pwd)"
 APP="build/Wonnet.app"
+# The iOS app's App ID, which has the Mac too.
+BUNDLE_ID="app.wonnet.wonnettest"
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
 
 echo "▸ Building the core…"
@@ -46,7 +50,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key><string>Wonnet</string>
     <key>CFBundleDisplayName</key><string>Wonnet</string>
     <key>CFBundleExecutable</key><string>Mail</string>
-    <key>CFBundleIdentifier</key><string>com.yekta.mail.mac</string>
+    <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
@@ -62,6 +66,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
         <key>CFBundleURLName</key><string>com.yekta.mail.auth</string>
         <key>CFBundleURLSchemes</key><array><string>mailapp</string></array>
     </dict></array>
+    <key>NSUserActivityTypes</key><array><string>INSendMessageIntent</string></array>
     <key>NSContactsUsageDescription</key><string>Wonnet shows the names and photos you gave people in your contacts, and suggests them when you write.</string>
     <key>MailServerURL</key><string>${MAIL_SERVER_URL:-https://api.wonnet.app}</string>
 </dict>
@@ -69,7 +74,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 if [ -n "${MAIL_SIGN_IDENTITY:-}" ]; then
-    codesign --force --options runtime --timestamp --entitlements Resources/Wonnet.entitlements \
+    ENTITLEMENTS="$(mktemp -d)/Wonnet.entitlements"
+    cp Resources/Wonnet.entitlements "$ENTITLEMENTS"
+    if [ -n "${MAIL_PROVISIONING_PROFILE:-}" ]; then
+        cp "$MAIL_PROVISIONING_PROFILE" "$APP/Contents/embedded.provisionprofile"
+        TEAM="$(security cms -D -i "$MAIL_PROVISIONING_PROFILE" | plutil -extract TeamIdentifier.0 raw -o - -)"
+        /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $TEAM.$BUNDLE_ID" \
+            -c "Add :com.apple.developer.team-identifier string $TEAM" \
+            -c "Add :com.apple.developer.usernotifications.communication bool true" "$ENTITLEMENTS"
+    fi
+    codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
         --sign "$MAIL_SIGN_IDENTITY" "$APP"
 else
     codesign --force --deep --sign - "$APP" >/dev/null

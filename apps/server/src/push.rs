@@ -212,6 +212,8 @@ fn alert(key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Push {
         "account": mail.account_id,
         "message": mail.id,
         "from": from.display(),
+        "email": from.email,
+        "initials": from.initials(),
         "subject": mail.subject,
         "snippet": mail.snippet,
     });

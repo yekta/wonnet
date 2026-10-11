@@ -127,9 +127,10 @@ async fn new_mail_is_pushed_sealed_with_the_devices_key_and_taken_down_once_read
     assert_eq!(alert.body["aps"]["badge"], 2, "the inbox's unread threads, as the apps count them");
     let content = open(&alert.body["sealed"]);
     assert_eq!(
-        (&content["from"], &content["subject"], &content["thread"]),
-        (&json!("Cy Young"), &json!("Plan"), &json!(format!("{}:t1", account.id)))
+        (&content["from"], &content["email"], &content["initials"]),
+        (&json!("Cy Young"), &json!("cy@example.com"), &json!("CY"))
     );
+    assert_eq!((&content["subject"], &content["thread"]), (&json!("Plan"), &json!(format!("{}:t1", account.id))));
 
     let bearer = alert.headers["authorization"].to_str().unwrap().strip_prefix("Bearer ").unwrap().to_string();
     let (unsigned, signature) = bearer.rsplit_once('.').unwrap();

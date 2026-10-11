@@ -63,23 +63,6 @@ pub fn participants(people: &[Address], me: &HashSet<String>) -> String {
     }
 }
 
-/// Two letters for an avatar: the first letters of the first and last name.
-pub fn initials(address: &Address) -> String {
-    let words: Vec<&str> = address
-        .display()
-        .split(|c: char| c.is_whitespace() || c == '.' || c == '_')
-        .filter(|word| !word.is_empty())
-        .collect();
-    let letter = |word: &&str| {
-        word.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_uppercase().to_string()).unwrap_or_default()
-    };
-    match words.as_slice() {
-        [] => "?".into(),
-        [one] => letter(one),
-        [first, .., last] => format!("{}{}", letter(first), letter(last)),
-    }
-}
-
 /// A snippet without the invisible words newsletters pad their preview with (`&#847;&zwnj;`
 /// and the like), which macOS stretches a line's spaces over.
 pub fn snippet(text: &str) -> String {
@@ -136,13 +119,6 @@ mod tests {
         let people = [Address::new(None, "me@example.com"), person("Roger Cotes", "r@x.com")];
         assert_eq!(participants(&people, &me()), "Roger & me");
         assert_eq!(participants(&[person("Roger Cotes", "r@x.com")], &me()), "Roger");
-    }
-
-    #[test]
-    fn initials_take_the_first_and_last_name() {
-        assert_eq!(initials(&person("Ada King Lovelace", "ada@x.com")), "AL");
-        assert_eq!(initials(&Address::new(None, "grace.hopper@navy.mil")), "GH");
-        assert_eq!(initials(&Address::new(None, "x@y.z")), "X");
     }
 
     #[test]

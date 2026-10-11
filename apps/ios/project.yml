@@ -55,11 +55,14 @@ targets:
         UIBackgroundModes: [remote-notification]
         AppGroup: $(APP_GROUP)
         PushEnvironment: $(APS_ENVIRONMENT)
+        # New mail shows as a message from its sender, with their avatar.
+        NSUserActivityTypes: [INSendMessageIntent]
     entitlements:
       path: Mail/Mail.entitlements
       properties:
         aps-environment: $(APS_ENVIRONMENT)
         com.apple.security.application-groups: [$(APP_GROUP)]
+        com.apple.developer.usernotifications.communication: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
@@ -89,6 +92,8 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         AppGroup: $(APP_GROUP)
+        NSUserActivityTypes: [INSendMessageIntent]
+        NSContactsUsageDescription: Wonnet shows the photos you gave people in your contacts on their mail's notifications.
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -96,6 +101,7 @@ targets:
       path: NotificationService/NotificationService.entitlements
       properties:
         com.apple.security.application-groups: [$(APP_GROUP)]
+        com.apple.developer.usernotifications.communication: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).notifications

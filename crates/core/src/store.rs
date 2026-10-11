@@ -543,12 +543,15 @@ impl Store {
                 && message.labels.iter().any(|label| label == role::INBOX)
                 && !context.me.contains(&message.from.email);
             if arrived {
+                let sender = named(&tx, &message.from)?;
                 applied.arrived.push(Arrived {
                     date: message.date,
                     mail: NewMail {
                         thread: thread.clone(),
                         account_id: message.account_id.clone(),
-                        from: named(&tx, &message.from)?.display().to_string(),
+                        from: sender.display().to_string(),
+                        email: sender.email.clone(),
+                        initials: sender.initials(),
                         subject: message.subject.clone(),
                         snippet: message.snippet.clone(),
                     },
@@ -1216,7 +1219,7 @@ impl Store {
         let threads: Vec<String> = statement.query_map([&email], |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
         Ok(Person {
             name: address.display().to_string(),
-            initials: rows::initials(&address),
+            initials: address.initials(),
             email,
             threads: rows_of(&self.db, &threads, now)?,
         })
