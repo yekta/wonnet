@@ -53,8 +53,9 @@ added to the component, not to the view.
   pickers. Segmented controls, dropdowns, fields and buttons are ours.
 - iOS's settings are the system's own: a page sheet of grouped `List`s, on `background`
   with rows on `card`, with its `Toggle`s, menu `Picker`s, `TextField`s, pages pushed for
-  what is written, swipes to remove and a hold to reorder. The Mac's are ours: the sections
-  beside the page, and `SettingsGroup`s of `SettingsRow`s.
+  what is written, swipes to remove and a hold to reorder, each group a `SettingsListSection`
+  given its name and the line under it as words, never a `Section` styled by hand. The Mac's
+  are ours: the sections beside the page, and `SettingsGroup`s of `SettingsRow`s.
 - A list whose rows the user puts in order is a `MovableList`. It picks a row up itself when it
   is pressed and pulled (held, on iOS): a picture of it shrinks a little on its light and
   follows the pointer, the rows it passes slide out of its way, and let go it slides into its
