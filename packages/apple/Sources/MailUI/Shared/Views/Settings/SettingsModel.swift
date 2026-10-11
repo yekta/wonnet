@@ -145,6 +145,11 @@ extension MailStore {
         account.identities.first?.signature.flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// Who keeps the account's mail, as a sentence names them.
+    func providerName(_ account: AccountView) -> String {
+        account.provider == "gmail" ? "Gmail" : "your provider"
+    }
+
     func ownSignature(_ account: AccountView) -> String {
         preferences["signature:\(account.id)"]?.string ?? ""
     }
