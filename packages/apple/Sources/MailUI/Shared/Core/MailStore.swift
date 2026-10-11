@@ -125,7 +125,7 @@ public final class MailStore {
     /// so a thread opened again at the same width is laid out before its pages are.
     @ObservationIgnored var bodyHeights: [String: CGFloat] = [:]
     @ObservationIgnored var bodyWidth: CGFloat = 0
-    var undoDelay: Int = UserDefaults.standard.object(forKey: "undoDelay") as? Int ?? 10 {
+    var undoDelay: Int = UserDefaults.standard.object(forKey: "undoDelay") as? Int ?? 5 {
         didSet { UserDefaults.standard.set(undoDelay, forKey: "undoDelay") }
     }
     var appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
