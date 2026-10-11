@@ -108,7 +108,7 @@ struct IOSShell: View {
 
     private func showSettings() {
         drawerOpen = false
-        store.settingsOpen = true
+        store.openSettings()
     }
 }
 

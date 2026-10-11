@@ -52,29 +52,6 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The key on the Mac, as the palette and the shortcuts list show it.
-    var shortcut: String? {
-        switch self {
-        case .archive: "E"
-        case .inbox: "⇧E"
-        case .trash: "#"
-        case .spam: "!"
-        case .star: "S"
-        case .read: "U"
-        case .markRead: "⇧I"
-        case .snooze: "H"
-        case .label: "L"
-        case .move: "V"
-        case .mute: "⇧M"
-        case .unsubscribe: "⌘U"
-        case .block, .deleteForever: nil
-        case .print: "⌘P"
-        case .reply: "R"
-        case .replyAll: "A"
-        case .forward: "F"
-        }
-    }
-
     /// What doesn't fit on a toolbar: in its "more" menu.
     static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .deleteForever, .print]
 }
@@ -96,8 +73,7 @@ struct ThreadActions: View {
     }
 
     private func help(_ command: ThreadCommand) -> String {
-        let title = command.title(store, [thread])
-        return command.shortcut.map { "\(title) (\($0))" } ?? title
+        store.keyHelp(command.title(store, [thread]), command.rawValue)
     }
 }
 

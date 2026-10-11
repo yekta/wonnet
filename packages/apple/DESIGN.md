@@ -51,6 +51,10 @@ added to the component, not to the view.
 - The platform's controls are used when they fit, not by default: the switch (`ToggleRow`),
   alerts, menus, iOS's navigation bar for sheets' titles and buttons, Quick Look, the file
   pickers. Segmented controls, dropdowns, fields and buttons are ours.
+- iOS's settings are the system's own: a page sheet of grouped `List`s, on `backgroundSecondary`
+  with rows on `popover`, with its `Toggle`s, menu `Picker`s, `TextField`s, pages pushed for
+  what is written, swipes to remove and a hold to reorder. The Mac's are ours: the sections
+  beside the page, and `SettingsGroup`s of `SettingsRow`s.
 - A list whose rows the user puts in order is a `MovableList`. It picks a row up itself when it
   is pressed and pulled (held, on iOS): a picture of it shrinks a little on its light and
   follows the pointer, the rows it passes slide out of its way, and let go it slides into its
@@ -93,6 +97,9 @@ added to the component, not to the view.
 | `Banner`, `ToastView` | A line across the window that stays, and the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
+| `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right |
+| `Switch` | The system's switch alone, for a row that says what it does |
+| `KeyCaps`, `KeyRecorder` | Keys on caps, and the Mac's button that records new ones for a keybinding |
 | `Rule`, `.rule(edge)` | A hairline, in `border` or in `borderCard` |
 | `Sheet`, `HeaderBar` | Every sheet's shell, and the bar across the top of a page: the Mac's, and iOS's over the list; with a `center`, the sides split what it leaves; `inset` is the space to its edges |
 | `FlowLayout` | Wrapping layout for chips |

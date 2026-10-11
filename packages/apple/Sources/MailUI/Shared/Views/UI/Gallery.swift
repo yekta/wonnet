@@ -145,6 +145,27 @@ struct GalleryView: View {
                             pick: { tab = $0.id }, reorder: { _ in }
                         )
                     }
+                    FormSection(title: "Settings", detail: "The Mac's settings pages; iOS's are the system's grouped lists.") {
+                        SettingsGroup(id: "gallery", title: "A group", detail: "With a line about it.") {
+                            SettingsRow {
+                                SettingsLabel(title: "A switch", detail: "What it turns on.")
+                            } trailing: {
+                                Switch(title: "A switch", isOn: $on)
+                            }
+                            SettingsDivider()
+                            SettingsRow {
+                                SettingsLabel(title: "isaac@example.com", detail: "Gmail", dot: Tokens.account1.color)
+                            } trailing: {
+                                KeyCaps(caps: Keys.caps("g shift+3"))
+                                #if os(macOS)
+                                KeyRecorder(key: "mod+k") { _ in }
+                                KeyRecorder(key: nil) { _ in }
+                                #endif
+                            }
+                            SettingsDivider()
+                            SettingsNote(text: "Nothing set yet.")
+                        }
+                    }
                     FormSection(title: "Notes") {
                         Notice(text: "A line about something.")
                         Notice(text: "Something went wrong: the server said no.", tone: .error)

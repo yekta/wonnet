@@ -243,6 +243,12 @@ extension MailStore {
         return String(mailbox[range.upperBound...])
     }
 
+    /// Takes the label of the mailbox on screen off the threads at hand.
+    func removeShownLabel() {
+        guard let label = Self.labelID(baseMailbox), !targets.isEmpty else { return }
+        act(.removeLabel, on: targets, label: label)
+    }
+
     /// Adds an account's label to its threads, takes it off, or moves them to it.
     func apply(label: String, account: String, to labeling: Labeling, remove: Bool = false) {
         self.labeling = nil

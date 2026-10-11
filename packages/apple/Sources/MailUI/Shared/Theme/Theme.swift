@@ -94,6 +94,8 @@ enum Theme {
     static let fieldHeight: CGFloat = ControlSize.regular.height
     /// A row of a list or a menu.
     static let rowHeight: CGFloat = ControlSize.regular.height
+    /// A row of a settings group: a regular control with room above and below.
+    static let settingsRowHeight: CGFloat = 52
     /// A chip: the smallest thing that can be clicked.
     static let chipHeight: CGFloat = ControlSize.small.height
     /// A bar across the window: the top bar, a sheet's header, a toolbar.
@@ -113,6 +115,9 @@ enum Theme {
     static let sidebarWidth: CGFloat = 300
     /// The Mac sidebar sliding in and out: a critically damped spring, as the iOS drawer's.
     static let sidebarSlide = Animation.smooth(duration: 0.3)
+    /// How wide the settings' sections may be dragged, and how wide a page grows.
+    static let settingsSidebarWidths: ClosedRange<CGFloat> = 200...360
+    static let settingsPageWidth: CGFloat = 640
 
     static let accountColors = [
         Tokens.account1, Tokens.account2, Tokens.account3, Tokens.account4, Tokens.account5,

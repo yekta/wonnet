@@ -16,16 +16,27 @@ struct ToggleRow: View {
                 }
             }
             Spacer(minLength: Space.s)
-            Toggle(isOn: $isOn) { Text(title) }
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(Tokens.primary.color)
-                #if os(macOS)
-                .controlSize(.small)
-                #endif
+            Switch(title: title, isOn: $isOn)
         }
         .frame(minHeight: ControlSize.small.height * Platform.scale)
         .contentShape(Rectangle())
         .onTapGesture { isOn.toggle() }
+    }
+}
+
+/// The system's switch alone, in the primary colour: for a row that says what it does itself.
+struct Switch: View {
+    /// What it turns on, for VoiceOver.
+    let title: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) { Text(title) }
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .tint(Tokens.primary.color)
+            #if os(macOS)
+            .controlSize(.small)
+            #endif
     }
 }
