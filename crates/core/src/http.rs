@@ -47,6 +47,11 @@ pub async fn post<T: DeserializeOwned>(
     Ok(answered(request).await?.json().await?)
 }
 
+pub async fn delete(http: &reqwest::Client, server: &str, path: &str, token: &str) -> Result<()> {
+    answered(http.delete(url(server, path)).bearer_auth(token)).await?;
+    Ok(())
+}
+
 /// Sends a file for a draft. Returns the id the server keeps it under.
 pub async fn upload(
     http: &reqwest::Client,

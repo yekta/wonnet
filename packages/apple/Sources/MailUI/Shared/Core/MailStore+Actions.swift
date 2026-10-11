@@ -1,5 +1,9 @@
 import Foundation
 
+#if os(iOS)
+import UIKit
+#endif
+
 /// Threads being labelled, or moved to a label.
 struct Labeling: Identifiable {
     let id = UUID()
@@ -22,6 +26,32 @@ enum PaletteScope {
 }
 
 extension MailStore {
+    // MARK: Notifications
+
+    /// Does what a notification's button asked for, then waits until the server has it: on iOS
+    /// the app may only have been woken for this. The core catches up first, for mail that came
+    /// while it slept.
+    func answer(_ answer: NotificationAnswer, thread: String) async {
+        #if os(iOS)
+        let task = UIApplication.shared.beginBackgroundTask(withName: "Notification action")
+        defer { UIApplication.shared.endBackgroundTask(task) }
+        #endif
+        _ = try? await bridge.call("settle", as: Empty.self)
+        switch answer {
+        case .archive:
+            _ = try? await bridge.call("act", ["action": Action.archive.rawValue, "threads": [thread]], as: ActReply.self)
+        case .read:
+            _ = try? await bridge.call("act", ["action": Action.read.rawValue, "threads": [thread]], as: ActReply.self)
+        case .reply(let text):
+            guard var reply = try? await bridge.call("reply_draft", ["thread": thread, "kind": ReplyKind.reply.rawValue], as: DraftReply.self).draft
+            else { return }
+            reply.text = text
+            _ = try? await bridge.call("act", ["action": Action.read.rawValue, "threads": [thread]], as: ActReply.self)
+            _ = try? await bridge.call("send", ["draft": CoreBridge.object(reply), "delay": 0], as: SendReply.self)
+        }
+        _ = try? await bridge.call("settle", as: Empty.self)
+    }
+
     // MARK: Selection
 
     func toggleSelection(_ thread: String) {

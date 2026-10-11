@@ -4,6 +4,7 @@
 
 mod attachments;
 mod changes;
+mod push;
 mod rules;
 mod search;
 mod sign_in;
@@ -75,6 +76,7 @@ pub fn config(base: &str) -> Config {
         gmail_hook_token: Some("hook-token".into()),
         poll_interval: std::time::Duration::from_millis(300),
         workers: false,
+        apns: None,
     }
 }
 
@@ -98,6 +100,7 @@ impl Server {
         let server_db = PgPoolOptions::new().max_connections(5).connect_lazy_with((*db.connect_options()).clone());
         let state = Arc::new(Inner {
             sealer: seal::Sealer::new(&config.secret_key),
+            pusher: crate::push::Pusher::new(config.apns.as_ref()),
             config,
             background: crate::background_pool(&db),
             db: server_db,
@@ -146,6 +149,14 @@ impl Server {
 
     pub async fn get(&self, path: &str, token: Option<&str>) -> reqwest::Response {
         let mut request = self.http.get(format!("{}{path}", self.base));
+        if let Some(token) = token {
+            request = request.bearer_auth(token);
+        }
+        request.send().await.unwrap()
+    }
+
+    pub async fn delete(&self, path: &str, token: Option<&str>) -> reqwest::Response {
+        let mut request = self.http.delete(format!("{}{path}", self.base));
         if let Some(token) = token {
             request = request.bearer_auth(token);
         }

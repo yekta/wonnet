@@ -11,7 +11,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow, bail};
 use chrono::Local;
-use mail_protocol::api::{DevLoginRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse};
+use mail_protocol::api::{
+    DevLoginRequest, DeviceRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse,
+};
 use mail_protocol::wire::{ClientMessage, ServerMessage};
 use mail_protocol::{
     ACCOUNT_COLORS, ACCOUNT_NAME_MAX, Account, Address, Draft, DraftAttachment, Label, Message, MessageState, Op,
@@ -50,6 +52,8 @@ const UNDO_DEPTH: usize = 30;
 const REFRESH_WAIT: Duration = Duration::from_secs(15);
 /// Only mail this recent is announced.
 const NEW_MAIL_WINDOW: i64 = 2 * 86_400_000;
+/// How long a `Settle` waits at most.
+const SETTLE_WAIT: Duration = Duration::from_secs(25);
 
 enum Input {
     Link(u64, LinkEvent),
@@ -145,6 +149,8 @@ pub fn start(config: Config, sink: Sink) -> Result<Handle> {
         arrived: Vec::new(),
         refreshing: Vec::new(),
         refresh: 0,
+        caught_up: false,
+        settling: Vec::new(),
     };
     core.announcing = core.ready_accounts();
     tokio::spawn(async move {
@@ -222,6 +228,10 @@ struct Core {
     /// The `Refresh` commands waiting for the server's `Synced`, and the number of the wait.
     refreshing: Vec<u64>,
     refresh: u64,
+    /// The server's changes since connecting were all applied.
+    caught_up: bool,
+    /// The `Settle` commands waiting.
+    settling: Vec<u64>,
 }
 
 fn random_hex() -> String {
@@ -331,6 +341,7 @@ impl Core {
 
     fn connect(&mut self) {
         self.link = None;
+        self.caught_up = false;
         self.backlog.clear();
         let (Some(server), Some(_)) = (self.server(), self.token()) else {
             self.set_connection("signed_out", None);
@@ -461,6 +472,13 @@ impl Core {
             Command::PrintThread { thread } => self.print_thread(&thread),
             Command::Search { query } => return self.search(id, query),
             Command::Refresh => return self.refresh(id),
+            Command::Settle => return self.settle(id),
+            Command::SetPushDevice { token, topic, sandbox, key } => {
+                self.set_push_device(DeviceRequest { token, topic, sandbox, key })
+            }
+            Command::UnreadInInbox { threads } => {
+                self.store.unread_in_inbox(&threads).map(|threads| json!({ "threads": threads }))
+            }
         })
     }
 
@@ -484,6 +502,74 @@ impl Core {
         }
         self.spawn(tokio::time::sleep(REFRESH_WAIT), move |core, _| core.refreshed(request));
         None
+    }
+
+    fn settle(&mut self, id: u64) -> Option<Result<Value>> {
+        if self.settled() {
+            return Some(Ok(json!({})));
+        }
+        self.settling.push(id);
+        self.spawn(tokio::time::sleep(SETTLE_WAIT), move |core, _| {
+            if let Some(index) = core.settling.iter().position(|waiting| *waiting == id) {
+                core.settling.remove(index);
+                core.reply(id, Ok(json!({})));
+            }
+        });
+        None
+    }
+
+    fn settled(&self) -> bool {
+        if self.demo || self.token().is_none() {
+            return true;
+        }
+        let later = mail_protocol::now_ms() + 2000;
+        let outbox = self.store.outbox().unwrap_or_default();
+        let waiting = outbox.iter().any(|(_, op)| !matches!(op, Op::Send { send_at, .. } if *send_at > later));
+        self.online() && self.caught_up && !waiting
+    }
+
+    /// Answers the `Settle`s once settled.
+    fn check_settled(&mut self) {
+        if self.settling.is_empty() || !self.settled() {
+            return;
+        }
+        for id in std::mem::take(&mut self.settling) {
+            self.reply(id, Ok(json!({})));
+        }
+    }
+
+    fn set_push_device(&mut self, device: DeviceRequest) -> Result<Value> {
+        self.store.set_meta("push_device", Some(&serde_json::to_string(&device)?))?;
+        self.register_device();
+        Ok(json!({}))
+    }
+
+    /// Gives the server this device to push to, when signed in.
+    fn register_device(&self) {
+        let device = self.store.meta("push_device").and_then(|text| serde_json::from_str::<DeviceRequest>(&text).ok());
+        let (Some(device), Some(server), Some(token), false) = (device, self.server(), self.token(), self.demo) else {
+            return;
+        };
+        let http = self.http.clone();
+        self.spawn(
+            async move { crate::http::post::<Value>(&http, &server, "/api/devices", Some(&token), &device).await },
+            |_, result| {
+                if let Err(error) = result {
+                    tracing::warn!("couldn't register for push notifications: {error:#}");
+                }
+            },
+        );
+    }
+
+    /// Stops the server pushing this session's mail to the device.
+    fn unregister_device(&self) {
+        let device = self.store.meta("push_device").and_then(|text| serde_json::from_str::<DeviceRequest>(&text).ok());
+        let (Some(device), Some(server), Some(token), false) = (device, self.server(), self.token(), self.demo) else {
+            return;
+        };
+        let http = self.http.clone();
+        let path = format!("/api/devices/{}", crate::http::encode(&device.token));
+        self.spawn(async move { crate::http::delete(&http, &server, &path, &token).await }, |_, _| {});
     }
 
     fn refreshed(&mut self, request: u64) {
@@ -622,6 +708,7 @@ impl Core {
                     core.store.set_meta("token", Some(&response.token))?;
                     if new {
                         core.connect();
+                        core.register_device();
                     }
                     Ok(json!({}))
                 });
@@ -632,6 +719,7 @@ impl Core {
     }
 
     fn sign_out(&mut self) -> Result<Value> {
+        self.unregister_device();
         self.link = None;
         self.generation += 1;
         self.forget()?;
@@ -1463,6 +1551,7 @@ impl Core {
                 self.send(ClientMessage::Hello { token, cursor: self.store.cursor(), protocol: PROTOCOL_VERSION });
             }
             LinkEvent::Closed(error) => {
+                self.caught_up = false;
                 if self.token().is_some() {
                     self.bodies_in_flight.clear();
                     self.set_connection("offline", error);
@@ -1505,7 +1594,10 @@ impl Core {
                     self.backlog.push_front(Step::Changes(Box::new(part)));
                 }
             }
-            ServerMessage::Applied { op_id, ok, error } => self.applied(&op_id, ok, error),
+            ServerMessage::Applied { op_id, ok, error } => {
+                self.applied(&op_id, ok, error);
+                self.check_settled();
+            }
             ServerMessage::Body { message_id, body, .. } => {
                 self.bodies_in_flight.remove(&message_id);
                 let Some(body) = body else {
@@ -1578,6 +1670,7 @@ impl Core {
             return;
         }
         // Caught up.
+        self.caught_up = true;
         self.flush();
         let arrived = std::mem::take(&mut self.arrived);
         match self.first_sync {
@@ -1592,6 +1685,7 @@ impl Core {
         }
         let missing = self.store.missing_bodies(PREFETCH).unwrap_or_default();
         self.queue_bodies(missing, false);
+        self.check_settled();
     }
 
     /// The accounts that are ready, and want their new mail announced.

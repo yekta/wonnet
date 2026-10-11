@@ -4,24 +4,36 @@ import SwiftUI
 /// The iOS app: a mailbox's threads, then a thread, in one navigation stack, with the mailboxes
 /// kept as tabs along the bottom and every mailbox in the drawer.
 public struct MailIOSApp: App {
-    @State private var store = MailStore()
+    /// Started at launch rather than when the window shows: a push or a notification's button
+    /// wakes the app in the background, with no window.
+    private static let store = MailStore()
+    @UIApplicationDelegateAdaptor(IOSDelegate.self) private var delegate
 
     public init() {
         Notifier.shared.install()
-    }
-
-    private var defaultServer: String {
-        Bundle.main.object(forInfoDictionaryKey: "MailServerURL") as? String ?? "http://localhost:3000"
+        let server = Bundle.main.object(forInfoDictionaryKey: "MailServerURL") as? String ?? "http://localhost:3000"
+        Self.store.start(defaultServer: server)
     }
 
     public var body: some Scene {
         WindowGroup {
             IOSRoot()
-                .environment(store)
-                .preferredColorScheme(store.appearance.scheme)
-                .onAppear { store.start(defaultServer: defaultServer) }
-                .onOpenURL { url in Task { await store.finishSignIn(url) } }
+                .environment(Self.store)
+                .preferredColorScheme(Self.store.appearance.scheme)
+                .onOpenURL { url in Task { await Self.store.finishSignIn(url) } }
         }
+    }
+}
+
+/// Hears from APNs: this device's token, and the background pushes that take notifications down.
+final class IOSDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Notifier.shared.registered(token: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        await Notifier.shared.received(userInfo)
+        return .newData
     }
 }
 

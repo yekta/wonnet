@@ -1,6 +1,6 @@
 //! Wakes a user's sockets when their data changed. Writers call `pg_notify('changes', user)`;
 //! one LISTEN connection per process passes it on, so it works across replicas. The same
-//! connection wakes account workers on `ops`.
+//! connection wakes account workers on `ops`, and tells the pusher of changes.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -73,7 +73,10 @@ async fn listen_once(state: &AppState, pool: &PgPool) -> sqlx::Result<()> {
         let notification = listener.recv().await?;
         let Ok(id) = notification.payload().parse::<Uuid>() else { continue };
         match notification.channel() {
-            "changes" => state.hub.poke(id),
+            "changes" => {
+                state.hub.poke(id);
+                state.pusher.changed(id);
+            }
             _ => state.workers.wake(id),
         }
     }

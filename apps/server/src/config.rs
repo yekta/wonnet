@@ -23,6 +23,29 @@ pub struct Config {
     pub poll_interval: Duration,
     /// Runs the account workers. Off in tests that only look at the API.
     pub workers: bool,
+    /// Push notifications; without them nothing is pushed.
+    pub apns: Option<ApnsConfig>,
+}
+
+pub struct ApnsConfig {
+    /// The auth key's .p8 file, PEM.
+    pub key: String,
+    pub key_id: String,
+    pub team_id: String,
+    pub production_url: String,
+    pub sandbox_url: String,
+}
+
+impl ApnsConfig {
+    fn from_env() -> Option<Self> {
+        Some(Self {
+            key: optional("APNS_KEY")?,
+            key_id: optional("APNS_KEY_ID")?,
+            team_id: optional("APNS_TEAM_ID")?,
+            production_url: "https://api.push.apple.com".into(),
+            sandbox_url: "https://api.sandbox.push.apple.com".into(),
+        })
+    }
 }
 
 fn required(name: &str) -> Result<String, String> {
@@ -57,6 +80,7 @@ impl Config {
             gmail_hook_token: optional("GMAIL_HOOK_TOKEN"),
             poll_interval: Duration::from_secs(number("POLL_SECONDS", 10)?),
             workers: true,
+            apns: ApnsConfig::from_env(),
         })
     }
 
