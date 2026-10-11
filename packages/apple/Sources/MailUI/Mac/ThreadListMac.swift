@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The thread list on the Mac: a table that only makes the rows on screen, each drawn in one
 /// pass. It spans the window, so the whole page scrolls, and draws its rows on the page in the
-/// centred column, framed by a hairline, with one between the rows. Hovering a row shows what can be done to it, as Newton did. ⌘-click picks rows,
+/// centred column. Hovering a row shows what can be done to it, as Newton did. ⌘-click picks rows,
 /// Shift-click picks the rows up to one.
 struct ThreadListMac: NSViewRepresentable {
     let store: MailStore
@@ -147,7 +147,7 @@ struct ThreadListMac: NSViewRepresentable {
             let row = rows[index]
             view.configure(
                 row: row, text: text(for: row), current: row.id == selected, checked: checked.contains(row.id),
-                hovering: table?.hovered == index, first: index == 0, last: index == rows.count - 1
+                hovering: table?.hovered == index
             )
         }
 
@@ -270,21 +270,17 @@ final class ThreadRowView: NSTableRowView {
     }
     /// The action or the star the pointer is over, lit as a button would be.
     var hoveredHit = Hit.none { didSet { if hoveredHit != oldValue { needsDisplay = true } } }
-    private var isFirst = false
-    private var isLast = false
 
     private static let sendersX: CGFloat = 36
     private static let sendersWidth: CGFloat = 190
     private static let iconSide: CGFloat = 16
 
-    func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, hovering: Bool, first: Bool, last: Bool) {
+    func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, hovering: Bool) {
         self.row = row
         self.text = text
         self.isCurrent = current
         self.isChecked = checked
         self.hovering = hovering
-        self.isFirst = first
-        self.isLast = last
         needsDisplay = true
     }
 
@@ -327,19 +323,11 @@ final class ThreadRowView: NSTableRowView {
             Tokens.primary.opacity(Tokens.colorTintOpacity).platform.setFill()
             column.fill()
         }
-        // The frame around the list, and the line above every row but the first: the first
-        // row's top line is the frame's.
-        Tokens.border.platform.setFill()
-        NSRect(x: column.minX, y: 0, width: 1, height: column.height).fill()
-        NSRect(x: column.maxX - 1, y: 0, width: 1, height: column.height).fill()
-        NSRect(x: column.minX, y: 0, width: column.width, height: 1).fill()
-        if isLast {
-            NSRect(x: column.minX, y: column.maxY - 1, width: column.width, height: 1).fill()
-        }
         if let row {
             Theme.accountColor(row.color).platform.setFill()
-            let bottom: CGFloat = isLast ? 1 : 0
-            NSRect(x: column.minX, y: 1, width: Theme.macAccountBarWidth, height: column.height - 1 - bottom).fill()
+            let bar = NSRect(x: column.minX, y: 2, width: Theme.macAccountBarWidth, height: column.height - 4)
+            let radius = Theme.macAccountBarWidth / 2
+            NSBezierPath(roundedRect: bar, xRadius: radius, yRadius: radius).fill()
         }
     }
 
