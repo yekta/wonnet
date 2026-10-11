@@ -357,7 +357,7 @@ final class ThreadRowView: NSTableRowView {
         }
         if let row {
             Theme.accountColor(row.color).platform.setFill()
-            let bar = NSRect(x: column.minX, y: 4, width: Theme.macAccountBarWidth, height: column.height - 8)
+            let bar = NSRect(x: column.minX + 4, y: 8, width: Theme.macAccountBarWidth, height: column.height - 16)
             let radius = Theme.macAccountBarWidth / 2
             NSBezierPath(roundedRect: bar, xRadius: radius, yRadius: radius).fill()
         }
