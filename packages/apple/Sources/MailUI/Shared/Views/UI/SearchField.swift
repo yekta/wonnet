@@ -36,17 +36,25 @@ struct SearchField: View {
                 .autocorrectionDisabled()
                 #endif
             if !text.isEmpty {
-                PlainButton(help: "Clear", action: clearText) {
-                    Image(.x, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
-                }
+                IconButton(symbol: .x, help: "Clear", size: .small, circled: false, quiet: true, action: clearText)
             }
         }
-        .padding(.horizontal, Space.m)
-        .frame(height: (style == .sheet ? Theme.searchHeight : ControlSize.regular.height) * Platform.scale)
+        .padding(.leading, Space.m)
+        .padding(.trailing, text.isEmpty ? Space.m : clearInset)
+        .frame(height: height)
         .background { if style == .bar { Capsule().strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline) } }
         .overlay(alignment: .bottom) { if style == .sheet { Rule(color: Tokens.borderCard) } }
         .onAppear { if autofocus { focused = true } }
         .onChange(of: focusTrigger) { focused = true }
+    }
+
+    private var height: CGFloat {
+        (style == .sheet ? Theme.searchHeight : ControlSize.regular.height) * Platform.scale
+    }
+
+    /// Clear sits as far from the end as from the top and the bottom.
+    private var clearInset: CGFloat {
+        (height - ControlSize.small.height * Platform.scale) / 2 - Theme.buttonGap / 2
     }
 
     private func clearText() {
