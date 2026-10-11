@@ -31,7 +31,8 @@ added to the component, not to the view.
   button. The thread row that is open stays in `backgroundAccentLarger`, the hover's fill, not
   the stronger one. From dimmest to strongest they go `backgroundAccentLarger`,
   `backgroundAccentLargerStronger`, `backgroundAccent`, `backgroundAccentStronger`, so a small
-  thing's hover shows on a selected row. What sits on `backgroundSecondary` (a chip) hovers in
+  thing's hover shows on a selected row. The actions on a hovered thread row hover in
+  `backgroundAccentLargerStrongest`, so they show on the row's fill. What sits on `backgroundSecondary` (a chip) hovers in
   `backgroundSecondaryAccent`. An accent is never thinned with an opacity: if a step is
   missing, add a token for it. A control with a colour of its own (the star) hovers in a wash
   of it: the colour at `Opacity.colorTint`, lighter in the dark scheme. Pressed is hovered: on

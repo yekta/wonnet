@@ -22,6 +22,7 @@
   --background-accent-strongest: #d6d8db;
   --background-accent-larger: #f0f1f3;
   --background-accent-larger-stronger: #e9ebed;
+  --background-accent-larger-strongest: #e2e4e7;
   --background-secondary: #f3f3f3;
   --background-secondary-accent: #e9eaeb;
   --background-secondary-accent-stronger: #e0e1e3;
@@ -98,6 +99,7 @@
     --background-accent-strongest: #3c3e40;
     --background-accent-larger: #1c1e1f;
     --background-accent-larger-stronger: #222426;
+    --background-accent-larger-strongest: #292b2d;
     --background-secondary: #191919;
     --background-secondary-accent: #232425;
     --background-secondary-accent-stronger: #2c2d2f;

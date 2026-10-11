@@ -402,7 +402,7 @@ final class ThreadRowView: NSTableRowView {
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
             for (kind, symbol, rect) in actions {
                 let lit = hoveredHit == kind
-                if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccent.platform) }
+                if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccentLargerStrongest.platform) }
                 Self.drawSymbol(symbol, in: rect, color: lit ? Tokens.foreground.platform : Tokens.mutedForeground.platform)
             }
         } else {
