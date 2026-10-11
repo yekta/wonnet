@@ -44,7 +44,6 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     private var pending: String?
     private var asked = false
-    private var badge = 0
     /// This device's push token, once APNs gave it: the server tells of new mail from then on.
     private var device: [String: Any]?
 
@@ -89,9 +88,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// Always set: an alert push sets the icon's badge too, so a value kept here could be stale.
     func setBadge(_ count: Int) {
-        guard count != badge else { return }
-        badge = count
         #if os(macOS)
         NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
         #else
