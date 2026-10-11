@@ -392,7 +392,7 @@ final class ThreadRowView: NSTableRowView {
         let dateWidth = ceil(text.date.size().width)
         let lineWidth = max(starRect.minX - 34 - dateWidth - x, 0)
         if hovering {
-            let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.xl
+            let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.l
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
             for (kind, symbol, rect) in actions {
                 let lit = hoveredHit == kind
