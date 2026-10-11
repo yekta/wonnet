@@ -31,6 +31,10 @@ final class IOSDelegate: NSObject, UIApplicationDelegate {
         Notifier.shared.registered(token: deviceToken)
     }
 
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Notifier.shared.failedToRegister(error)
+    }
+
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         await Notifier.shared.received(userInfo)
         return .newData

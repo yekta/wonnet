@@ -127,13 +127,19 @@ pub async fn add_device(
     Json(request): Json<DeviceRequest>,
 ) -> AppResult<Json<Value>> {
     use base64::Engine;
-    let user_id = user(&state, &headers).await?;
+    let user_id = user(&state, &headers).await.inspect_err(|_| tracing::warn!("refused a device without a session"))?;
     let token = request.token.to_ascii_lowercase();
     if !push::valid_token(&token) || !push::valid_topic(&request.topic) {
+        tracing::warn!(
+            "refused device {} ({}) for user {user_id}: not a token and bundle id",
+            push::short(&token),
+            request.topic
+        );
         return Err(AppError::bad_request("That isn't a device this server can push to."));
     }
     let key = base64::engine::general_purpose::STANDARD.decode(&request.key).unwrap_or_default();
     if key.len() != push::KEY_LEN {
+        tracing::warn!("refused device {} for user {user_id}: its key is {} bytes", push::short(&token), key.len());
         return Err(AppError::bad_request("The device's key should be 32 bytes."));
     }
     let key = state.sealer.seal(&key);

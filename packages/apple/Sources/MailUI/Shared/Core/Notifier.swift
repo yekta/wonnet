@@ -1,5 +1,6 @@
 import Foundation
 import MailPush
+import os
 import UserNotifications
 
 #if os(macOS)
@@ -109,16 +110,35 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     /// APNs gave this device its token.
     func registered(token: Data) {
-        guard let key = PushSeal.key(), let topic = Bundle.main.bundleIdentifier else { return }
-        let sandbox = Bundle.main.object(forInfoDictionaryKey: "PushEnvironment") as? String != "production"
         let hex = token.map { String(format: "%02x", $0) }.joined()
+        guard let key = PushSeal.key() else {
+            Self.log.error("No push key in the keychain, so device \(hex.prefix(8), privacy: .public) isn't registered")
+            return
+        }
+        guard let topic = Bundle.main.bundleIdentifier else { return }
+        let sandbox = Bundle.main.object(forInfoDictionaryKey: "PushEnvironment") as? String != "production"
+        Self.log.info("APNs gave device \(hex.prefix(8), privacy: .public) (sandbox: \(sandbox, privacy: .public))")
         device = ["token": hex, "topic": topic, "sandbox": sandbox, "key": key]
         registerDevice()
     }
 
+    /// APNs gave no token.
+    func failedToRegister(_ error: Error) {
+        Self.log.error("APNs gave no token: \(error.localizedDescription, privacy: .public)")
+    }
+
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Wonnet", category: "push")
+
     private func registerDevice() {
         guard let bridge, let device else { return }
-        bridge.send("set_push_device", device)
+        Task {
+            do {
+                _ = try await bridge.call("set_push_device", device, as: Empty.self)
+                Self.log.info("The server has this device")
+            } catch {
+                Self.log.error("The server didn't take this device: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     /// A background push: the badge, and the threads whose notifications to take down.
