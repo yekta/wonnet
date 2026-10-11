@@ -54,7 +54,7 @@
   --input: #fbfcfd;
   --ring: #4f96f2;
   --overlay: #000000;
-  --shadow: #000000;
+  --shadow: #0f1a24;
   --chart-1: #4f96f2;
   --chart-2: #4a9d5f;
   --chart-3: #f0a21e;
@@ -81,7 +81,7 @@
   --opacity-dimmed-stronger: 0.25;
   --opacity-lit: 0.88;
   --opacity-shadow: 0.1;
-  --opacity-shadow-stronger: 0.22;
+  --opacity-shadow-stronger: 0.16;
   --opacity-shadow-strongest: 0.32;
   --opacity-color-tint: 0.12;
   --opacity-color-tint-stronger: 0.2;
@@ -130,7 +130,7 @@
     --input: #1a1c1e;
     --ring: #5ea2f5;
     --overlay: #000000;
-    --shadow: #000000;
+    --shadow: #04080c;
     --chart-1: #5ea2f5;
     --chart-2: #5fab72;
     --chart-3: #f2ad33;
@@ -157,7 +157,7 @@
     --opacity-dimmed-stronger: 0.25;
     --opacity-lit: 0.88;
     --opacity-shadow: 0.25;
-    --opacity-shadow-stronger: 0.6;
+    --opacity-shadow-stronger: 0.4;
     --opacity-shadow-strongest: 0.75;
     --opacity-color-tint: 0.08;
     --opacity-color-tint-stronger: 0.14;
