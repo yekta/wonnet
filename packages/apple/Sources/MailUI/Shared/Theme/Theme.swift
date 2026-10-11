@@ -110,7 +110,9 @@ enum Theme {
     static let iosAccountBarWidth: CGFloat = 4
     /// The widest the list and the thread's card grow on the Mac.
     static let cardWidth: CGFloat = 1000
-    static let sidebarWidth: CGFloat = 256
+    static let sidebarWidth: CGFloat = 300
+    /// The Mac sidebar sliding in and out: a critically damped spring, as the iOS drawer's.
+    static let sidebarSlide = Animation.smooth(duration: 0.3)
 
     static let accountColors = [
         Tokens.account1, Tokens.account2, Tokens.account3, Tokens.account4, Tokens.account5,
