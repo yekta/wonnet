@@ -65,7 +65,7 @@ struct MacRoot: View {
                     content
                         .opacity(store.settings == nil ? 1 : 0)
                         .allowsHitTesting(store.settings == nil)
-                    if store.sidebarOpen, store.settings == nil { sidebar }
+                    if store.settings == nil { sidebar }
                     if let section = store.settings { SettingsRoute(section: section) }
                 }
                 .overlay(alignment: .bottom) { ToastView() }
@@ -79,11 +79,18 @@ struct MacRoot: View {
 
     /// Over the page, without moving it; a click beside it closes it.
     @ViewBuilder private var sidebar: some View {
+        // Always there and only faded, so it stops taking clicks the moment the sidebar closes:
+        // a removed view keeps them until its spring has fully settled.
         Tokens.overlay.opacity(Opacity.overlay).color
             .contentShape(Rectangle())
             .onTapGesture { showSidebar(false) }
-            .transition(.opacity)
+            .opacity(store.sidebarOpen ? 1 : 0)
+            .allowsHitTesting(store.sidebarOpen)
             .zIndex(1)
+        if store.sidebarOpen { panel }
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: 38)
             SidebarView(
