@@ -39,7 +39,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
         var body: some View {
             HStack(spacing: Space.xs + 2) {
                 Image(symbol, size: ControlSize.regular.icon - 1).foregroundStyle(foreground)
-                Text(title).textStyle(chosen ? .labelStrong : .label, color: foreground).lineLimit(1)
+                Text(title).textStyle(chosen && Platform.strongSelection ? .labelStrong : .label, color: foreground).lineLimit(1)
                 if count > 0 {
                     Text("\(count)").textStyle(.footnote, color: chosen ? Tokens.mutedForeground.color : Tokens.mutedStrongerForeground.color)
                 }

@@ -29,7 +29,7 @@ struct TabStrip<Tab: Identifiable & Hashable>: View {
 
         var body: some View {
             HStack(spacing: Space.xs + 2) {
-                Text(title).font((chosen ? TextStyle.labelStrong : .label).font)
+                Text(title).font((chosen && Platform.strongSelection ? TextStyle.labelStrong : .label).font)
                 if count > 0 {
                     Text("\(count)").textStyle(.footnote)
                 }

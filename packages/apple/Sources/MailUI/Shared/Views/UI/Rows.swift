@@ -86,7 +86,7 @@ struct NavRow<Trailing: View>: View {
                     }
                 }
                 .frame(width: 18)
-                Text(title).textStyle(selected ? .labelStrong : .label, color: Tokens.foreground.color).lineLimit(1).truncationMode(.middle)
+                Text(title).textStyle(selected && Platform.strongSelection ? .labelStrong : .label, color: Tokens.foreground.color).lineLimit(1).truncationMode(.middle)
                 Spacer()
                 if count > 0 {
                     Text("\(count)").textStyle(.caption)
