@@ -60,7 +60,7 @@ private struct SettingsSidebar: View {
                 VStack(spacing: 0) {
                     if store.settingsQuery.isEmpty {
                         ForEach(SettingsSection.shown) { section in
-                            NavRow(title: section.title, symbol: section.symbol, selected: section == selected, verticalPadding: Theme.buttonGap / 2) {
+                            NavRow(title: section.title, symbol: section.symbol, selected: section == selected, verticalPadding: Theme.rowGap / 2) {
                                 store.openSettings(section)
                             } trailing: {
                                 EmptyView()
@@ -83,7 +83,7 @@ private struct SettingsSidebar: View {
     @ViewBuilder private var results: some View {
         let found = SettingsEntry.matching(store.settingsQuery)
         ForEach(found) { entry in
-            NavRow(title: entry.title, symbol: entry.section.symbol, verticalPadding: Theme.buttonGap / 2) {
+            NavRow(title: entry.title, symbol: entry.section.symbol, verticalPadding: Theme.rowGap / 2) {
                 store.openSettings(entry.section, target: entry.id)
             } trailing: {
                 Text(entry.section.title).textStyle(.caption)

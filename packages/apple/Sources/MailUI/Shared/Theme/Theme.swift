@@ -88,7 +88,9 @@ enum Theme {
     static let hairline: CGFloat = 1
     /// Between the faces of buttons side by side. Each button pads half of it inside its hit
     /// area, so the gap is only drawn: hit areas still touch.
-    static let buttonGap: CGFloat = 2
+    static let buttonGap: CGFloat = 6
+    /// Between the faces of rows one above the other, kept like `buttonGap`.
+    static let rowGap: CGFloat = 2
 
     /// A text field, as tall as the regular control.
     static let fieldHeight: CGFloat = ControlSize.regular.height

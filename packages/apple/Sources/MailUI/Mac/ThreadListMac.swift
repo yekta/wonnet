@@ -352,9 +352,9 @@ final class ThreadRowView: NSTableRowView {
         return NSRect(x: ((bounds.width - width) / 2).rounded(), y: 0, width: width, height: bounds.height)
     }
 
-    /// The row's face: the column, with half the gap between buttons above and below.
+    /// The row's face: the column, with half the gap between rows above and below.
     private var face: NSRect {
-        column.insetBy(dx: 0, dy: Theme.buttonGap / 2)
+        column.insetBy(dx: 0, dy: Theme.rowGap / 2)
     }
 
     /// The star, as far from the face's right edge as from its top and bottom.
