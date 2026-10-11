@@ -91,7 +91,7 @@ private struct SettingsSections: View {
                         ForEach(group) { section in
                             if let selected {
                                 Button { choose(section) } label: { row(section) }
-                                    .listRowBackground(selected == section ? Tokens.backgroundAccentStronger.color : Tokens.popover.color)
+                                    .listRowBackground(selected == section ? Tokens.backgroundAccentStronger.color : Tokens.card.color)
                             } else {
                                 NavigationLink(value: section) { row(section) }
                             }
@@ -676,8 +676,8 @@ private struct SettingsList<Content: View>: View {
     var body: some View {
         List {
             content
-                .listRowBackground(Tokens.popover.color)
-                .listRowSeparatorTint(Tokens.borderPopover.color)
+                .listRowBackground(Tokens.card.color)
+                .listRowSeparatorTint(Tokens.borderCard.color)
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
