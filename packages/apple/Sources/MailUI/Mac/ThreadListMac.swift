@@ -16,6 +16,8 @@ struct ThreadListMac: NSViewRepresentable {
     let shown: Bool
     /// False while the rows are the mailbox before; when they are the new one's, the list goes to the top.
     let ready: Bool
+    /// The next page is being read: a row at the foot says so.
+    let loadingMore: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator(store: store) }
 
@@ -54,7 +56,7 @@ struct ThreadListMac: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         if scroll.contentInsets.top != topInset { pad(scroll) }
         if scroll.isHidden == shown { scroll.isHidden = !shown }
-        context.coordinator.update(rows: rows, selected: selected, checked: checked, ready: ready)
+        context.coordinator.update(rows: rows, selected: selected, checked: checked, ready: ready, loadingMore: loadingMore)
     }
 
     /// Pads the rows, not the scroll view, so the padding scrolls with them and the scroller
@@ -79,6 +81,7 @@ struct ThreadListMac: NSViewRepresentable {
         private var selected: String?
         private var checked: Set<String> = []
         private var ready = true
+        private var loadingMore = false
         private var prefetch: DispatchWorkItem?
         /// The row last clicked: it is where the pointer is, so the list doesn't move to show it.
         private var clickedRow: String?
@@ -89,7 +92,7 @@ struct ThreadListMac: NSViewRepresentable {
             self.store = store
         }
 
-        func update(rows: [ThreadRow], selected: String?, checked: Set<String>, ready: Bool) {
+        func update(rows: [ThreadRow], selected: String?, checked: Set<String>, ready: Bool, loadingMore: Bool) {
             guard let table else { return }
             let moved = selected != self.selected
             let picked = checked != self.checked
@@ -99,10 +102,17 @@ struct ThreadListMac: NSViewRepresentable {
             self.selected = selected
             self.checked = checked
             self.ready = ready
+            let footChanged = loadingMore != self.loadingMore
+            self.loadingMore = loadingMore
             if let changed {
                 for index in changed {
                     guard let view = table.rowView(atRow: index, makeIfNecessary: false) as? ThreadRowView else { continue }
                     configure(view, at: index)
+                }
+                if footChanged, loadingMore {
+                    table.insertRows(at: [rows.count], withAnimation: [])
+                } else if footChanged {
+                    table.removeRows(at: [rows.count], withAnimation: [])
                 }
             } else {
                 table.reloadData()
@@ -151,9 +161,12 @@ struct ThreadListMac: NSViewRepresentable {
             )
         }
 
-        func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+        func numberOfRows(in tableView: NSTableView) -> Int { rows.count + (loadingMore ? 1 : 0) }
 
         func tableView(_ tableView: NSTableView, rowViewForRow index: Int) -> NSTableRowView? {
+            guard index < rows.count else {
+                return tableView.makeView(withIdentifier: LoadingMoreRowView.identifier, owner: nil) as? LoadingMoreRowView ?? LoadingMoreRowView()
+            }
             let identifier = NSUserInterfaceItemIdentifier("row")
             let view = tableView.makeView(withIdentifier: identifier, owner: nil) as? ThreadRowView ?? ThreadRowView()
             view.identifier = identifier
@@ -214,6 +227,24 @@ struct ThreadListMac: NSViewRepresentable {
             }
         }
     }
+}
+
+/// The row at the foot of the list while the next page is being read.
+final class LoadingMoreRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("loadingMore")
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        let host = NSHostingView(rootView: LoadingMore())
+        host.frame = bounds
+        host.autoresizingMask = [.width, .height]
+        addSubview(host)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func drawSelection(in dirtyRect: NSRect) {}
 }
 
 /// Tells its rows when the pointer is over them.

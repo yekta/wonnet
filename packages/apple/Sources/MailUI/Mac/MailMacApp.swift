@@ -136,7 +136,8 @@ struct MacRoot: View {
                 }
                 ThreadListMac(
                     store: store, rows: store.visibleRows, selected: store.selected, checked: store.selection,
-                    topInset: header ? 0 : Space.l, shown: store.conversation == nil, ready: store.listReady
+                    topInset: header ? 0 : Space.l, shown: store.conversation == nil, ready: store.listReady,
+                    loadingMore: store.loadingMore && store.searchRows == nil
                 )
                 .overlay {
                     if store.listEmpty { EmptyList() }
