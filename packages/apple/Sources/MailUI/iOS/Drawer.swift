@@ -40,7 +40,7 @@ final class DrawerController: UIViewController, UIGestureRecognizerDelegate {
     /// What the sidebar leaves of the card on a phone.
     private static let peek: CGFloat = 56
     /// How far aside the card is when its content starts to dim.
-    private static let dimsFrom: CGFloat = 0.75
+    private static let dimsFrom: CGFloat = 0.5
 
     let sidebar: UIViewController
     let content: UIViewController
@@ -139,7 +139,7 @@ final class DrawerController: UIViewController, UIGestureRecognizerDelegate {
 
     /// The card's content dims over the last of the way open; its edge and shadow don't.
     private var contentAlpha: CGFloat {
-        let dimmed = Opacity.dimmed.value(for: traitCollection.userInterfaceStyle == .dark ? .dark : .light)
+        let dimmed = Opacity.dimmedStronger.value(for: traitCollection.userInterfaceStyle == .dark ? .dark : .light)
         let dimming = min(1, max(0, (progress - Self.dimsFrom) / (1 - Self.dimsFrom)))
         return 1 - (1 - dimmed) * dimming
     }
