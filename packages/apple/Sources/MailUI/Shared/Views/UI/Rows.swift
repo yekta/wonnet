@@ -14,7 +14,7 @@ struct ItemRow<Trailing: View>: View {
             if let dot {
                 Circle().fill(dot).frame(width: 8, height: 8).padding(.trailing, Space.s + 2)
             } else if let symbol {
-                Image(symbol, size: 13).foregroundStyle(Tokens.mutedMoreForeground.color).padding(.trailing, Space.s + 2)
+                Image(symbol, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color).padding(.trailing, Space.s + 2)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).textStyle(.body).lineLimit(1).truncationMode(.middle)
@@ -98,7 +98,7 @@ struct NavRow<Trailing: View>: View {
             .padding(.trailing, Space.l)
             .frame(height: Theme.rowHeight * Platform.scale)
             .padding(.vertical, verticalPadding * Platform.scale)
-            .background(selected ? Tokens.accentStronger.color : hovered ? Tokens.accent.color : .clear)
+            .background(selected ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear)
             .padding(.vertical, Theme.buttonGap / 2)
             .contentShape(Rectangle())
         }

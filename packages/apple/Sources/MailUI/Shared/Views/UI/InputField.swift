@@ -22,7 +22,7 @@ struct InputField: View {
                         .scrollContentBackground(.hidden)
                         .overlay(alignment: .topLeading) {
                             if text.isEmpty {
-                                Text(placeholder).foregroundStyle(Tokens.mutedMoreForeground.color).padding(.leading, 5).allowsHitTesting(false)
+                                Text(placeholder).foregroundStyle(Tokens.mutedStrongerForeground.color).padding(.leading, 5).allowsHitTesting(false)
                             }
                         }
                         .padding(.vertical, Space.s)
@@ -40,8 +40,8 @@ struct InputField: View {
             .foregroundStyle(Tokens.foreground.color)
             .padding(.horizontal, Space.s + 2)
             .frame(height: (lines > 1 ? CGFloat(lines) * 18 + 16 : Theme.fieldHeight) * Platform.scale)
-            .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Tokens.card.color))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Tokens.input.color, lineWidth: Theme.hairline))
+            .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Tokens.input.color))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline))
         }
         .onAppear {
             guard autofocus else { return }

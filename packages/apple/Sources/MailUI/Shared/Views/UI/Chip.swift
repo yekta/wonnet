@@ -36,7 +36,7 @@ struct Chip: View {
             }
             if let remove {
                 PlainButton(help: "Remove \(title)", action: remove) {
-                    Image(.x, size: 11).foregroundStyle(Tokens.mutedMoreForeground.color)
+                    Image(.x, size: 11).foregroundStyle(Tokens.mutedStrongerForeground.color)
                 }
                 .padding(.trailing, -Space.s)
             }
@@ -44,8 +44,8 @@ struct Chip: View {
         .padding(.horizontal, Space.s + 2)
         .frame(height: Theme.chipHeight * Platform.scale)
         .foregroundStyle(variant == .invalid ? Tokens.destructive.color : Tokens.foreground.color)
-        .background(Capsule().fill(hovered && action != nil ? Tokens.accent.color : Tokens.muted.color))
-        .overlay(Capsule().strokeBorder(variant == .invalid ? Tokens.destructive.color.opacity(0.6) : .clear, lineWidth: Theme.hairline))
+        .background(Capsule().fill(hovered && action != nil ? Tokens.backgroundSecondaryAccent.color : Tokens.backgroundSecondary.color))
+        .overlay(Capsule().strokeBorder(variant == .invalid ? Tokens.destructive.opacity(Opacity.colorBorder).color : .clear, lineWidth: Theme.hairline))
         .contentShape(Capsule())
     }
 }

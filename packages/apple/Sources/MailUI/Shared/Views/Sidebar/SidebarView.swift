@@ -97,7 +97,7 @@ struct SidebarView: View {
             } else if account.status == "reauth" || account.status == "error" {
                 Image(.circleAlert, size: 13).foregroundStyle(Tokens.destructive.color)
             }
-            Image(expanded.contains(account.id) ? .chevronDown : .chevronRight, size: 12).foregroundStyle(Tokens.mutedMostForeground.color)
+            Image(expanded.contains(account.id) ? .chevronDown : .chevronRight, size: 12).foregroundStyle(Tokens.mutedStrongestForeground.color)
         }
     }
 
@@ -154,7 +154,7 @@ struct SidebarView: View {
             #endif
             NavRow(title: "Settings", symbol: .settings, verticalPadding: 2, action: showSettings) {
                 if store.connection == "offline" {
-                    Image(.wifiOff, size: 14).foregroundStyle(Tokens.mutedMoreForeground.color).help("Offline")
+                    Image(.wifiOff, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color).help("Offline")
                 }
             }
         }

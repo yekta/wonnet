@@ -194,12 +194,12 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
 
-        private func swipe(_ title: String, _ symbol: Symbol, _ color: ThemeColor, _ perform: @escaping @MainActor () -> Void) -> UIContextualAction {
+        private func swipe(_ title: String, _ symbol: Symbol, _ color: ThemeColor, _ glyph: ThemeColor, _ perform: @escaping @MainActor () -> Void) -> UIContextualAction {
             let action = UIContextualAction(style: .normal, title: title) { _, _, done in
                 MainActor.assumeIsolated { perform() }
                 done(true)
             }
-            action.image = UIImage.symbol(symbol, side: 22).withTintColor(.white, renderingMode: .alwaysOriginal)
+            action.image = UIImage.symbol(symbol, side: 22).withTintColor(glyph.platform, renderingMode: .alwaysOriginal)
             action.backgroundColor = color.platform
             return action
         }
@@ -215,12 +215,12 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
             let row = rows[indexPath.row]
             let store = store
-            let delete = swipe("Delete", .trash, Tokens.destructive) { store.run(.trash, on: [row.id]) }
+            let delete = swipe("Delete", .trash, Tokens.destructive, Tokens.destructiveForeground) { store.run(.trash, on: [row.id]) }
             guard row.draftId == nil else { return UISwipeActionsConfiguration(actions: [delete]) }
             return UISwipeActionsConfiguration(actions: [
                 delete,
-                swipe(store.remindsInsteadOfSnoozing ? "Remind" : "Snooze", .clock, Tokens.warning) { store.run(.snooze, on: [row.id]) },
-                swipe("Archive", .archive, Tokens.success) { store.run(.archive, on: [row.id]) },
+                swipe(store.remindsInsteadOfSnoozing ? "Remind" : "Snooze", .clock, Tokens.warning, Tokens.warningForeground) { store.run(.snooze, on: [row.id]) },
+                swipe("Archive", .archive, Tokens.success, Tokens.successForeground) { store.run(.archive, on: [row.id]) },
             ])
         }
     }
@@ -255,7 +255,7 @@ final class ThreadCell: UITableViewCell {
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         contentView.addSubview(canvas)
         let pressed = UIView()
-        pressed.backgroundColor = Tokens.accentLargerStronger.platform
+        pressed.backgroundColor = Tokens.backgroundAccentLargerStronger.platform
         selectedBackgroundView = pressed
     }
 
@@ -294,12 +294,12 @@ private final class RowCanvas: UIView {
             x += 15
         }
         draw(text.senders, x: x, y: 12, width: star.minX - 10 - x)
-        let starColor = row.starred ? Tokens.star.platform : Tokens.input.platform
+        let starColor = row.starred ? Tokens.star.platform : Tokens.mutedStrongestForeground.platform
         UIImage.symbol(row.starred ? .starFilled : .star, side: star.width).withTintColor(starColor, renderingMode: .alwaysOriginal).draw(in: star)
         var subjectWidth = right - left
         if row.attachment {
             let clip = CGRect(x: right - 15, y: 38, width: 15, height: 15)
-            UIImage.symbol(.paperclip, side: 15).withTintColor(Tokens.mutedMoreForeground.platform, renderingMode: .alwaysOriginal).draw(in: clip)
+            UIImage.symbol(.paperclip, side: 15).withTintColor(Tokens.mutedStrongerForeground.platform, renderingMode: .alwaysOriginal).draw(in: clip)
             subjectWidth -= 22
         }
         draw(text.subject, x: left, y: 36, width: subjectWidth)

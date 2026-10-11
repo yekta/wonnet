@@ -57,7 +57,8 @@ struct PressStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .environment(\.hovered, hovering && enabled)
-                .opacity(enabled ? (configuration.isPressed ? 0.6 : 1) : 0.4)
+                .opacity(Opacity.pressed, when: enabled && configuration.isPressed)
+                .opacity(Opacity.disabled, when: !enabled)
                 .onHover { over in
                     var atOnce = Transaction()
                     atOnce.disablesAnimations = true
@@ -145,16 +146,16 @@ struct ActionButton: View {
 
         private var background: Color {
             switch variant {
-            case .primary: hovered ? Tokens.primary.color.opacity(0.88) : Tokens.primary.color
-            case .outline, .ghost, .destructive: hovered ? Tokens.accent.color : .clear
+            case .primary: hovered ? Tokens.primary.opacity(Opacity.lit).color : Tokens.primary.color
+            case .outline, .ghost, .destructive: hovered ? Tokens.backgroundAccent.color : .clear
             }
         }
 
         private var border: Color {
             switch variant {
             case .primary, .ghost: .clear
-            case .outline: Tokens.primary.color.opacity(0.7)
-            case .destructive: Tokens.destructive.color.opacity(0.6)
+            case .outline: Tokens.primary.opacity(Opacity.colorBorder).color
+            case .destructive: Tokens.destructive.opacity(Opacity.colorBorder).color
             }
         }
     }
@@ -240,7 +241,7 @@ struct IconCircle: View {
     var body: some View {
         ButtonIcon(symbol: symbol, pending: pending, size: size.icon, tint: tint)
             .frame(width: size.height * Platform.scale, height: size.height * Platform.scale)
-            .background(Circle().fill(hovered ? Tokens.accent.color : .clear))
+            .background(Circle().fill(hovered ? Tokens.backgroundAccent.color : .clear))
             .overlay(Circle().strokeBorder(circled ? Tokens.border.color : .clear, lineWidth: Theme.hairline))
             .padding(.horizontal, Theme.buttonGap / 2)
             .contentShape(Rectangle())
@@ -248,7 +249,7 @@ struct IconCircle: View {
 
     private var tint: Color {
         if active { return Tokens.primary.color }
-        if quiet { return hovered ? Tokens.mutedForeground.color : Tokens.mutedMoreForeground.color }
+        if quiet { return hovered ? Tokens.mutedForeground.color : Tokens.mutedStrongerForeground.color }
         return hovered ? Tokens.foreground.color : Tokens.mutedForeground.color
     }
 }
@@ -280,13 +281,13 @@ struct PlainButton<Label: View>: View {
             label
                 .padding(.horizontal, Space.xs)
                 .frame(minWidth: ControlSize.small.height, minHeight: ControlSize.small.height)
-                .background(RoundedRectangle(cornerRadius: Theme.radius).fill(hovered ? fill : .clear))
+                .background(RoundedRectangle(cornerRadius: Radius.sm).fill(hovered ? fill : .clear))
                 .contentShape(Rectangle())
         }
 
         private var fill: Color {
-            guard let tint else { return Tokens.accent.color }
-            return tint.opacity(Tokens.colorTintOpacity).color
+            guard let tint else { return Tokens.backgroundAccent.color }
+            return tint.opacity(Opacity.colorTint).color
         }
     }
 }
@@ -310,7 +311,7 @@ struct StarButton: View {
 
         var body: some View {
             Image(starred ? .starFilled : .star, size: size)
-                .foregroundStyle(starred || hovered ? Tokens.star.color : Tokens.mutedMoreForeground.color)
+                .foregroundStyle(starred || hovered ? Tokens.star.color : Tokens.mutedStrongerForeground.color)
         }
     }
 }

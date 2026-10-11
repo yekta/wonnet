@@ -28,7 +28,7 @@ struct Avatar: View {
     private var initialsCircle: some View {
         Text(initials)
             .font(.ui(size * 0.4, .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Tokens.primaryForeground.color)
             .frame(width: size * Platform.scale, height: size * Platform.scale)
             .background(Circle().fill(tint))
             .accessibilityHidden(true)

@@ -27,7 +27,7 @@ struct Notice: View {
     }
 
     private var color: Color {
-        tone == .error ? Tokens.destructive.color : Tokens.mutedMoreForeground.color
+        tone == .error ? Tokens.destructive.color : Tokens.mutedStrongerForeground.color
     }
 }
 
@@ -38,8 +38,8 @@ struct EmptyState: View {
 
     var body: some View {
         VStack(spacing: Space.m) {
-            Image(symbol, size: 30).foregroundStyle(Tokens.mutedMostForeground.color)
-            Text(message).textStyle(.body, color: Tokens.mutedMoreForeground.color)
+            Image(symbol, size: 30).foregroundStyle(Tokens.mutedStrongestForeground.color)
+            Text(message).textStyle(.body, color: Tokens.mutedStrongerForeground.color)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

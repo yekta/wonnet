@@ -36,8 +36,8 @@ struct Card<Content: View>: View {
     var body: some View {
         content
             .padding(Space.l)
-            .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Tokens.card.color))
-            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
+            .background(RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.card.color))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
     }
 }
 

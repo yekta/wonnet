@@ -26,7 +26,7 @@ struct ChoiceRow: View {
         var body: some View {
             HStack(spacing: Space.s + 2) {
                 if let symbol {
-                    Image(symbol, size: 14).foregroundStyle(Tokens.mutedMoreForeground.color)
+                    Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
                 }
                 Text(title).textStyle(.body).lineLimit(1)
                 Spacer(minLength: Space.m)
@@ -36,7 +36,7 @@ struct ChoiceRow: View {
             }
             .padding(.horizontal, Space.s + 2)
             .frame(minHeight: Theme.rowHeight * Platform.scale)
-            .background(RoundedRectangle(cornerRadius: Theme.radius).fill(highlighted ? Tokens.accentLargerStronger.color : hovered ? Tokens.accentLarger.color : .clear))
+            .background(RoundedRectangle(cornerRadius: Radius.sm).fill(highlighted ? Tokens.backgroundAccentLargerStronger.color : hovered ? Tokens.backgroundAccentLarger.color : .clear))
             .contentShape(Rectangle())
         }
     }
@@ -58,7 +58,7 @@ struct ChoiceList<Item: Identifiable, Row: View>: View {
                         row(index, item).id(item.id)
                     }
                     if items.isEmpty, let empty {
-                        Text(empty).textStyle(.label, color: Tokens.mutedMoreForeground.color)
+                        Text(empty).textStyle(.label, color: Tokens.mutedStrongerForeground.color)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(Space.s + 2)
                     }
@@ -88,9 +88,9 @@ struct PopupCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(Space.xs + 2)
             .background(
-                RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Tokens.popover.color)
-                    .shadow(color: Tokens.shadow.opacity(Tokens.shadowStrongerOpacity).color, radius: 12, y: 4)
+                RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.popover.color)
+                    .shadow(.md, Opacity.shadowStronger)
             )
-            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Tokens.cardBorder.color, lineWidth: Theme.hairline))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.borderPopover.color, lineWidth: Theme.hairline))
     }
 }

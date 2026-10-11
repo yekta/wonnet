@@ -16,7 +16,7 @@ struct BottomTabs<Tab: Identifiable & Hashable>: View {
     var body: some View {
         MovableList(
             items: tabs, axis: .horizontal, inset: Space.xs, fills: true, group: { _ in reorder == nil ? nil : "tabs" },
-            rowInset: EdgeInsets(top: Space.xs, leading: 0, bottom: Space.xs, trailing: 0), rowRadius: Theme.radius + 4,
+            rowInset: EdgeInsets(top: Space.xs, leading: 0, bottom: Space.xs, trailing: 0), rowRadius: Radius.md,
             clicked: pick, moved: moved
         ) { tab in
             Face(symbol: symbol(tab), title: title(tab), count: count(tab), chosen: tab.id == selected)
@@ -56,7 +56,7 @@ struct BottomTabs<Tab: Identifiable & Hashable>: View {
         }
 
         private var foreground: Color {
-            chosen || hovered ? Tokens.foreground.color : Tokens.mutedMoreForeground.color
+            chosen || hovered ? Tokens.foreground.color : Tokens.mutedStrongerForeground.color
         }
     }
 }

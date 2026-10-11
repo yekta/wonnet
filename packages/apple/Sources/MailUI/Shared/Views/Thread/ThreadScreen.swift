@@ -110,7 +110,7 @@ struct ThreadScreen: View {
                 .onTapGesture { if folded { store.unfoldedMessages.insert(message.id) } }
                 .id(message.id)
                 if message.id != conversation.messages.last?.id {
-                    Rule(color: Tokens.cardBorder)
+                    Rule(color: Tokens.borderCard)
                 }
             }
             if let draft = conversation.draftId {
@@ -121,7 +121,7 @@ struct ThreadScreen: View {
         .padding(.horizontal, pagePadding)
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
-        .background(Rectangle().fill(Tokens.card.color).shadow(color: Tokens.shadow.opacity(Tokens.shadowOpacity).color, radius: 16, y: 4))
+        .background(Rectangle().fill(Tokens.card.color).shadow(.lg))
     }
 
     private var pagePadding: CGFloat {
@@ -137,7 +137,7 @@ struct ThreadScreen: View {
             HStack(alignment: .top, spacing: Space.m) {
                 VStack(alignment: .leading, spacing: Space.xs + 2) {
                     Text(conversation.subject).textStyle(.title).textSelection(.enabled)
-                    Text(conversation.participants).textStyle(.label, color: Tokens.mutedMoreForeground.color)
+                    Text(conversation.participants).textStyle(.label, color: Tokens.mutedStrongerForeground.color)
                 }
                 Spacer(minLength: 0)
                 StarButton(starred: conversation.starred) { store.toggleStar(conversation.id) }
@@ -166,11 +166,11 @@ struct ThreadScreen: View {
     /// The reply the user started and didn't send.
     private func draftCard(_ id: String) -> some View {
         VStack(spacing: 0) {
-            Rule(color: Tokens.cardBorder)
+            Rule(color: Tokens.borderCard)
             HStack(spacing: Space.m) {
                 Image(.pencil, size: 14).foregroundStyle(Tokens.destructive.color)
                 Text("Draft").textStyle(.subheading, color: Tokens.destructive.color)
-                Text("A reply you started").textStyle(.label, color: Tokens.mutedMoreForeground.color)
+                Text("A reply you started").textStyle(.label, color: Tokens.mutedStrongerForeground.color)
                 Spacer(minLength: Space.s)
                 ActionButton(title: "Open", variant: .outline) { store.openDraft(id) }
             }
@@ -237,14 +237,14 @@ struct MessageCard: View {
                     .onTapGesture(perform: tapSender)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.fromName)
-                        .textStyle(folded ? .body : .subheading, color: folded ? Tokens.mutedMoreForeground.color : Tokens.foreground.color)
+                        .textStyle(folded ? .body : .subheading, color: folded ? Tokens.mutedStrongerForeground.color : Tokens.foreground.color)
                         .onTapGesture(perform: tapSender)
                         .help(folded ? "" : message.fromEmail)
                     Text(folded ? message.snippet : message.to).textStyle(.caption).lineLimit(1)
                 }
                 Spacer(minLength: Space.s)
                 if !message.attachments.isEmpty {
-                    Image(.paperclip, size: 13).foregroundStyle(Tokens.mutedMoreForeground.color)
+                    Image(.paperclip, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color)
                 }
                 Text(message.date).textStyle(.caption)
                 if canShowOriginal {
@@ -259,9 +259,9 @@ struct MessageCard: View {
                         MessageWebView(message: message.id, html: html, original: original, kept: store.bodyHeights[message.id])
                     } else if message.failed {
                         Text("This message couldn't be loaded. Open the conversation again to retry.")
-                            .textStyle(.body, color: Tokens.mutedMoreForeground.color)
+                            .textStyle(.body, color: Tokens.mutedStrongerForeground.color)
                     } else {
-                        Text(message.snippet).textStyle(.body, color: Tokens.mutedMoreForeground.color).redacted(reason: .placeholder)
+                        Text(message.snippet).textStyle(.body, color: Tokens.mutedStrongerForeground.color).redacted(reason: .placeholder)
                     }
                 }
                 .padding(.leading, bodyIndent)

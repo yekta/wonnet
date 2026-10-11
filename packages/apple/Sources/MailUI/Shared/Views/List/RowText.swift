@@ -35,12 +35,12 @@ struct RowText {
         let subjectText = row.subject.isEmpty ? "(no subject)" : row.subject
         subject = NSAttributedString(string: subjectText, attributes: Self.style(Self.subjectSize, weight, strong))
         let snippetText = row.snippet.replacingOccurrences(of: "\n", with: " ")
-        snippet = NSAttributedString(string: snippetText, attributes: Self.style(Self.snippetSize, .regular, Tokens.mutedMoreForeground))
+        snippet = NSAttributedString(string: snippetText, attributes: Self.style(Self.snippetSize, .regular, Tokens.mutedStrongerForeground))
         let line = NSMutableAttributedString(attributedString: subject)
         if !snippetText.isEmpty {
-            line.append(NSAttributedString(string: "  –  " + snippetText, attributes: Self.style(Self.snippetSize, .regular, Tokens.mutedMoreForeground)))
+            line.append(NSAttributedString(string: "  –  " + snippetText, attributes: Self.style(Self.snippetSize, .regular, Tokens.mutedStrongerForeground)))
         }
         self.line = line
-        date = NSAttributedString(string: row.date, attributes: Self.style(Self.dateSize, weight, row.unread ? strong : Tokens.mutedMoreForeground))
+        date = NSAttributedString(string: row.date, attributes: Self.style(Self.dateSize, weight, row.unread ? strong : Tokens.mutedStrongerForeground))
     }
 }

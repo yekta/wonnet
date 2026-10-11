@@ -18,8 +18,8 @@ struct Segmented<Option: Hashable>: View {
             }
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: Theme.radius + 2).fill(Tokens.muted.color))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radius + 2).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
+        .background(RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.backgroundSecondary.color))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
     }
 }
 
@@ -33,8 +33,8 @@ private struct Segment: View {
             .textStyle(chosen ? .labelStrong : .label, color: chosen || hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
             .padding(.horizontal, Space.m)
             .frame(height: ControlSize.small.height * Platform.scale)
-            .background(RoundedRectangle(cornerRadius: Theme.radius - 1).fill(chosen ? Tokens.accentStronger.color : hovered ? Tokens.accent.color : .clear))
-            .contentShape(RoundedRectangle(cornerRadius: Theme.radius - 1))
+            .background(RoundedRectangle(cornerRadius: Radius.xs).fill(chosen ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.xs))
     }
 }
 
@@ -50,7 +50,7 @@ struct Dropdown<Option: Hashable>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
             if let label {
-                Text(label).textStyle(.footnote, color: Tokens.mutedMoreForeground.color).fontWeight(.medium)
+                Text(label).textStyle(.footnote, color: Tokens.mutedStrongerForeground.color).fontWeight(.medium)
             }
             Menu {
                 if let none {
@@ -85,13 +85,13 @@ private struct DropdownFace: View {
         HStack(spacing: Space.s) {
             Text(text).textStyle(.body).lineLimit(1)
             Spacer(minLength: Space.s)
-            Image(.chevronDown, size: 12).foregroundStyle(Tokens.mutedMoreForeground.color)
+            Image(.chevronDown, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
         }
         .padding(.horizontal, Space.s + 2)
         .frame(height: Theme.fieldHeight * Platform.scale)
-        .background(RoundedRectangle(cornerRadius: Theme.radius).fill(hovered ? Tokens.accent.color : Tokens.card.color))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Tokens.input.color, lineWidth: Theme.hairline))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radius))
+        .background(RoundedRectangle(cornerRadius: Radius.sm).fill(hovered ? Tokens.backgroundAccent.color : Tokens.input.color))
+        .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline))
+        .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
     }
 }
 

@@ -75,7 +75,7 @@ struct MacRoot: View {
 
     /// Over the page, without moving it; a click beside it closes it.
     @ViewBuilder private var sidebar: some View {
-        Tokens.overlay.color.opacity(0.15)
+        Tokens.overlay.opacity(Opacity.overlay).color
             .contentShape(Rectangle())
             .onTapGesture { showSidebar(false) }
             .transition(.opacity)

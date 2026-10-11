@@ -11,13 +11,13 @@ struct Banner: View {
     var body: some View {
         HStack(spacing: Space.s + 2) {
             Image(symbol, size: 14).foregroundStyle(Tokens.mutedForeground.color)
-            Text(text).textStyle(.label, color: Tokens.accentForeground.color).lineLimit(1)
+            Text(text).textStyle(.label, color: Tokens.foreground.color).lineLimit(1)
             Spacer()
             ActionButton(title: action, variant: .primary, action: perform)
         }
         .padding(.horizontal, Space.xl)
         .frame(height: 44 * Platform.scale)
-        .background(Tokens.accentLargerStronger.color)
+        .background(Tokens.backgroundAccentLargerStronger.color)
         .rule(.bottom)
     }
 }

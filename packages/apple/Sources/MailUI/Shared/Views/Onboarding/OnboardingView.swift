@@ -13,7 +13,7 @@ struct OnboardingView: View {
                         .frame(width: 72 * Platform.scale, height: 72 * Platform.scale)
                         .background(Circle().fill(Tokens.primary.color))
                     Text("Mail").textStyle(.display)
-                    Text("All your email, calm and fast.").textStyle(.body, color: Tokens.mutedMoreForeground.color)
+                    Text("All your email, calm and fast.").textStyle(.body, color: Tokens.mutedStrongerForeground.color)
                 }
                 .padding(.top, 48)
                 AddAccountForm()
