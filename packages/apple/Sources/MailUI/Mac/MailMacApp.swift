@@ -210,13 +210,13 @@ struct MacTopBar: View {
     var body: some View {
         Group {
             if store.conversation == nil, !store.selection.isEmpty {
-                HeaderBar {
+                HeaderBar(leadingInset: leadingInset) {
                     SelectionBar()
                 } trailing: {
                     compose
                 }
             } else {
-                HeaderBar {
+                HeaderBar(leadingInset: leadingInset) {
                     if store.conversation == nil {
                         SearchField(
                             placeholder: "Search", text: $query, style: .bar, autofocus: false, focusTrigger: focusSearch,
@@ -235,7 +235,6 @@ struct MacTopBar: View {
                 }
             }
         }
-        .padding(.leading, pastToolbarButton - Space.l)
         .toolbar {
             // The mail stays under the settings, which have their own.
             if store.settings == nil {
@@ -255,6 +254,9 @@ struct MacTopBar: View {
         .onChange(of: query) { _, text in store.search(text) }
         .onChange(of: store.searchQuery) { _, text in if text.isEmpty { query = "" } }
     }
+
+    /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the window.
+    private var leadingInset: CGFloat { pastToolbarButton - Space.l }
 
     private var compose: some View {
         ActionButton(title: "Compose", symbol: .squarePen, variant: .outline, action: store.newMessage)
