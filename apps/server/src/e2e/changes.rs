@@ -21,7 +21,7 @@ fn remote(index: usize) -> RemoteMessage {
 
 async fn changes(server: &Server, user: uuid::Uuid, cursor: i64) -> (usize, usize, i64, bool) {
     let ServerMessage::Changes { accounts, messages, cursor, more, .. } =
-        crate::changes::read(&server.state.db, user, cursor).await.unwrap()
+        crate::changes::read(&server.state.db, user, cursor, cursor).await.unwrap()
     else {
         panic!("not changes");
     };
@@ -32,30 +32,40 @@ async fn changes(server: &Server, user: uuid::Uuid, cursor: i64) -> (usize, usiz
 async fn changes_come_in_batches_that_never_skip_a_rev(db: PgPool) {
     let server = Server::start(db.clone()).await;
     let user = db::create_user(&db).await.unwrap();
-    let account = NewAccount {
-        user_id: user,
-        provider: Provider::Jmap,
-        address: "ann@example.com",
-        login: "l",
-        credentials: vec![],
+    let add = async |address: &str, count: usize| {
+        let account =
+            NewAccount { user_id: user, provider: Provider::Jmap, address, login: address, credentials: vec![] };
+        let account = db::account(&db, db::upsert_account(&db, account).await.unwrap()).await.unwrap().unwrap();
+        let all: Vec<RemoteMessage> = (0..count).map(remote).collect();
+        db::upsert_messages(&db, &account, &all).await.unwrap();
+        (account, all)
     };
-    let account_id = db::upsert_account(&db, account).await.unwrap();
-    let account = db::account(&db, account_id).await.unwrap().unwrap();
-    let all: Vec<RemoteMessage> = (0..1200).map(remote).collect();
-    db::upsert_messages(&db, &account, &all).await.unwrap();
-    db::set_account_status(&db, &account, "ready").await.unwrap();
+    let (bob, _) = add("bob@example.com", 300).await;
+    let (ann, all) = add("ann@example.com", 1100).await;
+    db::set_account_status(&db, &bob, "ready").await.unwrap();
+    db::set_account_status(&db, &ann, "ready").await.unwrap();
+    let read = async |cursor, ahead| {
+        let ServerMessage::Changes { accounts, messages, arriving, cursor, more, .. } =
+            crate::changes::read(&db, user, cursor, ahead).await.unwrap()
+        else {
+            panic!("not changes");
+        };
+        let ahead = accounts.iter().map(|account| account.rev).max().unwrap_or(ahead);
+        (accounts.len(), messages.len(), arriving, cursor, ahead, more)
+    };
 
-    // The account's status changed after every message was written, so it comes last.
-    let (accounts, messages, cursor, more) = changes(&server, user, 0).await;
-    assert_eq!((accounts, messages, more), (0, BATCH_SIZE, true));
-    let (accounts, messages, cursor, more) = changes(&server, user, cursor).await;
-    assert_eq!((accounts, messages, more), (0, BATCH_SIZE, true));
-    let (accounts, messages, cursor, more) = changes(&server, user, cursor).await;
-    assert_eq!((accounts, messages, more), (1, 200, false));
+    // Both accounts come first, though their statuses changed after every message was written,
+    // and each batch names the accounts whose mail is still to come.
+    let (accounts, messages, arriving, cursor, ahead, more) = read(0, 0).await;
+    assert_eq!((accounts, messages, arriving, more), (2, BATCH_SIZE, vec![ann.id.to_string()], true));
+    let (accounts, messages, arriving, cursor, ahead, more) = read(cursor, ahead).await;
+    assert_eq!((accounts, messages, arriving, more), (0, BATCH_SIZE, vec![ann.id.to_string()], true));
+    let (accounts, messages, arriving, cursor, _, more) = read(cursor, ahead).await;
+    assert_eq!((accounts, messages, arriving, more), (0, 400, vec![], false));
     assert_eq!(changes(&server, user, cursor).await, (0, 0, cursor, false));
 
     // Writing what the provider says again changes nothing, so the cursor stays.
-    db::upsert_messages(&db, &account, &all[..10]).await.unwrap();
+    db::upsert_messages(&db, &ann, &all[..10]).await.unwrap();
     assert_eq!(changes(&server, user, cursor).await, (0, 0, cursor, false));
 }
 
@@ -108,7 +118,7 @@ async fn a_delete_removes_the_message_for_clients_at_once_and_stale_provider_sta
 
     let outcome = ops::apply(&server.state, user, "op-1", Op::Delete { ids: vec![id.to_string()] }).await.unwrap();
     assert!(matches!(outcome, ops::Outcome::Done { ok: true, .. }));
-    let ServerMessage::Changes { messages, .. } = crate::changes::read(&db, user, cursor).await.unwrap() else {
+    let ServerMessage::Changes { messages, .. } = crate::changes::read(&db, user, cursor, cursor).await.unwrap() else {
         panic!("not changes");
     };
     assert_eq!(messages.iter().map(|message| message.deleted).collect::<Vec<_>>(), [true]);
@@ -137,7 +147,7 @@ async fn an_account_colour_is_kept_for_its_user_only(db: PgPool) {
 
     let outcome = ops::apply(&server.state, user, "1", set("account-7")).await.unwrap();
     assert!(matches!(outcome, ops::Outcome::Done { ok: true, .. }));
-    let ServerMessage::Changes { accounts, .. } = crate::changes::read(&db, user, cursor).await.unwrap() else {
+    let ServerMessage::Changes { accounts, .. } = crate::changes::read(&db, user, cursor, cursor).await.unwrap() else {
         panic!("not changes");
     };
     assert_eq!(accounts[0].color, "account-7");
@@ -157,7 +167,7 @@ async fn preferences_and_drafts_sync_and_leave_tombstones(db: PgPool) {
     let user = db::create_user(&db).await.unwrap();
     let read = async |cursor| {
         let ServerMessage::Changes { preferences, drafts, cursor, .. } =
-            crate::changes::read(&db, user, cursor).await.unwrap()
+            crate::changes::read(&db, user, cursor, cursor).await.unwrap()
         else {
             panic!("not changes");
         };

@@ -56,6 +56,7 @@ async fn run(state: AppState, socket: WebSocket) {
         state: state.clone(),
         user_id,
         cursor,
+        ahead: cursor,
         waiting_sends: HashSet::new(),
         caught_up: false,
         syncs: JoinSet::new(),
@@ -88,6 +89,8 @@ struct Session {
     state: AppState,
     user_id: Uuid,
     cursor: i64,
+    /// The rev the accounts, labels and preferences were sent through, ahead of `cursor`.
+    ahead: i64,
     /// Sends this client is waiting to hear about.
     waiting_sends: HashSet<String>,
     /// The first batch goes out even when empty, so the client knows it is up to date.
@@ -104,14 +107,14 @@ impl Session {
 
     async fn send_changes(&mut self) -> bool {
         loop {
-            let batch = match changes::read(&self.state.db, self.user_id, self.cursor).await {
+            let batch = match changes::read(&self.state.db, self.user_id, self.cursor, self.ahead).await {
                 Ok(batch) => batch,
                 Err(error) => {
                     tracing::error!("couldn't read changes: {error}");
                     return false;
                 }
             };
-            let ServerMessage::Changes { accounts, labels, messages, preferences, drafts, cursor, more } = &batch
+            let ServerMessage::Changes { accounts, labels, messages, preferences, drafts, cursor, more, .. } = &batch
             else {
                 return false;
             };
@@ -120,12 +123,19 @@ impl Session {
                 && messages.is_empty()
                 && preferences.is_empty()
                 && drafts.is_empty();
+            let sent = accounts
+                .iter()
+                .map(|account| account.rev)
+                .chain(labels.iter().map(|label| label.rev))
+                .chain(preferences.iter().map(|preference| preference.rev))
+                .max();
             let (cursor, more) = (*cursor, *more);
             if (!empty || !self.caught_up) && !self.send(batch).await {
                 return false;
             }
             self.caught_up = true;
             self.cursor = cursor;
+            self.ahead = self.ahead.max(sent.unwrap_or(cursor)).max(cursor);
             if !more {
                 return true;
             }

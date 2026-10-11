@@ -1,6 +1,8 @@
 //! What changed for a user after a cursor, read in one snapshot. A batch holds at most
-//! `BATCH_SIZE` messages; a full batch ends at its last message's rev, and the accounts, labels,
-//! preferences and drafts it carries end there too, so the next batch starts where this one stopped.
+//! `BATCH_SIZE` messages; a full batch ends at its last message's rev, and the drafts it carries
+//! end there too, so the next batch starts where this one stopped. Accounts, labels and
+//! preferences are few and come whole with the first batch, so a new device lists every account
+//! at once; `ahead` is the rev they were sent through, which later batches skip.
 
 use mail_protocol::wire::ServerMessage;
 use mail_protocol::{Account, BATCH_SIZE, Label};
@@ -9,7 +11,8 @@ use uuid::Uuid;
 
 use crate::db::{ACCOUNT_COLUMNS, AccountRow, DraftRow, LabelRow, MESSAGE_COLUMNS, MessageRow, PreferenceRow};
 
-pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64) -> sqlx::Result<ServerMessage> {
+pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64, ahead: i64) -> sqlx::Result<ServerMessage> {
+    let ahead = ahead.max(cursor);
     let mut tx = db.begin().await?;
     sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY").execute(&mut *tx).await?;
 
@@ -28,30 +31,26 @@ pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64) -> sqlx::Result<Serve
     };
 
     let accounts: Vec<AccountRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE user_id = $1 AND rev > $2 AND rev <= $3 ORDER BY rev"
+        "SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE user_id = $1 AND rev > $2 ORDER BY rev"
     )))
     .bind(user_id)
-    .bind(cursor)
-    .bind(upper)
+    .bind(ahead)
     .fetch_all(&mut *tx)
     .await?;
     let labels: Vec<LabelRow> = sqlx::query_as(
         "SELECT id, account_id, provider_id, name, rev, deleted
-         FROM labels WHERE user_id = $1 AND rev > $2 AND rev <= $3 ORDER BY rev",
+         FROM labels WHERE user_id = $1 AND rev > $2 ORDER BY rev",
     )
     .bind(user_id)
-    .bind(cursor)
-    .bind(upper)
+    .bind(ahead)
     .fetch_all(&mut *tx)
     .await?;
-    let preferences: Vec<PreferenceRow> = sqlx::query_as(
-        "SELECT key, value, rev, deleted FROM preferences WHERE user_id = $1 AND rev > $2 AND rev <= $3 ORDER BY rev",
-    )
-    .bind(user_id)
-    .bind(cursor)
-    .bind(upper)
-    .fetch_all(&mut *tx)
-    .await?;
+    let preferences: Vec<PreferenceRow> =
+        sqlx::query_as("SELECT key, value, rev, deleted FROM preferences WHERE user_id = $1 AND rev > $2 ORDER BY rev")
+            .bind(user_id)
+            .bind(ahead)
+            .fetch_all(&mut *tx)
+            .await?;
     let drafts: Vec<DraftRow> = sqlx::query_as(
         "SELECT id, draft, updated, rev, deleted FROM drafts WHERE user_id = $1 AND rev > $2 AND rev <= $3 ORDER BY rev",
     )
@@ -60,6 +59,19 @@ pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64) -> sqlx::Result<Serve
     .bind(upper)
     .fetch_all(&mut *tx)
     .await?;
+    let arriving: Vec<Uuid> = match full {
+        true => {
+            sqlx::query_scalar(
+                "SELECT id FROM accounts WHERE user_id = $1 AND NOT deleted
+                 AND EXISTS (SELECT 1 FROM messages WHERE account_id = accounts.id AND rev > $2)",
+            )
+            .bind(user_id)
+            .bind(upper)
+            .fetch_all(&mut *tx)
+            .await?
+        }
+        false => Vec::new(),
+    };
     tx.commit().await?;
 
     let highest = rows
@@ -79,7 +91,8 @@ pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64) -> sqlx::Result<Serve
         messages: rows.into_iter().map(MessageRow::wire).collect(),
         preferences: preferences.into_iter().map(PreferenceRow::wire).collect(),
         drafts: drafts.into_iter().map(DraftRow::wire).collect(),
-        cursor: if full { upper } else { highest.max(cursor) },
+        arriving: arriving.iter().map(Uuid::to_string).collect(),
+        cursor: if full { upper } else { highest.max(ahead) },
         more: full,
     })
 }

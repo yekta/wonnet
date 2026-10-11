@@ -78,8 +78,9 @@ struct Part {
     preferences: Vec<Preference>,
     drafts: Vec<SavedDraft>,
     cursor: Option<i64>,
-    /// On the last part: whether another batch follows.
+    /// On the last part: whether another batch follows, and the accounts with mail still to come.
     more: Option<bool>,
+    arriving: Option<HashSet<String>>,
 }
 
 #[derive(Clone)]
@@ -137,6 +138,7 @@ pub fn start(config: Config, sink: Sink) -> Result<Handle> {
         uploading: HashSet::new(),
         upload_tries: HashMap::new(),
         announcing: HashSet::new(),
+        arriving: HashSet::new(),
         undo: Vec::new(),
         actions: 0,
         first_sync: false,
@@ -208,6 +210,8 @@ struct Core {
     /// The accounts that were caught up and ready at the last catch-up: only their new mail is
     /// announced, not that of an account still syncing for the first time.
     announcing: HashSet<String>,
+    /// The accounts whose mail the server is still sending: shown as syncing.
+    arriving: HashSet<String>,
     /// The ops that take back each recent action, the last last, with the action's number.
     undo: Vec<(u64, Vec<Op>)>,
     actions: u64,
@@ -561,6 +565,7 @@ impl Core {
         self.undo.clear();
         self.arrived.clear();
         self.announcing.clear();
+        self.arriving.clear();
         self.changed(Touched { mailboxes: true, preferences: true, ..Default::default() });
         Ok(())
     }
@@ -634,7 +639,10 @@ impl Core {
     }
 
     fn mailboxes(&self) -> Result<Value> {
-        let (unified, accounts) = self.store.mailboxes()?;
+        let (unified, mut accounts) = self.store.mailboxes()?;
+        for account in accounts.iter_mut().filter(|account| self.arriving.contains(&account.id)) {
+            account.status = "syncing".into();
+        }
         Ok(json!({ "unified": unified, "accounts": accounts }))
     }
 
@@ -1463,7 +1471,7 @@ impl Core {
                     self.send(ClientMessage::Sync { request: self.refresh });
                 }
             }
-            ServerMessage::Changes { accounts, labels, messages, preferences, drafts, cursor, more } => {
+            ServerMessage::Changes { accounts, labels, messages, preferences, drafts, arriving, cursor, more } => {
                 let mut parts: Vec<Part> = Vec::new();
                 let mut messages = messages.into_iter().peekable();
                 loop {
@@ -1477,7 +1485,8 @@ impl Core {
                         (accounts, labels, preferences, drafts);
                 }
                 if let Some(last) = parts.last_mut() {
-                    (last.cursor, last.more) = (Some(cursor), Some(more));
+                    (last.cursor, last.more, last.arriving) =
+                        (Some(cursor), Some(more), Some(arriving.into_iter().collect()));
                 }
                 for part in parts.into_iter().rev() {
                     self.backlog.push_front(Step::Changes(Box::new(part)));
@@ -1538,7 +1547,11 @@ impl Core {
             cursor: part.cursor,
         };
         match self.store.apply_changes(batch) {
-            Ok(applied) => {
+            Ok(mut applied) => {
+                if let Some(arriving) = part.arriving.filter(|arriving| *arriving != self.arriving) {
+                    self.arriving = arriving;
+                    applied.touched.mailboxes = true;
+                }
                 self.changed(applied.touched);
                 self.arrived.extend(applied.arrived);
             }
