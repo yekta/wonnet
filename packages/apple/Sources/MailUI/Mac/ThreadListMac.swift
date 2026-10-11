@@ -347,9 +347,16 @@ final class ThreadRowView: NSTableRowView {
     override func drawBackground(in dirtyRect: NSRect) {
         let face = column.insetBy(dx: 0, dy: Theme.buttonGap / 2)
         let shape = NSBezierPath(roundedRect: face, xRadius: Radius.sm, yRadius: Radius.sm)
-        if isCurrent || hovering {
+        if hovering {
             Tokens.backgroundAccentLarger.platform.setFill()
             shape.fill()
+        }
+        if isCurrent {
+            let outline = NSBezierPath(roundedRect: face.insetBy(dx: 0.5, dy: 0.5), xRadius: Radius.sm, yRadius: Radius.sm)
+            outline.lineWidth = 1
+            outline.setLineDash([4, 3], count: 2, phase: 0)
+            Tokens.backgroundAccent.platform.setStroke()
+            outline.stroke()
         }
         if isChecked {
             Tokens.primary.opacity(Opacity.colorTint).platform.setFill()
