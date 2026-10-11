@@ -39,6 +39,8 @@ final class DrawerController: UIViewController, UIGestureRecognizerDelegate {
     private static let widest: CGFloat = 340
     /// What the sidebar leaves of the card on a phone.
     private static let peek: CGFloat = 56
+    /// How far aside the card is when its content starts to dim.
+    private static let dimsFrom: CGFloat = 0.75
 
     let sidebar: UIViewController
     let content: UIViewController
@@ -122,6 +124,7 @@ final class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         sidebar.view.frame = CGRect(x: 0, y: 0, width: sidebarWidth, height: bounds.height)
         card.frame = CGRect(x: progress * sidebarWidth, y: 0, width: bounds.width, height: bounds.height)
         content.view.frame = card.bounds
+        content.view.alpha = contentAlpha
         cardEdge.frame = CGRect(x: 0, y: 0, width: Theme.hairline, height: bounds.height)
         cardEdge.alpha = min(1, progress * 6)
         if cardShadow.bounds.size != card.bounds.size {
@@ -132,6 +135,13 @@ final class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         shade.frame = card.bounds
         shade.isHidden = progress == 0
         sidebar.view.isHidden = progress <= 0
+    }
+
+    /// The card's content dims over the last of the way open; its edge and shadow don't.
+    private var contentAlpha: CGFloat {
+        let dimmed = Opacity.dimmed.value(for: traitCollection.userInterfaceStyle == .dark ? .dark : .light)
+        let dimming = min(1, max(0, (progress - Self.dimsFrom) / (1 - Self.dimsFrom)))
+        return 1 - (1 - dimmed) * dimming
     }
 
     /// Opens or closes as the store says, unless a finger is moving the card.

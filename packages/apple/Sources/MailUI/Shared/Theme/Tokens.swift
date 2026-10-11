@@ -68,6 +68,7 @@ enum Opacity {
     static let overlay = ThemeNumber(light: 0.15, dark: 0.15)
     static let disabled = ThemeNumber(light: 0.4, dark: 0.4)
     static let pressed = ThemeNumber(light: 0.6, dark: 0.6)
+    static let dimmed = ThemeNumber(light: 0.5, dark: 0.5)
     static let lit = ThemeNumber(light: 0.88, dark: 0.88)
     static let shadow = ThemeNumber(light: 0.1, dark: 0.25)
     static let shadowStronger = ThemeNumber(light: 0.22, dark: 0.6)
