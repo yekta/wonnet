@@ -447,7 +447,7 @@ enum CoreEvent: Decodable {
 
 /// What can be done to threads, as the core names it.
 enum Action: String {
-    case archive, trash, read, unread, star, unstar, inbox, spam, snooze, move, mute, unmute, unsubscribe, block
+    case archive, trash, read, unread, star, unstar, inbox, spam, snooze, move, mute, unmute, unsubscribe, block, delete
     case addLabel = "add_label"
     case removeLabel = "remove_label"
 }

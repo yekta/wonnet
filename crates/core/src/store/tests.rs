@@ -418,6 +418,29 @@ fn address_book_names_win_over_the_names_mail_came_with() {
 }
 
 #[test]
+fn deleting_for_good_removes_messages_at_once_and_keeps_them_gone() {
+    let mut store = store();
+    let mut trashed = message("m1", "t1", "Ann", 1_000);
+    trashed.labels = vec!["trash".into()];
+    let mut spam = message("m2", "t2", "Bob", 2_000);
+    spam.labels = vec!["spam".into()];
+    apply(&mut store, &[account()], &[trashed.clone(), spam, message("m3", "t3", "Cy", 3_000)], 1);
+    assert_eq!(store.mailbox_messages("trash").unwrap(), ["m1"]);
+    assert_eq!(store.mailbox_messages("a/spam").unwrap(), ["m2"]);
+    assert!(store.mailbox_messages("inbox").unwrap().is_empty(), "only Trash and Spam are emptied");
+
+    let touched = store.apply_local("delete", &Op::Delete { ids: vec!["m1".into()] }).unwrap();
+    assert!(touched.threads.contains("a:t1") && touched.mailboxes);
+    assert!(page(&store, "trash").rows.is_empty());
+    assert!(store.message("m1").unwrap().is_none());
+
+    apply(&mut store, &[], &[trashed], 2);
+    assert!(store.message("m1").unwrap().is_none(), "the server's copy from before the delete stays gone");
+    store.settle("delete", true).unwrap();
+    assert_eq!(counts(&store).0, counts(&store).1);
+}
+
+#[test]
 fn saved_drafts_show_in_drafts_and_on_their_thread() {
     let mut store = store();
     apply(&mut store, &[account()], &[message("m1", "t1", "Ann", 1_000)], 1);

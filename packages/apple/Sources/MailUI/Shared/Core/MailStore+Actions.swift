@@ -91,6 +91,7 @@ extension MailStore {
         case .mute: act(isMuted(threads) ? .unmute : .mute, on: threads)
         case .unsubscribe: act(.unsubscribe, on: threads)
         case .block: confirmBlock(threads)
+        case .deleteForever: confirmDelete(threads)
         case .print: printThread(first)
         case .reply: reply(.reply, to: first)
         case .replyAll: reply(.replyAll, to: first)
@@ -143,6 +144,38 @@ extension MailStore {
         confirmation = Confirmation(
             title: who, message: "New mail from them goes straight to the trash, and so does this.", action: "Block"
         ) { [weak self] in self?.act(.block, on: threads) }
+    }
+
+    private func confirmDelete(_ threads: [String]) {
+        let what = threads.count == 1 ? "this conversation" : "these \(threads.count) conversations"
+        confirmation = Confirmation(
+            title: "Delete \(what) forever?", message: "It's deleted from your mail account too. This can't be undone.", action: "Delete forever"
+        ) { [weak self] in self?.act(.delete, on: threads) }
+    }
+
+    /// Whether the list is Trash or Spam, which can be emptied.
+    var canEmpty: Bool {
+        guard searchRows == nil, !rows.isEmpty, let last = baseMailbox.split(separator: "/").last else { return false }
+        return last == "trash" || last == "spam"
+    }
+
+    /// Deletes everything in Trash or Spam for good, after asking.
+    func emptyMailbox() {
+        guard canEmpty else { return }
+        let mailbox = baseMailbox
+        confirmation = Confirmation(
+            title: "Empty \(mailboxName)?", message: "Everything in it is deleted from your mail account too. This can't be undone.", action: "Empty"
+        ) { [weak self] in
+            guard let self else { return }
+            clearSelection()
+            Task {
+                do {
+                    self.report(try await self.bridge.call("empty_mailbox", ["mailbox": mailbox], as: ActReply.self))
+                } catch {
+                    self.show(error.localizedDescription)
+                }
+            }
+        }
     }
 
     /// Archives everything in the mailbox on screen, after asking: Get Me To Zero.

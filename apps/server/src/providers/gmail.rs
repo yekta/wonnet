@@ -249,6 +249,10 @@ impl Gmail {
                 self.hold(Duration::from_secs(2 << attempt)).await;
                 continue;
             }
+            // Accounts added before the app asked for all of Gmail can't delete for good.
+            if status == StatusCode::FORBIDDEN && missing_scope(&text) {
+                return Err(Reauth(format!("Gmail answered {what} without the access it needs")).into());
+            }
             if status == StatusCode::BAD_REQUEST || status == StatusCode::CONFLICT {
                 return Err(Refused(format!("Gmail answered {what} with {status}: {text}")).into());
             }
@@ -440,6 +444,13 @@ impl Gmail {
     }
 
     pub async fn apply(&self, batch: &Batch, labels: &HashMap<Uuid, String>) -> anyhow::Result<()> {
+        if let Op::Delete { .. } = batch.op {
+            for ids in batch.provider_ids.chunks(1000) {
+                let body = json!({ "ids": ids });
+                let _: Value = self.request(Method::POST, "/messages/batchDelete", &[], Some(&body)).await?;
+            }
+            return Ok(());
+        }
         let label = |id: &String| match id.as_str() {
             role::INBOX => Some("INBOX".to_string()),
             role::TRASH => Some("TRASH".to_string()),
@@ -545,10 +556,14 @@ fn units(method: &Method, path: &str) -> u32 {
         "/profile" | "/settings/sendAs" => 1,
         "/labels" if method == Method::GET => 1,
         "/history" => 2,
-        "/messages/batchModify" => 50,
+        "/messages/batchModify" | "/messages/batchDelete" => 50,
         "/watch" => 100,
         _ => 5,
     }
+}
+
+fn missing_scope(body: &str) -> bool {
+    body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT") || body.contains("insufficientPermissions")
 }
 
 /// Gmail answers a spent quota with a 403 that says so, unlike a 403 for missing access.

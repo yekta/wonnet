@@ -88,7 +88,7 @@ async fn inbox_rows(core: &mut Driver) -> Vec<Value> {
 }
 
 #[sqlx::test]
-async fn seeded_mail_reaches_the_core_and_archiving_reaches_stalwart(db: PgPool) {
+async fn seeded_mail_reaches_the_core_and_archiving_and_deleting_reach_stalwart(db: PgPool) {
     let Some((stalwart, email, jmap)) = stalwart_user(40).await else { return };
 
     let server = Server::start_with(db, |config| config.workers = true).await;
@@ -133,6 +133,23 @@ async fn seeded_mail_reaches_the_core_and_archiving_reaches_stalwart(db: PgPool)
         let inbox = inbox.as_str().unwrap();
         let emails = answers[1]["list"].as_array().unwrap();
         emails.iter().all(|email| email["mailboxIds"][inbox].is_null()).then_some(())
+    })
+    .await;
+
+    let doomed = rows[1]["id"].as_str().unwrap().to_string();
+    core.call(json!({ "type": "act", "action": "delete", "threads": [doomed] })).await;
+    let inbox = inbox_rows(&mut core).await;
+    assert!(inbox.iter().all(|row| row["id"] != rows[1]["id"]), "deleted at once");
+    let provider_thread = doomed.split_once(':').unwrap().1.to_string();
+    eventually("Stalwart to delete the thread", async || {
+        let answers = jmap
+            .call(
+                &["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
+                vec![("Email/query", json!({ "filter": { "inThread": provider_thread } }))],
+            )
+            .await
+            .unwrap();
+        answers[0]["ids"].as_array().unwrap().is_empty().then_some(())
     })
     .await;
 }

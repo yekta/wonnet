@@ -2,7 +2,7 @@ import SwiftUI
 
 /// What can be done to threads, alike from the keys, the toolbars, the menus and the palette.
 enum ThreadCommand: String, CaseIterable, Identifiable {
-    case archive, inbox, trash, spam, star, read, markRead, snooze, label, move, mute, unsubscribe, block, print, reply, replyAll, forward
+    case archive, inbox, trash, deleteForever, spam, star, read, markRead, snooze, label, move, mute, unsubscribe, block, print, reply, replyAll, forward
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
         case .archive: "Archive"
         case .inbox: "Move to Inbox"
         case .trash: "Trash"
+        case .deleteForever: "Delete forever"
         case .spam: "Spam"
         case .star: store.allStarred(threads) ? "Unstar" : "Star"
         case .read: store.anyUnread(threads) ? "Mark read" : "Mark unread"
@@ -33,7 +34,7 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
         switch self {
         case .archive: .archive
         case .inbox: .archiveRestore
-        case .trash: .trash
+        case .trash, .deleteForever: .trash
         case .spam: .shieldAlert
         case .star: .star
         case .read: .mailOpen
@@ -66,7 +67,7 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
         case .move: "V"
         case .mute: "⇧M"
         case .unsubscribe: "⌘U"
-        case .block: nil
+        case .block, .deleteForever: nil
         case .print: "⌘P"
         case .reply: "R"
         case .replyAll: "A"
@@ -75,7 +76,7 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
     }
 
     /// What doesn't fit on a toolbar: in its "more" menu.
-    static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .print]
+    static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .deleteForever, .print]
 }
 
 /// What can be done to the open thread: archive, trash, snooze, label, mark unread, and more.

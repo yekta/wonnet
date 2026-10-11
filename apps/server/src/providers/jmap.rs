@@ -484,6 +484,19 @@ impl Jmap {
     }
 
     pub async fn apply(&self, batch: &Batch, labels: &HashMap<Uuid, String>) -> anyhow::Result<()> {
+        if let Op::Delete { .. } = batch.op {
+            for ids in batch.provider_ids.chunks(200) {
+                let answers = self.call(&[CORE, MAIL], vec![("Email/set", json!({ "destroy": ids }))]).await?;
+                if let Some(failed) = answers[0]["notDestroyed"].as_object().filter(|failed| !failed.is_empty()) {
+                    tracing::warn!(
+                        "the JMAP server didn't delete {} messages: {:?}",
+                        failed.len(),
+                        failed.values().next()
+                    );
+                }
+            }
+            return Ok(());
+        }
         let answers = self
             .call(&[CORE, MAIL], vec![("Mailbox/get", json!({ "ids": null, "properties": ["id", "role"] }))])
             .await?;

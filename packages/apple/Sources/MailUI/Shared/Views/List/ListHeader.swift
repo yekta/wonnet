@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// Over the list: the split inbox's tabs, and the filter the list is narrowed to.
+/// Over the list: the split inbox's tabs, the filter the list is narrowed to, and emptying Trash
+/// or Spam.
 struct ListHeader: View {
     @Environment(MailStore.self) private var store
 
     static let height = 38 * Platform.scale
 
     static func shows(_ store: MailStore) -> Bool {
-        store.searchRows == nil && (!store.splits.isEmpty || store.filter != nil)
+        store.searchRows == nil && (!store.splits.isEmpty || store.filter != nil || store.canEmpty)
     }
 
     var body: some View {
@@ -22,6 +23,10 @@ struct ListHeader: View {
                 }
                 if let filter = store.filter {
                     Chip(title: filter == .unread ? "Unread" : "Starred", symbol: .listFilter, help: "Show everything", remove: { store.setFilter(nil) })
+                        .padding(.trailing, Space.l)
+                }
+                if store.canEmpty {
+                    ActionButton(title: "Empty \(store.mailboxName)", variant: .ghost, action: store.emptyMailbox)
                         .padding(.trailing, Space.l)
                 }
             }

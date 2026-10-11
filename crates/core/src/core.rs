@@ -431,6 +431,7 @@ impl Core {
             Command::ArchiveAll { mailbox, before, filter, keep } => {
                 to_value(self.archive_all(&mailbox, before, filter, &keep))
             }
+            Command::EmptyMailbox { mailbox } => to_value(self.empty_mailbox(&mailbox)),
             Command::CreateLabel { account, name } => self.create_label(account, &name),
             Command::ParseTime { text } => Ok(json!({ "choices": times::parse(&text, &Local::now()) })),
             Command::Contacts { query, limit } => {
@@ -992,6 +993,7 @@ impl Core {
                 Action::Archive => ids.extend(in_inbox),
                 Action::Trash => ids.extend(pick(&messages, |message| !has(message, role::TRASH))),
                 Action::Spam => ids.extend(pick(&messages, |message| !has(message, role::SPAM))),
+                Action::Delete => ids.extend(pick(&messages, |_| true)),
                 Action::Read => ids.extend(pick(&messages, |message| message.unread)),
                 Action::Unread | Action::Star => ids.extend(newest),
                 Action::Unstar => ids.extend(pick(&messages, |message| message.starred)),
@@ -1042,6 +1044,7 @@ impl Core {
             Action::Archive | Action::Mute => vec![Op::Archive { ids }],
             Action::Trash | Action::Block => vec![Op::Trash { ids }],
             Action::Spam => vec![Op::Spam { ids }],
+            Action::Delete => vec![Op::Delete { ids }],
             Action::Read => vec![Op::SetUnread { ids, unread: false }],
             Action::Unread => vec![Op::SetUnread { ids, unread: true }],
             Action::Star => vec![Op::SetStarred { ids, starred: true }],
@@ -1087,6 +1090,7 @@ impl Core {
             Action::Archive => Some("Archived.".to_string()),
             Action::Trash => Some("Moved to Trash.".into()),
             Action::Spam => Some("Marked as spam.".into()),
+            Action::Delete => Some("Deleted forever.".into()),
             Action::Inbox => Some("Moved to Inbox.".into()),
             Action::Read | Action::Unread | Action::Star | Action::Unstar => None,
             Action::Snooze => when.map(|when| match reminder {
@@ -1138,6 +1142,19 @@ impl Core {
         let action = self.actions;
         self.backlog.extend(ops.map(|op| Step::Mutate { action, op }));
         Ok(ActReply { message: Some("Archived.".into()), undo, url: None })
+    }
+
+    fn empty_mailbox(&mut self, mailbox: &str) -> Result<ActReply> {
+        let ids = self.store.mailbox_messages(mailbox)?;
+        if ids.is_empty() {
+            return Ok(ActReply::default());
+        }
+        let mut ops = undo::in_chunks(Op::Delete { ids }).into_iter();
+        if let Some(first) = ops.next() {
+            self.mutate(first)?;
+        }
+        self.backlog.extend(ops.map(|op| Step::Mutate { action: 0, op }));
+        Ok(ActReply { message: Some("Deleted forever.".into()), undo: false, url: None })
     }
 
     fn set_account_color(&mut self, account: String, color: String) -> Result<Value> {

@@ -673,6 +673,14 @@ pub async fn apply_op(tx: &mut UserTx, messages: &[(Uuid, MessageState)], op: &O
     if messages.is_empty() {
         return Ok(());
     }
+    let ids: Vec<Uuid> = messages.iter().map(|(id, _)| *id).collect();
+    if let Op::Delete { .. } = op {
+        sqlx::query("UPDATE messages SET deleted = true, rev = nextval('revs') WHERE id = ANY($1)")
+            .bind(&ids)
+            .execute(&mut *tx.tx)
+            .await?;
+        return queue_for_provider(tx, &ids, op).await;
+    }
     let changed: Vec<Value> = messages
         .iter()
         .map(|(id, state)| {
@@ -694,11 +702,14 @@ pub async fn apply_op(tx: &mut UserTx, messages: &[(Uuid, MessageState)], op: &O
     .bind(Json(changed))
     .execute(&mut *tx.tx)
     .await?;
-    let ids: Vec<Uuid> = messages.iter().map(|(id, _)| *id).collect();
+    queue_for_provider(tx, &ids, op).await
+}
+
+async fn queue_for_provider(tx: &mut UserTx, ids: &[Uuid], op: &Op) -> sqlx::Result<()> {
     sqlx::query(
         "INSERT INTO provider_ops (account_id, message_id, op) SELECT account_id, id, $2 FROM messages WHERE id = ANY($1)",
     )
-    .bind(&ids)
+    .bind(ids)
     .bind(json!(without_ids(op)))
     .execute(&mut *tx.tx)
     .await?;
@@ -715,6 +726,7 @@ fn without_ids(op: &Op) -> Op {
         | Op::MoveToInbox { ids }
         | Op::Trash { ids }
         | Op::Spam { ids }
+        | Op::Delete { ids }
         | Op::AddLabel { ids, .. }
         | Op::RemoveLabel { ids, .. }
         | Op::Snooze { ids, .. } => ids.clear(),

@@ -506,8 +506,13 @@ impl Store {
                 }
                 continue;
             }
+            let ops = waiting.get(message.id.as_str());
+            if ops.is_some_and(|ops| ops.iter().any(|op| matches!(op, Op::Delete { .. }))) {
+                touched.threads.extend(delete_message(&tx, &message.id)?);
+                continue;
+            }
             let mut message = message.clone();
-            if let Some(ops) = waiting.get(message.id.as_str()) {
+            if let Some(ops) = ops {
                 let server = state_of(&message);
                 tx.execute(
                     "INSERT OR REPLACE INTO bases (message_id, state) VALUES (?1, ?2)",
@@ -585,6 +590,10 @@ impl Store {
         let context = context(&tx)?;
         let mut threads = HashSet::new();
         for id in op.ids() {
+            if let Op::Delete { .. } = op {
+                threads.extend(delete_message(&tx, id)?);
+                continue;
+            }
             let Some(mut message) = message_in(&tx, id)? else { continue };
             tx.execute(
                 "INSERT OR IGNORE INTO bases (message_id, state) VALUES (?1, ?2)",
@@ -1042,6 +1051,21 @@ impl Store {
         let mut statement = self.db.prepare_cached(&sql)?;
         let rows =
             statement.query_map(params![label, account, before.unwrap_or(i64::MAX), unread], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Every message in Trash or Spam (an account's, or all of them), to delete for good.
+    pub fn mailbox_messages(&self, mailbox: &str) -> Result<Vec<String>> {
+        let Some((label, account)) = parse_mailbox(mailbox) else { return Ok(Vec::new()) };
+        if label != role::TRASH && label != role::SPAM {
+            return Ok(Vec::new());
+        }
+        let mut statement = self.db.prepare_cached(
+            "SELECT id FROM messages WHERE (?2 IS NULL OR account_id = ?2)
+                 AND EXISTS (SELECT 1 FROM json_each(labels) WHERE value = ?1)
+             ORDER BY date DESC",
+        )?;
+        let rows = statement.query_map(params![label, account], |row| row.get(0))?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 

@@ -47,6 +47,7 @@ fn with_ids(op: &Op, ids: Vec<String>) -> Op {
         Op::MoveToInbox { .. } => Op::MoveToInbox { ids },
         Op::Trash { .. } => Op::Trash { ids },
         Op::Spam { .. } => Op::Spam { ids },
+        Op::Delete { .. } => Op::Delete { ids },
         Op::AddLabel { label, .. } => Op::AddLabel { ids, label: label.clone() },
         Op::RemoveLabel { label, .. } => Op::RemoveLabel { ids, label: label.clone() },
         Op::Snooze { until, .. } => Op::Snooze { ids, until: *until },

@@ -150,6 +150,8 @@ pub enum Action {
     Unsubscribe,
     /// Blocks the sender of the thread's newest message not from the user, and trashes the thread.
     Block,
+    /// Deletes every message of the thread for good. It can't be undone.
+    Delete,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -248,6 +250,11 @@ pub enum Command {
         /// As `Threads`'s.
         #[serde(default)]
         keep: Vec<String>,
+    },
+    /// Deletes every message in Trash or Spam for good: `trash`, `spam`, or an account's. It
+    /// can't be undone. An `ActReply`.
+    EmptyMailbox {
+        mailbox: String,
     },
     /// `{id}`: the new label's id, usable at once.
     CreateLabel {

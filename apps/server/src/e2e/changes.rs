@@ -90,6 +90,37 @@ async fn an_op_sent_twice_is_applied_once_and_holds_off_stale_provider_state(db:
 }
 
 #[sqlx::test]
+async fn a_delete_removes_the_message_for_clients_at_once_and_stale_provider_state_keeps_it_gone(db: PgPool) {
+    let server = Server::start(db.clone()).await;
+    let user = db::create_user(&db).await.unwrap();
+    let account = NewAccount {
+        user_id: user,
+        provider: Provider::Jmap,
+        address: "ann@example.com",
+        login: "l",
+        credentials: vec![],
+    };
+    let account_id = db::upsert_account(&db, account).await.unwrap();
+    let account = db::account(&db, account_id).await.unwrap().unwrap();
+    db::upsert_messages(&db, &account, &[remote(0)]).await.unwrap();
+    let id: uuid::Uuid = sqlx::query_scalar("SELECT id FROM messages").fetch_one(&db).await.unwrap();
+    let (_, _, cursor, _) = changes(&server, user, 0).await;
+
+    let outcome = ops::apply(&server.state, user, "op-1", Op::Delete { ids: vec![id.to_string()] }).await.unwrap();
+    assert!(matches!(outcome, ops::Outcome::Done { ok: true, .. }));
+    let ServerMessage::Changes { messages, .. } = crate::changes::read(&db, user, cursor).await.unwrap() else {
+        panic!("not changes");
+    };
+    assert_eq!(messages.iter().map(|message| message.deleted).collect::<Vec<_>>(), [true]);
+    let kind: String = sqlx::query_scalar("SELECT op->>'kind' FROM provider_ops").fetch_one(&db).await.unwrap();
+    assert_eq!(kind, "delete");
+
+    db::upsert_messages(&db, &account, &[remote(0)]).await.unwrap();
+    let deleted: bool = sqlx::query_scalar("SELECT deleted FROM messages").fetch_one(&db).await.unwrap();
+    assert!(deleted);
+}
+
+#[sqlx::test]
 async fn an_account_colour_is_kept_for_its_user_only(db: PgPool) {
     let server = Server::start(db.clone()).await;
     let user = db::create_user(&db).await.unwrap();

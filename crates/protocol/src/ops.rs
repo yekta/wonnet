@@ -30,6 +30,10 @@ pub enum Op {
     Spam {
         ids: Vec<String>,
     },
+    /// Deletes the messages for good, at the provider too.
+    Delete {
+        ids: Vec<String>,
+    },
     /// `label` is a custom label's id, or the role `inbox`, `trash` or `spam`.
     AddLabel {
         ids: Vec<String>,
@@ -104,6 +108,7 @@ impl Op {
             | Op::MoveToInbox { ids }
             | Op::Trash { ids }
             | Op::Spam { ids }
+            | Op::Delete { ids }
             | Op::AddLabel { ids, .. }
             | Op::RemoveLabel { ids, .. }
             | Op::Snooze { ids, .. } => ids,
@@ -146,7 +151,9 @@ impl Op {
                 state.remove(role::INBOX);
                 state.snoozed_until = Some(*until);
             }
-            Op::Send { .. }
+            // A deleted message has no state left: each side removes it.
+            Op::Delete { .. }
+            | Op::Send { .. }
             | Op::CancelSend { .. }
             | Op::RemoveAccount { .. }
             | Op::SetAccountColor { .. }

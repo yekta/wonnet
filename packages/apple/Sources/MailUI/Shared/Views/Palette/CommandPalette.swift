@@ -104,6 +104,9 @@ struct CommandPalette: View {
         if store.searchRows == nil, !store.rows.isEmpty {
             items.append(PaletteItem(id: "zero", title: "Get Me To Zero: archive everything here", symbol: .archive, afterClosing: true) { store.archiveAll() })
         }
+        if store.canEmpty {
+            items.append(PaletteItem(id: "empty", title: "Empty \(store.mailboxName)", symbol: .trash, afterClosing: true) { store.emptyMailbox() })
+        }
         if store.conversation == nil, !store.visibleRows.isEmpty {
             items.append(PaletteItem(id: "select-all", title: "Select all", symbol: .squareCheck, shortcut: "⌘A") { store.selectAll() })
         }
