@@ -26,7 +26,7 @@ public struct MailMacApp: App {
                 }
                 .onOpenURL { url in Task { await store.finishSignIn(url) } }
         }
-        .windowToolbarStyle(.unified)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1280, height: 820)
         .commands { MacCommands(store: store) }
     }
@@ -47,54 +47,66 @@ final class MacDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// The window, around the pages. Each page puts its first button in the window's toolbar, beside
+/// the window's buttons, where the system gives it its clicks; what follows it on the bar is ours,
+/// drawn under the toolbar. This view reads nothing of the mail, so a sync doesn't redraw it.
 struct MacRoot: View {
-    /// Past the window's buttons, in the toolbar.
-    private static let pastWindowButtons: CGFloat = 68
+    /// Past the window's buttons and the toolbar's button beside them.
+    private static let pastToolbarButton: CGFloat = 139
 
     @Environment(MailStore.self) private var store
-    @State private var focusSearch = 0
-    /// Full screen hides the window's buttons, so it has no toolbar.
+    /// Full screen hides the window's buttons.
     @State private var fullScreen = false
 
     var body: some View {
+        MacPages()
+            .toolbar {
+                // Until there is a page, an item no one sees, so the window's buttons sit where the
+                // pages will have them.
+                if !store.booted || !store.signedIn {
+                    ToolbarItem(placement: .navigation) {
+                        Color.clear.frame(width: 1, height: 1).allowsHitTesting(false)
+                    }
+                    .withoutSystemGlass()
+                }
+            }
+            .frame(minWidth: 860, minHeight: 520)
+            .ignoresSafeArea()
+            .windowToolbarUnderTopBar()
+            .environment(\.pastToolbarButton, Self.pastToolbarButton - (fullScreen ? Self.windowButtons : 0))
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in fullScreen = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in fullScreen = false }
+            .mailSheets(store)
+    }
+
+    /// How much of the toolbar's start the window's buttons take, which full screen hides.
+    private static let windowButtons: CGFloat = 68
+}
+
+/// The mail, the sidebar over it and the settings; onboarding until an account is added.
+private struct MacPages: View {
+    @Environment(MailStore.self) private var store
+    @State private var focusSearch = 0
+
+    var body: some View {
         @Bindable var store = store
-        Group {
-            if !store.booted {
-                // The page's colour alone, until the core says where the app was left.
-                Tokens.background.color
-            } else if !store.signedIn {
-                OnboardingView().overlay(alignment: .bottom) { ToastView() }
-            } else {
-                ZStack(alignment: .leading) {
-                    // The mail stays under the settings, so going back finds it as it was left.
-                    content
-                        .opacity(store.settings == nil ? 1 : 0)
-                        .allowsHitTesting(store.settings == nil)
-                    if store.settings == nil { sidebar }
-                    if let section = store.settings { SettingsRoute(section: section) }
-                }
-                .overlay(alignment: .bottom) { ToastView() }
-                .background(KeyHandler(store: store, focusSearch: { focusSearch += 1 }, sidebarOpen: $store.sidebarOpen))
+        if !store.booted {
+            // The page's colour alone, until the core says where the app was left.
+            Tokens.background.color
+        } else if !store.signedIn {
+            OnboardingView().overlay(alignment: .bottom) { ToastView() }
+        } else {
+            ZStack(alignment: .leading) {
+                // The mail stays under the settings, so going back finds it as it was left.
+                content
+                    .opacity(store.settings == nil ? 1 : 0)
+                    .allowsHitTesting(store.settings == nil)
+                if store.settings == nil { sidebar }
+                if let section = store.settings { SettingsRoute(section: section) }
             }
+            .overlay(alignment: .bottom) { ToastView() }
+            .background(KeyHandler(store: store, focusSearch: { focusSearch += 1 }, sidebarOpen: $store.sidebarOpen))
         }
-        .toolbar {
-            // An item no one sees, for the window to have a toolbar: it puts the window's buttons
-            // in the middle of a bar as tall as ours, on every page. What is beside them is ours,
-            // where the system would place an item further off. Full screen has neither.
-            if !fullScreen {
-                ToolbarItem(placement: .navigation) {
-                    Color.clear.frame(width: 1, height: 1).allowsHitTesting(false)
-                }
-                .withoutSystemGlass()
-            }
-        }
-        .frame(minWidth: 860, minHeight: 520)
-        .ignoresSafeArea()
-        .windowToolbarUnderTopBar()
-        .environment(\.pastWindowButtons, fullScreen ? 0 : Self.pastWindowButtons)
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in fullScreen = true }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in fullScreen = false }
-        .mailSheets(store)
     }
 
     /// Over the page, without moving it; a click beside it closes it.
@@ -140,7 +152,7 @@ struct MacRoot: View {
                 // Writing is a page of its own, as a thread is, with its bar on top.
                 ComposeView(compose: compose).id(compose.id)
             } else {
-                MacTopBar(focusSearch: focusSearch, showSidebar: { showSidebar(true) })
+                MacTopBar(focusSearch: focusSearch, toggleSidebar: { showSidebar(!store.sidebarOpen) })
                 Rule()
                 page
             }
@@ -182,29 +194,26 @@ struct MacRoot: View {
     }
 }
 
-/// Search and compose above the list; back and the thread's actions above a thread.
+/// Search and compose above the list; back and the thread's actions above a thread. The menu,
+/// and back beside it, are the toolbar's.
 struct MacTopBar: View {
     @Environment(MailStore.self) private var store
     let focusSearch: Int
-    let showSidebar: () -> Void
-    @Environment(\.pastWindowButtons) private var pastWindowButtons
+    let toggleSidebar: () -> Void
+    @Environment(\.pastToolbarButton) private var pastToolbarButton
     @State private var query = ""
 
     var body: some View {
         Group {
             if store.conversation == nil, !store.selection.isEmpty {
                 HeaderBar {
-                    menu
                     SelectionBar()
                 } trailing: {
                     compose
                 }
             } else {
                 HeaderBar {
-                    menu
-                    if store.conversation != nil {
-                        IconButton(symbol: .arrowLeft, help: "Back (Esc)") { store.close() }
-                    } else {
+                    if store.conversation == nil {
                         SearchField(
                             placeholder: "Search", text: $query, style: .bar, autofocus: false, focusTrigger: focusSearch,
                             submit: { store.search(query) }, escape: store.endSearch, clear: store.endSearch
@@ -222,14 +231,25 @@ struct MacTopBar: View {
                 }
             }
         }
-        .padding(.leading, pastWindowButtons)
+        .padding(.leading, pastToolbarButton - Space.l)
+        .toolbar {
+            // The mail stays under the settings, which have their own.
+            if store.settings == nil {
+                ToolbarItem(placement: .navigation) {
+                    HStack(spacing: Space.s + 2) {
+                        IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)
+                        // Over the open sidebar, only the menu, which closes it.
+                        if store.conversation != nil, !store.sidebarOpen {
+                            IconButton(symbol: .arrowLeft, help: "Back (Esc)") { store.close() }
+                        }
+                    }
+                }
+                .withoutSystemGlass()
+            }
+        }
         .onAppear { query = store.searchQuery }
         .onChange(of: query) { _, text in store.search(text) }
         .onChange(of: store.searchQuery) { _, text in if text.isEmpty { query = "" } }
-    }
-
-    private var menu: some View {
-        IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: showSidebar)
     }
 
     private var compose: some View {

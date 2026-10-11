@@ -174,15 +174,15 @@ enum Appearance: String, CaseIterable, Identifiable {
     }
 }
 
-private struct PastWindowButtonsKey: EnvironmentKey {
+private struct PastToolbarButtonKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }
 
 extension EnvironmentValues {
-    /// On the Mac, how far the top bar's controls are moved along: past the window's buttons,
-    /// which full screen hides.
-    var pastWindowButtons: CGFloat {
-        get { self[PastWindowButtonsKey.self] }
-        set { self[PastWindowButtonsKey.self] = newValue }
+    /// On the Mac, where the top bar's own controls start: past the window's buttons, which full
+    /// screen hides, and the button the page puts in the toolbar beside them.
+    var pastToolbarButton: CGFloat {
+        get { self[PastToolbarButtonKey.self] }
+        set { self[PastToolbarButtonKey.self] = newValue }
     }
 }
