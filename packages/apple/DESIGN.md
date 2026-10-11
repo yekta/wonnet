@@ -34,9 +34,9 @@ added to the component, not to the view.
   thing's hover shows on a selected row. What sits on `backgroundSecondary` (a chip) hovers in
   `backgroundSecondaryAccent`. An accent is never thinned with an opacity: if a step is
   missing, add a token for it. A control with a colour of its own (the star) hovers in a wash
-  of it: the colour at `Opacity.colorTint`, lighter in the dark scheme. A pressed button shows
-  at `Opacity.pressed`, a disabled one at `Opacity.disabled`, a filled one lights at
-  `Opacity.lit`.
+  of it: the colour at `Opacity.colorTint`, lighter in the dark scheme. Pressed is hovered: on
+  iOS a press shows the hover's fill. A disabled button shows at `Opacity.disabled`, a filled
+  one lights at `Opacity.lit`.
 - Things side by side have no gap between them: an `HStack(spacing: 0)` of buttons, rows with
   no spacing. The space is inside each control, so hover areas and hit areas touch. Buttons
   with a face (a circle, a pill) show `Theme.buttonGap` (2pt) between the faces; each button

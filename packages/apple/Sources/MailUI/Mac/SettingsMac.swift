@@ -228,39 +228,14 @@ private struct AccountSettings: View {
     @State private var adding = false
 
     var body: some View {
+        let accounts = store.accounts
         VStack(alignment: .leading, spacing: Space.s + 2) {
             SectionHeading(title: "Accounts", detail: "Each account's colour marks its mail in the list and its mailboxes in the sidebar.")
                 .padding(.horizontal, Space.xs)
-            ForEach(store.accounts) { account in
-                SettingsCard {
-                    SettingsRow {
-                        SettingsLabel(title: account.title, detail: store.subtitle(of: account), dot: Theme.accountColor(account.color).color, heading: true)
-                    } trailing: {
-                        IconMenu(symbol: .ellipsis, help: "More", circled: false) {
-                            Button(role: .destructive) { store.confirmRemoving(account) } label: { Text("Remove Account…") }
-                        }
-                    }
-                    SettingsDivider()
-                    SettingsRow {
-                        SettingsLabel(title: "Name", detail: "Shown in the sidebar in place of the address.")
-                    } trailing: {
-                        AccountNameField(account: account)
-                    }
-                    SettingsDivider()
-                    SettingsRow {
-                        SettingsLabel(title: "Colour")
-                    } trailing: {
-                        SwatchRow(selected: account.color) { store.setAccountColor(account.id, $0) }
-                    }
-                    SettingsDivider()
-                    SettingsRow {
-                        SettingsLabel(title: "Notifications", detail: "New mail makes a notification and counts on the badge.")
-                    } trailing: {
-                        Switch(title: "Notifications", isOn: store.notifies(account))
-                    }
-                    SettingsDivider()
-                    SignatureRow(account: account)
-                        .id(account.id == store.accounts.first?.id ? "signatures" : account.id)
+            LazyVStack(spacing: Space.xl) {
+                ForEach(accounts) { account in
+                    AccountCard(account: account, anchor: account.id == accounts.first?.id ? "signatures" : account.id)
+                        .equatable()
                 }
             }
             ActionButton(title: "Add account", symbol: .plus, variant: .outline) { adding = true }
@@ -275,6 +250,54 @@ private struct AccountSettings: View {
             } trailing: {
                 ActionButton(title: "Sign out", symbol: .logOut, variant: .destructive) { store.confirmSigningOut() }
             }
+        }
+    }
+}
+
+/// An account's card. The account changes with its mailboxes' counts as mail syncs, which the
+/// card doesn't show, so it is drawn again only when what it shows changes.
+private struct AccountCard: View, Equatable {
+    @Environment(MailStore.self) private var store
+    let account: AccountView
+    /// What a search scrolls to: the first card's signature is the settings' "signatures".
+    let anchor: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        let a = lhs.account, b = rhs.account
+        return lhs.anchor == rhs.anchor && a.id == b.id && a.address == b.address && a.name == b.name && a.title == b.title
+            && a.color == b.color && a.status == b.status && a.identities == b.identities
+    }
+
+    var body: some View {
+        SettingsCard {
+            SettingsRow {
+                SettingsLabel(title: account.title, detail: store.subtitle(of: account), dot: Theme.accountColor(account.color).color, heading: true)
+            } trailing: {
+                IconMenu(symbol: .ellipsis, help: "More", circled: false) {
+                    Button(role: .destructive) { store.confirmRemoving(account) } label: { Text("Remove Account…") }
+                }
+            }
+            SettingsDivider()
+            SettingsRow {
+                SettingsLabel(title: "Name", detail: "Shown in the sidebar in place of the address.")
+            } trailing: {
+                AccountNameField(account: account)
+            }
+            SettingsDivider()
+            SettingsRow {
+                SettingsLabel(title: "Colour")
+            } trailing: {
+                SwatchRow(selected: account.color) { store.setAccountColor(account.id, $0) }
+            }
+            SettingsDivider()
+            SettingsRow {
+                SettingsLabel(title: "Notifications", detail: "New mail makes a notification and counts on the badge.")
+            } trailing: {
+                Switch(title: "Notifications", isOn: store.notifies(account))
+            }
+            SettingsDivider()
+            SignatureRow(account: account)
+                .id(anchor)
         }
     }
 }

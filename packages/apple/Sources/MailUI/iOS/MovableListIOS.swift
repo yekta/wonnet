@@ -147,13 +147,13 @@ struct MovableList<Item: Identifiable, Row: View>: UIViewRepresentable {
             configure(cell, id)
         }
 
-        /// Draws the row in the cell, dimmed while the cell is pressed as a button would be.
+        /// Draws the row in the cell, in its hover's fill while the cell is pressed.
         private func configure(_ cell: MovableCell, _ id: Item.ID) {
             guard let list, let store, let item = item(id) else { return }
             cell.generation = generation
             let content = list.row(item).environment(store)
             cell.configurationUpdateHandler = { cell, state in
-                cell.contentConfiguration = UIHostingConfiguration { content.opacity(Opacity.pressed, when: state.isHighlighted) }
+                cell.contentConfiguration = UIHostingConfiguration { content.environment(\.hovered, state.isHighlighted) }
                     .margins(.all, 0)
                     .minSize(width: 0, height: 0)
             }

@@ -41,9 +41,9 @@ extension EnvironmentValues {
     }
 }
 
-/// How every button answers the pointer, a press and being disabled, so none does it a way of
-/// its own. The face reads `hovered` from the environment and lights up at once: the system
-/// would animate the hover otherwise.
+/// How every button answers the pointer and being disabled, so none does it a way of its own.
+/// The face reads `hovered` from the environment and lights up at once: the system would
+/// animate the hover otherwise. Pressed is hovered, so a touch shows what a pointer would.
 struct PressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         Pressed(configuration: configuration)
@@ -56,8 +56,7 @@ struct PressStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .environment(\.hovered, hovering && enabled)
-                .opacity(Opacity.pressed, when: enabled && configuration.isPressed)
+                .environment(\.hovered, (hovering || configuration.isPressed) && enabled)
                 .opacity(Opacity.disabled, when: !enabled)
                 .onHover { over in
                     var atOnce = Transaction()
