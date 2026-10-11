@@ -3,7 +3,7 @@
 import SwiftUI
 
 enum Tokens {
-    static let background = ThemeColor(light: 0xfbfcfd, dark: 0x161819)
+    static let background = ThemeColor(light: 0xf5f6f7, dark: 0x161819)
     static let backgroundAccent = ThemeColor(light: 0xedeff1, dark: 0x202225)
     static let backgroundAccentStronger = ThemeColor(light: 0xe5e7ea, dark: 0x2a2c2e)
     static let backgroundAccentStrongest = ThemeColor(light: 0xd6d8db, dark: 0x3c3e40)
@@ -40,7 +40,7 @@ enum Tokens {
     static let borderCard = ThemeColor(light: 0xebecee, dark: 0x2a2c2f)
     static let borderInput = ThemeColor(light: 0xe1e3e6, dark: 0x2a2c2f)
     static let borderPopover = ThemeColor(light: 0xebecee, dark: 0x2a2c2f)
-    static let input = ThemeColor(light: 0xfbfcfd, dark: 0x1a1c1e)
+    static let input = ThemeColor(light: 0xf5f6f7, dark: 0x1a1c1e)
     static let ring = ThemeColor(light: 0x4f96f2, dark: 0x5ea2f5)
     static let overlay = ThemeColor(light: 0x000000, dark: 0x000000)
     static let shadow = ThemeColor(light: 0x0f1a24, dark: 0x04080c)
