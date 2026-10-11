@@ -314,18 +314,19 @@ final class ThreadRowView: NSTableRowView {
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
-        let column = column
+        let face = column.insetBy(dx: 0, dy: Theme.buttonGap / 2)
+        let shape = NSBezierPath(roundedRect: face, xRadius: Radius.sm, yRadius: Radius.sm)
         if isCurrent || hovering {
             Tokens.backgroundAccentLarger.platform.setFill()
-            column.fill()
+            shape.fill()
         }
         if isChecked {
             Tokens.primary.opacity(Opacity.colorTint).platform.setFill()
-            column.fill()
+            shape.fill()
         }
         if let row {
             Theme.accountColor(row.color).platform.setFill()
-            let bar = NSRect(x: column.minX, y: 2, width: Theme.macAccountBarWidth, height: column.height - 4)
+            let bar = NSRect(x: column.minX, y: 4, width: Theme.macAccountBarWidth, height: column.height - 8)
             let radius = Theme.macAccountBarWidth / 2
             NSBezierPath(roundedRect: bar, xRadius: radius, yRadius: radius).fill()
         }
