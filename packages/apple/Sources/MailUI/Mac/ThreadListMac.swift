@@ -392,7 +392,7 @@ final class ThreadRowView: NSTableRowView {
         let dateWidth = ceil(text.date.size().width)
         let lineWidth = max(starRect.minX - 34 - dateWidth - x, 0)
         if hovering {
-            let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.m
+            let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.xl
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
             for (kind, symbol, rect) in actions {
                 let lit = hoveredHit == kind
@@ -432,7 +432,7 @@ final class ThreadRowView: NSTableRowView {
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         drawLine(text, x: x, width: width, middle: middle)
         context.setBlendMode(.destinationOut)
-        context.drawLinearGradient(fade, start: CGPoint(x: end - Space.xxl, y: 0), end: CGPoint(x: end, y: 0), options: [.drawsAfterEndLocation])
+        context.drawLinearGradient(fade, start: CGPoint(x: end - (Space.xxl + Space.xs), y: 0), end: CGPoint(x: end, y: 0), options: [.drawsAfterEndLocation])
         context.endTransparencyLayer()
         context.restoreGState()
     }
