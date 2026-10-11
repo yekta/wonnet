@@ -323,8 +323,15 @@ final class ThreadRowView: NSTableRowView {
         return NSRect(x: ((bounds.width - width) / 2).rounded(), y: 0, width: width, height: bounds.height)
     }
 
+    /// The row's face: the column, with half the gap between buttons above and below.
+    private var face: NSRect {
+        column.insetBy(dx: 0, dy: Theme.buttonGap / 2)
+    }
+
+    /// The star, as far from the face's right edge as from its top and bottom.
     private var starRect: NSRect {
-        NSRect(x: column.maxX - 40, y: (bounds.height - Self.iconSide) / 2, width: Self.iconSide, height: Self.iconSide)
+        let margin = (face.height - Self.iconSide) / 2
+        return NSRect(x: face.maxX - margin - Self.iconSide, y: face.minY + margin, width: Self.iconSide, height: Self.iconSide)
     }
 
     private var actions: [(Hit, Symbol, NSRect)] {
@@ -345,7 +352,6 @@ final class ThreadRowView: NSTableRowView {
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
-        let face = column.insetBy(dx: 0, dy: Theme.buttonGap / 2)
         let shape = NSBezierPath(roundedRect: face, xRadius: Radius.sm, yRadius: Radius.sm)
         if hovering {
             Tokens.backgroundAccentLarger.platform.setFill()
