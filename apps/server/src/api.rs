@@ -139,6 +139,8 @@ pub async fn add_device(
     let key = state.sealer.seal(&key);
     let device = NewDevice { user_id, token: &token, topic: &request.topic, sandbox: request.sandbox, key };
     db::upsert_device(&state.db, device).await?;
+    let environment = if request.sandbox { "sandbox" } else { "production" };
+    tracing::info!("registered device {} ({environment}, {}) for user {user_id}", push::short(&token), request.topic);
     Ok(Json(json!({})))
 }
 
@@ -149,6 +151,7 @@ pub async fn remove_device(
 ) -> AppResult<Json<Value>> {
     let user_id = user(&state, &headers).await?;
     db::delete_device(&state.db, user_id, &token.to_ascii_lowercase()).await?;
+    tracing::info!("removed device {} for user {user_id}", push::short(&token));
     Ok(Json(json!({})))
 }
 
