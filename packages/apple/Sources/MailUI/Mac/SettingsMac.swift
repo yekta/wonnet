@@ -7,7 +7,6 @@ import SwiftUI
 /// window's buttons or under the sections, and Esc go back to the mail.
 struct SettingsRoute: View {
     @Environment(MailStore.self) private var store
-    @Environment(\.pastWindowButtons) private var pastWindowButtons
     let section: SettingsSection
     @AppStorage("settings.sidebarWidth") private var sidebarWidth = Double(Theme.sidebarWidth)
 
@@ -15,13 +14,8 @@ struct SettingsRoute: View {
         let widths = Theme.settingsSidebarWidths
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    ActionButton(title: "Back", symbol: .arrowLeft, variant: .ghost) { store.closeSettings() }
-                        .help("Back to the mail (Esc)")
-                    Spacer()
-                }
-                .padding(.leading, pastWindowButtons + Space.l)
-                .frame(height: Theme.barHeight)
+                // Under the window's buttons and Back, which is the toolbar's.
+                Color.clear.frame(height: Theme.barHeight)
                 SettingsSidebar(selected: section)
             }
             .frame(width: min(max(CGFloat(sidebarWidth), widths.lowerBound), widths.upperBound))
@@ -36,6 +30,13 @@ struct SettingsRoute: View {
             }
         }
         .background(Tokens.background.color)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                ActionButton(title: "Back", symbol: .arrowLeft, variant: .ghost) { store.closeSettings() }
+                    .help("Back to the mail (Esc)")
+            }
+            .withoutSystemGlass()
+        }
     }
 }
 

@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 /// undo delay, or for a time picked to send it at.
 struct ComposeView: View {
     @Environment(MailStore.self) private var store
-    @Environment(\.pastWindowButtons) private var pastWindowButtons
     @State private var compose: Compose
     /// Typed into the address fields and not yet made a chip.
     @State private var to = ""
@@ -66,12 +65,19 @@ struct ComposeView: View {
         #if os(macOS)
         VStack(spacing: 0) {
             HeaderBar(title: title) {
-                IconButton(symbol: .arrowLeft, help: "Back (Esc)", action: close)
-                    .keyboardShortcut(.cancelAction)
+                EmptyView()
             } trailing: {
                 actions
             }
-            .padding(.leading, pastWindowButtons)
+            .toolbar {
+                if store.settings == nil {
+                    ToolbarItem(placement: .navigation) {
+                        IconButton(symbol: .arrowLeft, help: "Back (Esc)", action: close)
+                            .keyboardShortcut(.cancelAction)
+                    }
+                    .withoutSystemGlass()
+                }
+            }
             Rule(color: Tokens.borderCard)
             page
         }
