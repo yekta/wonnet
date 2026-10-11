@@ -365,7 +365,8 @@ pub enum Command {
     Settle,
     /// This device, to push new mail to: its APNs token in hex, the app's bundle id, whether it
     /// is a development build, and the 32 bytes (base64) the notifications are sealed with. Kept,
-    /// and given to the server at every sign-in. `{}`.
+    /// and given to the server at every sign-in. `{}` once the server has it (at once when signed
+    /// out), or the server's error.
     SetPushDevice {
         token: String,
         topic: String,

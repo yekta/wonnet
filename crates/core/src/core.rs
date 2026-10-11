@@ -474,7 +474,7 @@ impl Core {
             Command::Refresh => return self.refresh(id),
             Command::Settle => return self.settle(id),
             Command::SetPushDevice { token, topic, sandbox, key } => {
-                self.set_push_device(DeviceRequest { token, topic, sandbox, key })
+                return self.set_push_device(id, DeviceRequest { token, topic, sandbox, key });
             }
             Command::UnreadInInbox { threads } => {
                 self.store.unread_in_inbox(&threads).map(|threads| json!({ "threads": threads }))
@@ -538,24 +538,34 @@ impl Core {
         }
     }
 
-    fn set_push_device(&mut self, device: DeviceRequest) -> Result<Value> {
-        self.store.set_meta("push_device", Some(&serde_json::to_string(&device)?))?;
-        self.register_device();
-        Ok(json!({}))
+    /// Answers once the server has the device, or at once when not signed in.
+    fn set_push_device(&mut self, id: u64, device: DeviceRequest) -> Option<Result<Value>> {
+        let kept = serde_json::to_string(&device).map_err(Into::into);
+        if let Err(error) = kept.and_then(|text| self.store.set_meta("push_device", Some(&text))) {
+            return Some(Err(error));
+        }
+        self.register_device(Some(id));
+        None
     }
 
     /// Gives the server this device to push to, when signed in.
-    fn register_device(&self) {
+    fn register_device(&self, reply: Option<u64>) {
         let device = self.store.meta("push_device").and_then(|text| serde_json::from_str::<DeviceRequest>(&text).ok());
         let (Some(device), Some(server), Some(token), false) = (device, self.server(), self.token(), self.demo) else {
+            if let Some(id) = reply {
+                self.reply(id, Ok(json!({})));
+            }
             return;
         };
         let http = self.http.clone();
         self.spawn(
             async move { crate::http::post::<Value>(&http, &server, "/api/devices", Some(&token), &device).await },
-            |_, result| {
-                if let Err(error) = result {
+            move |core, result| {
+                if let Err(error) = &result {
                     tracing::warn!("couldn't register for push notifications: {error:#}");
+                }
+                if let Some(id) = reply {
+                    core.reply(id, result.map(|_| json!({})));
                 }
             },
         );
@@ -708,7 +718,7 @@ impl Core {
                     core.store.set_meta("token", Some(&response.token))?;
                     if new {
                         core.connect();
-                        core.register_device();
+                        core.register_device(None);
                     }
                     Ok(json!({}))
                 });
