@@ -16,7 +16,8 @@ enum NotificationAnswer {
     case reply(String)
 }
 
-/// New mail as notifications while the app is in the background, a click on one opening its
+/// New mail as notifications from its sender, with their avatar, while the app is in the
+/// background, a click on one opening its
 /// thread and its buttons archiving, marking read or replying; and the unread count of the
 /// inboxes on the app's icon. On the Mac the app tells of mail as it syncs. On iOS the server
 /// pushes it, sealed with this device's key, which the notification extension opens. A thread's
@@ -84,7 +85,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             content.threadIdentifier = message.thread
             content.categoryIdentifier = "message"
             content.userInfo = ["thread": message.thread]
-            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+            Task.detached {
+                let shown = await MessageNotification.fromSender(content, email: message.email, initials: message.initials)
+                try? await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: shown, trigger: nil))
+            }
         }
     }
 

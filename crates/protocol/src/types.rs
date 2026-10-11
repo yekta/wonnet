@@ -110,6 +110,23 @@ impl Address {
             None => self.email.split('@').next().unwrap_or(&self.email),
         }
     }
+
+    /// Two letters for an avatar: the first letters of the first and last name.
+    pub fn initials(&self) -> String {
+        let words: Vec<&str> = self
+            .display()
+            .split(|c: char| c.is_whitespace() || c == '.' || c == '_')
+            .filter(|word| !word.is_empty())
+            .collect();
+        let letter = |word: &&str| {
+            word.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_uppercase().to_string()).unwrap_or_default()
+        };
+        match words.as_slice() {
+            [] => "?".into(),
+            [one] => letter(one),
+            [first, .., last] => format!("{}{}", letter(first), letter(last)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -245,4 +262,16 @@ pub struct Preference {
     pub value: serde_json::Value,
     pub deleted: bool,
     pub rev: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initials_take_the_first_and_last_name() {
+        assert_eq!(Address::new(Some("Ada King Lovelace"), "ada@x.com").initials(), "AL");
+        assert_eq!(Address::new(None, "grace.hopper@navy.mil").initials(), "GH");
+        assert_eq!(Address::new(None, "x@y.z").initials(), "X");
+    }
 }

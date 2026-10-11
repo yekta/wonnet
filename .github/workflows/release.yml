@@ -63,7 +63,11 @@ jobs:
       - name: Build and sign the app
         env:
           MAIL_SIGN_IDENTITY: Developer ID Application
-        run: apps/macos/scripts/build-app.sh
+          MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
+        run: |
+          export MAIL_PROVISIONING_PROFILE="$RUNNER_TEMP/Wonnet.provisionprofile"
+          echo "$MACOS_PROVISIONING_PROFILE" | base64 --decode > "$MAIL_PROVISIONING_PROFILE"
+          apps/macos/scripts/build-app.sh
 
       - name: Notarize the app
         env:

@@ -1,3 +1,4 @@
+import MailPush
 import SwiftUI
 
 /// Someone's contact photo, or a circle with their initials in a colour picked from their address.
@@ -8,8 +9,7 @@ struct Avatar: View {
 
     private var tint: Color {
         let colors = Theme.accountColors
-        let sum = email.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffff }
-        return colors[sum % colors.count].color
+        return colors[SenderAvatar.colorIndex(email, count: colors.count)].color
     }
 
     var body: some View {

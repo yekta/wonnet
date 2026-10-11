@@ -109,13 +109,15 @@ events out through the callback given to `mail_core_start`) and a Rust library f
 `tokens.json` is the source of every colour, opacity, radius and shadow, in Motile's names, with
 Wonnet's values measured from Newton Mail. `build.mjs` writes `tokens.css` (the core includes it
 in message pages, where `.light` keeps an element in the light scheme; the server's error page
-too) and the Apple kit's `Tokens.swift` (`Tokens`, `Opacity`, `Radius`, `ShadowSize`). Never edit
-either by hand: change `tokens.json` and run `node packages/theme/build.mjs`.
+too), the Apple kit's `Tokens.swift` (`Tokens`, `Opacity`, `Radius`, `ShadowSize`) and
+`MailPush`'s `AccountColors.swift` (the avatars' colours for the notification extension). Never edit
+them by hand: change `tokens.json` and run `node packages/theme/build.mjs`.
 
 ### packages/apple (Swift: SwiftUI, with AppKit and UIKit for the thread list)
 
 `MailUI`, the Swift package both apps are made of, and `MailPush` (`Sources/MailPush`), the
-device's push key and the opening of sealed pushes, which the iOS notification extension uses too. `Sources/MailUI/Shared` is what both use,
+device's push key, the opening of sealed pushes and the sender's avatar on a notification, which
+the iOS notification extension uses too. `Sources/MailUI/Shared` is what both use,
 `Mac` and `iOS` what only one does, each file of those inside `#if os(…)`.
 
 - `Shared/Core`: `CoreBridge.swift` calls the Rust core, `Models.swift` is what it answers,
@@ -185,7 +187,8 @@ from the apps' tokens. The screenshots come from `docs/screenshots`; the favicon
 - Do not leave paragraphs of comments on top of the code. Prefer clear names; keep the comments
   that are needed concise. Comments move with the code.
 - Use guard statement patterns in any code you write.
-- Do not edit generated code: `Cargo.lock`, `packages/theme/tokens.css`, `Tokens.swift`. Never
+- Do not edit generated code: `Cargo.lock`, `packages/theme/tokens.css`, `Tokens.swift`,
+  `AccountColors.swift`. Never
   edit an applied migration in `apps/server/migrations`; add a new one.
 - Do not write useless tests; tests cover input/output behaviour.
 - Reinvent the wheel but do not reinvent the car. A simple problem gets no new library; a
@@ -218,9 +221,11 @@ the Stalwart test runs when `STALWART_URL` is set):
     cd apps/marketing && pnpm check && pnpm build
 
 The `macOS` and `iOS` workflows build the apps on pull requests that change them. On `main`,
-`release.yml` signs and notarizes the Mac app and publishes it as a GitHub release, and uploads the
+`release.yml` signs the Mac app with its Developer ID profile, notarizes it and publishes it as a
+GitHub release, and uploads the
 iOS app to TestFlight (`apps/ios/scripts/testflight.sh`), signed with two App Store profiles: the
-app's and its notification extension's. Its signing secrets and the `APPLE_TEAM_ID` and
+app's and its notification extension's. Both apps are the App ID `app.wonnet.wonnettest`. Its
+signing secrets and the `APPLE_TEAM_ID` and
 `IOS_BUNDLE_ID` variables are set on the repository.
 
 ## Commit Messages

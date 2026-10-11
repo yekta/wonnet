@@ -442,6 +442,8 @@ pub struct NewMail {
     pub account_id: String,
     /// The sender's name.
     pub from: String,
+    pub email: String,
+    pub initials: String,
     pub subject: String,
     pub snippet: String,
 }

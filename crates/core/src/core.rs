@@ -804,7 +804,7 @@ impl Core {
                 id: message.id.clone(),
                 from_name,
                 from_email: message.from.email.clone(),
-                initials: rows::initials(&message.from),
+                initials: message.from.initials(),
                 to: if to.is_empty() { String::new() } else { format!("to {}", to.join(", ")) },
                 date: dates::long(message.date, &now),
                 snippet: rows::snippet(&message.snippet),

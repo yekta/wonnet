@@ -1,8 +1,9 @@
 import MailPush
 import UserNotifications
 
-/// Opens what the server pushed for new mail, sealed with this device's key, and shows it: the
-/// sender, the subject and the start of the message. Without the key the push reads "New mail".
+/// Opens what the server pushed for new mail, sealed with this device's key, and shows it as a
+/// message from its sender: their avatar with the app's icon in its corner, the subject and the
+/// start of the message. Without the key the push reads "New mail".
 final class NotificationService: UNNotificationServiceExtension {
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         guard let content = request.content.mutableCopy() as? UNMutableNotificationContent,
@@ -18,6 +19,13 @@ final class NotificationService: UNNotificationServiceExtension {
         content.body = mail["snippet"] as? String ?? ""
         content.threadIdentifier = thread
         content.userInfo = ["thread": thread]
-        contentHandler(content)
+        guard let email = mail["email"] as? String else {
+            contentHandler(content)
+            return
+        }
+        let initials = mail["initials"] as? String ?? ""
+        Task {
+            contentHandler(await MessageNotification.fromSender(content, email: email, initials: initials))
+        }
     }
 }
