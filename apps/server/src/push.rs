@@ -165,6 +165,9 @@ async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
         }
         let token = short(&device.token);
         let (alerts, total) = (fresh.len().min(MOST_ALERTS), pushes.len());
+        if total == 0 {
+            continue;
+        }
         let mut sent = 0;
         for push in pushes {
             match apns.send(&device, &push).await {
