@@ -9,6 +9,7 @@ enum Symbol: String {
     case archive = "\u{e041}"
     case archiveRestore = "\u{e2cd}"
     case arrowLeft = "\u{e048}"
+    case arrowUp = "\u{e04a}"
     case atSign = "\u{e04e}"
     case ban = "\u{e051}"
     case bell = "\u{e059}"

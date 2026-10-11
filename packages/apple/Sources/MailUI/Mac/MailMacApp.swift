@@ -87,6 +87,8 @@ struct MacRoot: View {
 private struct MacPages: View {
     @Environment(MailStore.self) private var store
     @State private var focusSearch = 0
+    @State private var farDown = false
+    @State private var toTop = 0
 
     var body: some View {
         @Bindable var store = store
@@ -179,11 +181,13 @@ private struct MacPages: View {
                 ThreadListMac(
                     store: store, rows: store.visibleRows, selected: store.selected, checked: store.selection,
                     topInset: header ? 0 : Space.l, shown: store.conversation == nil, ready: store.listReady,
-                    loadingMore: store.loadingMore && store.searchRows == nil
+                    loadingMore: store.loadingMore && store.searchRows == nil,
+                    farDown: { farDown = $0 }, toTop: toTop
                 )
                 .overlay {
                     if store.listEmpty { EmptyList() }
                 }
+                .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
             }
             .opacity(store.conversation == nil ? 1 : 0)
             .allowsHitTesting(store.conversation == nil)
