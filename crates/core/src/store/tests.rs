@@ -733,3 +733,17 @@ fn a_big_store_stays_fast() {
 fn a_huge_store_stays_fast() {
     report(&fill_and_time(500_000, 50));
 }
+
+#[test]
+fn only_threads_still_unread_in_an_inbox_keep_their_notifications() {
+    let mut store = store();
+    let mut read = message("m2", "t2", "Bo", 2);
+    read.unread = false;
+    let mut archived = message("m3", "t3", "Cy", 3);
+    archived.labels.clear();
+    apply(&mut store, &[account()], &[message("m1", "t1", "Al", 1), read, archived], 1);
+    let threads = ["a:t1", "a:t2", "a:t3", "a:gone"].map(String::from);
+    assert_eq!(store.unread_in_inbox(&threads).unwrap(), ["a:t1"]);
+    set(&mut store, "split_inbox", json!(true));
+    assert_eq!(store.unread_in_inbox(&threads).unwrap(), ["a:t1"], "with the inbox split too");
+}

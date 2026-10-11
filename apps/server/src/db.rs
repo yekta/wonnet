@@ -170,6 +170,7 @@ pub async fn cleanup(db: &PgPool) -> sqlx::Result<()> {
     .execute(db)
     .await?;
     sqlx::query("DELETE FROM reminders WHERE remind_at < now() - interval '7 days'").execute(db).await?;
+    sqlx::query("DELETE FROM pushes WHERE created_at < now() - interval '3 days'").execute(db).await?;
     Ok(())
 }
 
@@ -1005,5 +1006,38 @@ pub async fn owns_uploads(db: &PgPool, user_id: Uuid, ids: &[Uuid]) -> sqlx::Res
 
 pub async fn delete_uploads(db: &PgPool, user_id: Uuid, ids: &[Uuid]) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM uploads WHERE user_id = $1 AND id = ANY($2)").bind(user_id).bind(ids).execute(db).await?;
+    Ok(())
+}
+
+// ---------- devices ----------
+
+pub struct NewDevice<'a> {
+    pub user_id: Uuid,
+    pub token: &'a str,
+    pub topic: &'a str,
+    pub sandbox: bool,
+    /// Sealed.
+    pub key: Vec<u8>,
+}
+
+/// Keeps a device for push notifications. A token already kept moves to this user.
+pub async fn upsert_device(db: &PgPool, device: NewDevice<'_>) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO devices (token, user_id, topic, sandbox, key) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, topic = excluded.topic,
+             sandbox = excluded.sandbox, key = excluded.key, created_at = now()",
+    )
+    .bind(device.token)
+    .bind(device.user_id)
+    .bind(device.topic)
+    .bind(device.sandbox)
+    .bind(device.key)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_device(db: &PgPool, user_id: Uuid, token: &str) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM devices WHERE token = $1 AND user_id = $2").bind(token).bind(user_id).execute(db).await?;
     Ok(())
 }

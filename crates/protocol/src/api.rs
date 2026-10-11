@@ -41,3 +41,14 @@ pub struct ErrorResponse {
 pub struct UploadResponse {
     pub id: String,
 }
+
+/// `POST /api/devices`: a device to push notifications to. `token` is its APNs token in hex,
+/// `topic` the app's bundle id, `sandbox` true for a development build, `key` the 32 bytes
+/// (base64) that what a notification says is sealed with (AES-256-GCM).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceRequest {
+    pub token: String,
+    pub topic: String,
+    pub sandbox: bool,
+    pub key: String,
+}

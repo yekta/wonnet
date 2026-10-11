@@ -30,7 +30,8 @@ Production is the `Wonnet` project on Unbind:
 | `Postgres` | | The server's database |
 
 The server runs one replica: an account's worker must run in one place. Gmail needs
-`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set on the `Server` service. When a deploy changes
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set on the `Server` service, and pushes to iPhones
+`APNS_KEY` (the APNs auth key's .p8), `APNS_KEY_ID` and `APNS_TEAM_ID`. When a deploy changes
 required variables, deploy the code first and change the variables after: Unbind restarts the
 service on every variable change.
 
@@ -71,6 +72,9 @@ What the server and the core agree on.
   MIME (bodies, attachments, headers) and builds what is sent.
 - `scheduler.rs`: snoozed mail coming back and mail waiting to be sent (undo-send, send-later,
   remind me).
+- `push.rs`: new inbox mail pushed to the iOS app through APNs, sealed with each device's own key
+  so Apple carries only ciphertext; a background push takes a notification down once its mail
+  is read or leaves the inbox.
 - `seed.rs`: `mail-server seed` gives a Stalwart server a demo user with a few hundred messages.
 - `migrations/`: the schema. `e2e/`: the real router on a fresh database per test, with a fake
   Google; `e2e/stalwart.rs` runs Stalwart, the server and the core together.
@@ -110,12 +114,14 @@ either by hand: change `tokens.json` and run `node packages/theme/build.mjs`.
 
 ### packages/apple (Swift: SwiftUI, with AppKit and UIKit for the thread list)
 
-`MailUI`, the Swift package both apps are made of. `Sources/MailUI/Shared` is what both use,
+`MailUI`, the Swift package both apps are made of, and `MailPush` (`Sources/MailPush`), the
+device's push key and the opening of sealed pushes, which the iOS notification extension uses too. `Sources/MailUI/Shared` is what both use,
 `Mac` and `iOS` what only one does, each file of those inside `#if os(…)`.
 
 - `Shared/Core`: `CoreBridge.swift` calls the Rust core, `Models.swift` is what it answers,
   `MailStore.swift` is the state the views show (`+Actions.swift`: what can be done to threads),
-  `Preferences.swift` the synced settings, `Notifier.swift` notifications and the badge,
+  `Preferences.swift` the synced settings, `Notifier.swift` notifications (their buttons, the
+  push token, taking them down) and the badge,
   `AddressBook.swift` the device's contacts (their names to the core, their photos to `Avatar`).
 - `Shared/Platform`: `Platform.swift` (what the two systems call differently; sizes are written
   as on the Mac and `Platform.scale` enlarges them on iOS) and `Symbol.swift` (the icons, from
@@ -156,7 +162,8 @@ from the apps' tokens. The screenshots come from `docs/screenshots`; the favicon
   app into `build/Wonnet.app`. `Resources/AppIcon.icon` is the icon of both apps, made in Icon
   Composer: the W in black on a light tile, white on a dark one in dark mode.
 - `apps/ios`: `project.yml` for XcodeGen; the Xcode project is generated, never committed.
-  `scripts/build-core.sh` builds the core for the platform Xcode builds for.
+  `scripts/build-core.sh` builds the core for the platform Xcode builds for. `NotificationService`
+  is the extension that opens the sealed pushes of new mail.
 
 ## General Rules:
 
@@ -211,8 +218,9 @@ the Stalwart test runs when `STALWART_URL` is set):
 
 The `macOS` and `iOS` workflows build the apps on pull requests that change them. On `main`,
 `release.yml` signs and notarizes the Mac app and publishes it as a GitHub release, and uploads the
-iOS app to TestFlight (`apps/ios/scripts/testflight.sh`). Its signing secrets and the
-`APPLE_TEAM_ID` and `IOS_BUNDLE_ID` variables are set on the repository.
+iOS app to TestFlight (`apps/ios/scripts/testflight.sh`), signed with two App Store profiles: the
+app's and its notification extension's. Its signing secrets and the `APPLE_TEAM_ID` and
+`IOS_BUNDLE_ID` variables are set on the repository.
 
 ## Commit Messages
 

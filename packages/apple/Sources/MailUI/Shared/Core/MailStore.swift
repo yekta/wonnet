@@ -286,6 +286,8 @@ public final class MailStore {
             show("The mail store couldn't open.")
             return
         }
+        Notifier.shared.bridge = bridge
+        Notifier.shared.answer = { [weak self] answer, thread in await self?.answer(answer, thread: thread) }
         Outgoing.prune()
         #if os(macOS)
         if !demo { updater.start() }
@@ -342,6 +344,7 @@ public final class MailStore {
             Notifier.shared.askPermission()
             AddressBook.shared.start(bridge)
         }
+        Task { await Notifier.shared.settle(nil) }
         guard !searchQuery.isEmpty else { return }
         search(searchQuery)
     }
@@ -468,6 +471,7 @@ public final class MailStore {
         case .changed(let mailboxes, let threads, let preferences):
             prefetched.subtract(threads)
             if preferences { preferencesChanged() }
+            if !threads.isEmpty { Task { await Notifier.shared.settle(threads) } }
             Task {
                 if mailboxes { await reloadMailboxes() }
                 await reloadThreads()
@@ -482,7 +486,7 @@ public final class MailStore {
                 listedUnified = []
                 listedAccounts = []
                 selection = []
-                Notifier.shared.setBadge(0)
+                Notifier.shared.signedOut()
             }
         case .sent:
             show("Sent.")

@@ -13,3 +13,6 @@ DerivedData/
 node_modules/
 /.claude/
 /apps/ios/Mail/Info.plist
+/apps/ios/Mail/Mail.entitlements
+/apps/ios/NotificationService/Info.plist
+/apps/ios/NotificationService/NotificationService.entitlements

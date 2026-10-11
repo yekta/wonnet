@@ -616,6 +616,20 @@ impl Store {
         Ok(touched)
     }
 
+    /// Those of `threads` with unread mail in an inbox.
+    pub fn unread_in_inbox(&self, threads: &[String]) -> Result<Vec<String>> {
+        let mut statement = self
+            .db
+            .prepare_cached("SELECT thread FROM thread_labels WHERE thread = ?1 AND label = 'inbox' AND unread > 0")?;
+        let mut unread = Vec::new();
+        for thread in threads {
+            if statement.exists([thread])? {
+                unread.push(thread.clone());
+            }
+        }
+        Ok(unread)
+    }
+
     pub fn outbox(&self) -> Result<Vec<(String, Op)>> {
         pending_ops(&self.db)
     }

@@ -354,6 +354,24 @@ pub enum Command {
     /// Asks the server to check every account with its provider now, reconnecting first when
     /// offline. `{}` once the server has, or after a while when it can't be reached.
     Refresh,
+    /// `{}` once the core is caught up with the server and has sent everything waiting (but
+    /// sends waiting for their time), or after 25 s. For an app that runs in the background a
+    /// short while, as for a notification's action.
+    Settle,
+    /// This device, to push new mail to: its APNs token in hex, the app's bundle id, whether it
+    /// is a development build, and the 32 bytes (base64) the notifications are sealed with. Kept,
+    /// and given to the server at every sign-in. `{}`.
+    SetPushDevice {
+        token: String,
+        topic: String,
+        sandbox: bool,
+        key: String,
+    },
+    /// `{threads}`: those of these threads that are still unread in an inbox, whose
+    /// notifications stay.
+    UnreadInInbox {
+        threads: Vec<String>,
+    },
 }
 
 fn default_limit() -> usize {

@@ -8,17 +8,17 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use mail_protocol::Provider;
 use mail_protocol::api::{
-    DevLoginRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse, UploadResponse,
+    DevLoginRequest, DeviceRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse, UploadResponse,
 };
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::db::NewAccount;
+use crate::db::{NewAccount, NewDevice};
 use crate::error::{AppError, AppResult};
 use crate::providers::Reauth;
 use crate::providers::jmap::{Jmap, Login};
-use crate::{AppState, db, mime, random_token, sha256_hex, workers};
+use crate::{AppState, db, mime, push, random_token, sha256_hex, workers};
 
 /// The largest file `POST /api/uploads` takes.
 pub const UPLOAD_LIMIT: usize = 25 * 1024 * 1024;
@@ -118,6 +118,38 @@ pub async fn dev_login(
     }
     let user_id = db::create_user(&state.db).await?;
     new_session(&state, user_id).await
+}
+
+/// Pushes this user's new mail to a device from now on.
+pub async fn add_device(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<DeviceRequest>,
+) -> AppResult<Json<Value>> {
+    use base64::Engine;
+    let user_id = user(&state, &headers).await?;
+    let token = request.token.to_ascii_lowercase();
+    if !push::valid_token(&token) || !push::valid_topic(&request.topic) {
+        return Err(AppError::bad_request("That isn't a device this server can push to."));
+    }
+    let key = base64::engine::general_purpose::STANDARD.decode(&request.key).unwrap_or_default();
+    if key.len() != push::KEY_LEN {
+        return Err(AppError::bad_request("The device's key should be 32 bytes."));
+    }
+    let key = state.sealer.seal(&key);
+    let device = NewDevice { user_id, token: &token, topic: &request.topic, sandbox: request.sandbox, key };
+    db::upsert_device(&state.db, device).await?;
+    Ok(Json(json!({})))
+}
+
+pub async fn remove_device(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(token): Path<String>,
+) -> AppResult<Json<Value>> {
+    let user_id = user(&state, &headers).await?;
+    db::delete_device(&state.db, user_id, &token.to_ascii_lowercase()).await?;
+    Ok(Json(json!({})))
 }
 
 /// One of a message's attachments, by its place in the message's list, fetched from the provider.

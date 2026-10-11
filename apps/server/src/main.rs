@@ -10,6 +10,7 @@ mod hub;
 mod mime;
 mod ops;
 mod providers;
+mod push;
 mod rules;
 mod scheduler;
 mod seal;
@@ -27,7 +28,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::HeaderValue;
 use axum::http::header::{REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -44,6 +45,7 @@ pub struct Inner {
     pub sealer: seal::Sealer,
     pub hub: hub::Hub,
     pub workers: workers::Workers,
+    pub pusher: push::Pusher,
     /// Set when the process stops, so that the LISTEN connection lets go of the database.
     pub stopping: tokio::sync::watch::Sender<bool>,
 }
@@ -75,6 +77,8 @@ fn router(state: AppState) -> Router {
         .route("/api/accounts/jmap", post(api::add_jmap))
         .route("/api/dev/login", post(api::dev_login))
         .route("/api/messages/{id}/attachments/{index}", get(api::attachment))
+        .route("/api/devices", post(api::add_device))
+        .route("/api/devices/{token}", delete(api::remove_device))
         .route("/api/uploads", post(api::upload).layer(DefaultBodyLimit::max(api::UPLOAD_LIMIT)))
         .route("/hooks/gmail", post(api::gmail_hook))
         .route("/sync", get(sync::socket))
@@ -90,6 +94,7 @@ async fn start_background(state: &AppState) {
     hub::listen(state.clone());
     state.workers.start_all(state).await;
     scheduler::start(state.clone());
+    push::start(state.clone());
     let backfill = state.clone();
     tokio::spawn(async move {
         let stopping = backfill.stopping.subscribe();
@@ -155,6 +160,9 @@ async fn main() {
     if config.dev_login {
         tracing::warn!("DEV_LOGIN is on: anyone can get a session. Never set it in production.");
     }
+    if config.apns.is_none() {
+        tracing::warn!("APNS_KEY, APNS_KEY_ID or APNS_TEAM_ID is missing: nothing is pushed to phones.");
+    }
     if !config.google_enabled() {
         tracing::warn!("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing: Gmail accounts can't be added.");
     }
@@ -162,6 +170,7 @@ async fn main() {
     sqlx::migrate!().run(&db).await.expect("run migrations");
     let state = Arc::new(Inner {
         sealer: seal::Sealer::new(&config.secret_key),
+        pusher: push::Pusher::new(config.apns.as_ref()),
         config,
         background: background_pool(&db),
         db,
