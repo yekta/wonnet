@@ -62,6 +62,15 @@ struct SettingsEntry: Identifiable, Hashable {
         SettingsEntry(id: "keybindings", title: "Keybindings", section: .keybindings, keywords: "keyboard shortcuts keys hotkeys superhuman"),
     ]
 
+    /// The groups only a touch screen has.
+    static var touch: [SettingsEntry] {
+        #if os(iOS)
+        [SettingsEntry(id: "swipe", title: "Swipe Left", section: .inbox, keywords: "swipe actions gestures archive snooze read unread")]
+        #else
+        []
+        #endif
+    }
+
     /// The groups every word of the query is found in, and the commands of the keys it names.
     static func matching(_ query: String) -> [SettingsEntry] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -69,7 +78,7 @@ struct SettingsEntry: Identifiable, Hashable {
         let keys = SettingsSection.shown.contains(.keybindings)
             ? KeyCommand.all.map { SettingsEntry(id: "key-\($0.id)", title: $0.title, section: .keybindings, keywords: "shortcut keys \($0.group)") }
             : []
-        return (all + keys).filter { entry in
+        return (all + touch + keys).filter { entry in
             let text = "\(entry.title) \(entry.section.title) \(entry.keywords)"
             return SettingsSection.shown.contains(entry.section) && words.allSatisfy { text.localizedCaseInsensitiveContains($0) }
         }

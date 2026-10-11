@@ -416,6 +416,91 @@ private struct InboxPage: View {
             SettingsFooter("The mailboxes along the bottom. Hold a tab and drag it to move it; swipe it to remove it.")
         }
         .id("tabs")
+        SwipeSection()
+    }
+}
+
+/// What a swipe to the left on a thread does: one to three commands, the first at the edge.
+private struct SwipeSection: View {
+    @Environment(MailStore.self) private var store
+
+    var body: some View {
+        let commands = store.swipeCommands
+        Section {
+            ForEach(commands) { command in
+                HStack(spacing: Space.m) {
+                    SwipeTile(command: command)
+                    Text(command.swipeName).foregroundStyle(Tokens.foreground.color)
+                    Spacer(minLength: Space.s)
+                    if command == commands.first {
+                        Text(commands.count == 1 ? "Short swipe" : "Long swipe").textStyle(.caption, color: Tokens.mutedForeground.color)
+                    }
+                }
+                .deleteDisabled(commands.count == 1)
+            }
+            .onMove { from, to in
+                guard let index = from.first else { return }
+                store.moveSwipeCommand(commands[index], to: to > index ? to - 1 : to)
+            }
+            .onDelete { rows in
+                store.setSwipeCommands(commands.enumerated().filter { !rows.contains($0.offset) }.map(\.element))
+            }
+            if commands.count < SwipePreference.most {
+                NavigationLink {
+                    AddSwipePage()
+                } label: {
+                    SettingsActionLabel(title: "Add Action", symbol: .plus)
+                }
+            }
+        } header: {
+            Text("Swipe Left")
+        } footer: {
+            Text(
+                commands.count == 1
+                    ? "Swipe a thread to the left to show it; swipe a little further to do it. Add another to choose between them."
+                    : "Swipe a thread to the left to choose one, the first at the edge; swipe it all the way to do the first. Hold one and drag it to move it; swipe it to remove it."
+            )
+        }
+        .id("swipe")
+    }
+}
+
+/// The commands a swipe doesn't have yet; the one picked joins them and the page goes back.
+private struct AddSwipePage: View {
+    @Environment(MailStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SettingsList {
+            Section {
+                ForEach(store.swipeChoicesLeft) { command in
+                    Button {
+                        store.setSwipeCommands(store.swipeCommands + [command])
+                        dismiss()
+                    } label: {
+                        HStack(spacing: Space.m) {
+                            SwipeTile(command: command)
+                            Text(command.swipeName).foregroundStyle(Tokens.foreground.color)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Add Action")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// A swipe command as the swipe shows it: its icon in a wash of its colour.
+private struct SwipeTile: View {
+    let command: ThreadCommand
+
+    var body: some View {
+        let tint = command.swipeTint.fill
+        Image(command.symbol, size: 15)
+            .foregroundStyle(tint.color)
+            .frame(width: SettingsTile.size, height: SettingsTile.size)
+            .background(tint.opacity(Opacity.colorTintStronger).color, in: Circle())
     }
 }
 

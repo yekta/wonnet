@@ -54,6 +54,44 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
 
     /// What doesn't fit on a toolbar: in its "more" menu.
     static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .deleteForever, .print]
+
+    /// Its name where it is picked for a swipe, which does it to any thread.
+    var swipeName: String {
+        switch self {
+        case .read: "Read or unread"
+        case .star: "Star or unstar"
+        case .snooze: "Snooze"
+        case .move: "Move to"
+        case .mute: "Mute"
+        default: rawValue.capitalized
+        }
+    }
+
+    /// Its colour on a swipe, and its icon's on that colour.
+    var swipeTint: (fill: ThemeColor, glyph: ThemeColor) {
+        switch self {
+        case .read: (Tokens.primary, Tokens.primaryForeground)
+        case .snooze: (Tokens.warning, Tokens.warningForeground)
+        case .archive: (Tokens.success, Tokens.successForeground)
+        case .trash, .spam: (Tokens.destructive, Tokens.destructiveForeground)
+        case .star: (Tokens.star, Tokens.starForeground)
+        case .mute: (Tokens.pending, Tokens.pendingForeground)
+        default: (Tokens.process, Tokens.processForeground)
+        }
+    }
+
+    /// Its icon on a swipe over this row: what it would make of it.
+    func swipeSymbol(_ row: ThreadRow) -> Symbol {
+        switch self {
+        case .read: row.unread ? .mailOpen : .mail
+        default: symbol
+        }
+    }
+
+    /// Whether doing it takes the thread out of the list at once, so its row slides away.
+    var takesRowAway: Bool {
+        [.archive, .trash, .spam, .mute].contains(self)
+    }
 }
 
 /// What can be done to the open thread: archive, trash, snooze, label, mark unread, and more.

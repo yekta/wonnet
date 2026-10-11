@@ -47,6 +47,7 @@
   --process: #2b9bd6;
   --process-foreground: #ffffff;
   --star: #f9775d;
+  --star-foreground: #ffffff;
   --border: #e1e3e6;
   --border-card: #ebecee;
   --border-input: #e1e3e6;
@@ -123,6 +124,7 @@
     --process: #4cb0e8;
     --process-foreground: #ffffff;
     --star: #f9775d;
+    --star-foreground: #ffffff;
     --border: #222425;
     --border-card: #2a2c2f;
     --border-input: #2a2c2f;

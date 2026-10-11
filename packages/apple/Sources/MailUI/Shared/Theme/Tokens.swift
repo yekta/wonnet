@@ -34,6 +34,7 @@ enum Tokens {
     static let process = ThemeColor(light: 0x2b9bd6, dark: 0x4cb0e8)
     static let processForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
     static let star = ThemeColor(light: 0xf9775d, dark: 0xf9775d)
+    static let starForeground = ThemeColor(light: 0xffffff, dark: 0xffffff)
     static let border = ThemeColor(light: 0xe1e3e6, dark: 0x222425)
     static let borderCard = ThemeColor(light: 0xebecee, dark: 0x2a2c2f)
     static let borderInput = ThemeColor(light: 0xe1e3e6, dark: 0x2a2c2f)

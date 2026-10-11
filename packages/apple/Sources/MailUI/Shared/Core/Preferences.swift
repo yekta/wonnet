@@ -113,3 +113,27 @@ enum SidebarOrder {
         before + [id] + all.filter { $0 != id && !before.contains($0) }
     }
 }
+
+/// What a swipe to the left shows on a thread row, `swipe`: one to three commands from the
+/// screen's edge inwards, the first of which a long swipe does. Unset, read, snooze and archive.
+enum SwipePreference {
+    static let key = "swipe"
+    static let standard: [ThreadCommand] = [.read, .snooze, .archive]
+    static let choices: [ThreadCommand] = [.read, .snooze, .archive, .trash, .star, .label, .move, .mute, .spam]
+    static let most = 3
+
+    static func commands(in preferences: [String: JSONValue]) -> [ThreadCommand] {
+        guard case .array(let values) = preferences[key] else { return standard }
+        var chosen: [ThreadCommand] = []
+        for value in values {
+            guard let command = value.string.flatMap(ThreadCommand.init(rawValue:)), choices.contains(command), !chosen.contains(command)
+            else { continue }
+            chosen.append(command)
+        }
+        return chosen.isEmpty ? standard : Array(chosen.prefix(most))
+    }
+
+    static func value(_ commands: [ThreadCommand]) -> JSONValue {
+        .array(commands.map { .string($0.rawValue) })
+    }
+}

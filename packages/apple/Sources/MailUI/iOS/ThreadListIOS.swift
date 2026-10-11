@@ -2,9 +2,10 @@
 import SwiftUI
 import UIKit
 
-/// The thread list on iOS: a table that only makes the rows on screen. A swipe to the left
-/// deletes, snoozes or archives; one to the right opens the drawer, unless a row's actions are
-/// out, when it puts them away. A pull from the top refreshes. In edit mode, rows are picked.
+/// The thread list on iOS: a table that only makes the rows on screen. A swipe to the left does
+/// what the settings pick (`RowSwiper`); one to the right opens the drawer, unless a row's
+/// commands are out, when it puts them away. A pull from the top refreshes. In edit mode, rows
+/// are picked.
 struct ThreadListIOS<Header: View>: UIViewRepresentable {
     let store: MailStore
     let rows: [ThreadRow]
@@ -46,6 +47,9 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             table.refreshControl = control
         }
         context.coordinator.table = table
+        let swiper = RowSwiper(table: table, store: store)
+        context.coordinator.swiper = swiper
+        table.swiper = swiper
         let head = UIHostingController(rootView: header())
         head.view.backgroundColor = .clear
         head.safeAreaRegions = []
@@ -70,6 +74,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         var open: (String) -> Void
         var refresh: (() async -> Void)?
         weak var table: UITableView?
+        var swiper: RowSwiper?
         var head: UIHostingController<Header>?
         /// Under the last row: a rule, and while the next page is being read, `LoadingMore`.
         let foot = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
@@ -112,9 +117,19 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             }
             let switched = ready && !self.ready
             let changed = Self.changes(from: self.rows, to: rows)
+            let removed = switched ? nil : Self.removals(from: self.rows, to: rows)
+            let old = self.rows
             self.rows = rows
             self.ready = ready
-            if let changed {
+            if let removed {
+                table.performBatchUpdates {
+                    table.deleteRows(at: removed.map { IndexPath(row: $0, section: 0) }, with: .fade)
+                }
+                let kept = Dictionary(old.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+                let visible = Set(table.indexPathsForVisibleRows ?? [])
+                let paths = rows.indices.filter { kept[rows[$0].id] != rows[$0] }.map { IndexPath(row: $0, section: 0) }.filter(visible.contains)
+                if !paths.isEmpty { table.reconfigureRows(at: paths) }
+            } else if let changed {
                 let visible = Set(table.indexPathsForVisibleRows ?? [])
                 let paths = changed.map { IndexPath(row: $0, section: 0) }.filter(visible.contains)
                 if !paths.isEmpty { table.reconfigureRows(at: paths) }
@@ -138,6 +153,22 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
                 changed.insert(index)
             }
             return changed
+        }
+
+        /// The rows taken out when the list is the one before less some threads, in the same
+        /// order, so they leave with the rows under them closing up.
+        private static func removals(from old: [ThreadRow], to new: [ThreadRow]) -> [Int]? {
+            guard new.count < old.count, old.count - new.count <= 50 else { return nil }
+            var removed: [Int] = []
+            var next = 0
+            for (index, row) in old.enumerated() {
+                if next < new.count, new[next].id == row.id {
+                    next += 1
+                } else {
+                    removed.append(index)
+                }
+            }
+            return next == new.count ? removed : nil
         }
 
         /// Shows the store's selection as the table's.
@@ -167,12 +198,27 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
             let cell = tableView.dequeueReusableCell(withIdentifier: ThreadCell.identifier, for: indexPath)
             let row = rows[indexPath.row]
-            (cell as? ThreadCell)?.configure(row: row, text: text(for: row), first: indexPath.row == 0)
+            (cell as? ThreadCell)?.configure(row: row, text: text(for: row), first: indexPath.row == 0, swiper: swiper)
             return cell
         }
 
         func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
             if indexPath.row > rows.count - 30 { store.loadMore() }
+        }
+
+        /// A tap while a row's commands are out only puts them away.
+        func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
+            tableView.isEditing || swiper?.isOut != true
+        }
+
+        func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
+            guard !tableView.isEditing, let swiper, swiper.isOut else { return indexPath }
+            swiper.close()
+            return nil
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            swiper?.close()
         }
 
         func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -214,43 +260,13 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             prefetch = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
-
-        private func swipe(_ title: String, _ symbol: Symbol, _ color: ThemeColor, _ glyph: ThemeColor, _ perform: @escaping @MainActor () -> Void) -> UIContextualAction {
-            let action = UIContextualAction(style: .normal, title: title) { _, _, done in
-                MainActor.assumeIsolated { perform() }
-                done(true)
-            }
-            action.image = UIImage.symbol(symbol, side: 22).withTintColor(glyph.platform, renderingMode: .alwaysOriginal)
-            action.backgroundColor = color.platform
-            return action
-        }
-
-        func tableView(_ tableView: UITableView, willBeginEditingRowAt indexPath: IndexPath) {
-            (tableView as? ThreadTable)?.swipedRow = indexPath
-        }
-
-        func tableView(_ tableView: UITableView, didEndEditingRowAt indexPath: IndexPath?) {
-            (tableView as? ThreadTable)?.swipedRow = nil
-        }
-
-        func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-            let row = rows[indexPath.row]
-            let store = store
-            let delete = swipe("Delete", .trash, Tokens.destructive, Tokens.destructiveForeground) { store.run(.trash, on: [row.id]) }
-            guard row.draftId == nil else { return UISwipeActionsConfiguration(actions: [delete]) }
-            return UISwipeActionsConfiguration(actions: [
-                delete,
-                swipe(store.remindsInsteadOfSnoozing ? "Remind" : "Snooze", .clock, Tokens.warning, Tokens.warningForeground) { store.run(.snooze, on: [row.id]) },
-                swipe("Archive", .archive, Tokens.success, Tokens.successForeground) { store.run(.archive, on: [row.id]) },
-            ])
-        }
     }
 }
 
-/// The table, which keeps the drawer out of a swipe while a row's actions are out.
+/// The table, which keeps the drawer out of a swipe while a row's commands are out.
 final class ThreadTable: UITableView, OwnsRightSwipe {
-    var swipedRow: IndexPath?
-    var ownsRightSwipe: Bool { swipedRow != nil }
+    weak var swiper: RowSwiper?
+    var ownsRightSwipe: Bool { swiper?.isOut == true }
     private var topInset: CGFloat = 0
 
     /// The bar's height arrives after the table is made; a list at the top stays at the top.
@@ -263,18 +279,36 @@ final class ThreadTable: UITableView, OwnsRightSwipe {
     }
 }
 
-/// One thread on three lines: who wrote and the star, the subject, the snippet and the date.
+/// One thread on three lines: who wrote and the star, the subject, the snippet and the date. A
+/// swipe slides it aside over its commands.
 final class ThreadCell: UITableViewCell {
     static let identifier = "thread"
+    private let slider = UIView()
     private let canvas = RowCanvas()
+    private let tray = SwipeTray()
+    private weak var swiper: RowSwiper?
+    private var first = false
+    private(set) var row: ThreadRow?
+    var swipe = SwipeLayout()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
-        canvas.isOpaque = false
         backgroundColor = .clear
-        canvas.frame = contentView.bounds
+        tray.frame = contentView.bounds
+        tray.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        tray.isHidden = true
+        tray.tapped = { [weak self] command in
+            guard let self else { return }
+            self.swiper?.commit(command, on: self)
+        }
+        contentView.addSubview(tray)
+        slider.frame = contentView.bounds
+        slider.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        contentView.addSubview(slider)
+        canvas.isOpaque = false
+        canvas.frame = slider.bounds
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        contentView.addSubview(canvas)
+        slider.addSubview(canvas)
         let pressed = UIView()
         pressed.backgroundColor = Tokens.backgroundAccentLargerStronger.platform
         selectedBackgroundView = pressed
@@ -282,12 +316,60 @@ final class ThreadCell: UITableViewCell {
 
     required init?(coder: NSCoder) { nil }
 
-    func configure(row: ThreadRow, text: RowText, first: Bool) {
+    func configure(row: ThreadRow, text: RowText, first: Bool, swiper: RowSwiper?) {
+        self.row = row
+        self.first = first
+        self.swiper = swiper
         canvas.row = row
         canvas.text = text
         canvas.first = first
         canvas.setNeedsDisplay()
+        if !tray.isHidden { tray.show(swipe.commands, for: row, first: first) }
         accessibilityLabel = "\(row.unread ? "Unread, " : "")\(row.senders), \(row.subject), \(row.date)"
+    }
+
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get { row.flatMap { swiper?.accessibilityActions(for: $0) } }
+        set {}
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        swiper?.forget(self)
+        endSwipe()
+    }
+
+    /// Shows the commands behind the row; one caught as it slides is held where it is.
+    func beginSwipe(_ commands: [ThreadCommand]) {
+        guard let row else { return }
+        if slider.layer.animationKeys() != nil, let shown = slider.layer.presentation()?.affineTransform().tx {
+            swipe.pulled = -shown
+        }
+        Self.stopAnimations(in: contentView)
+        swipe.commands = commands
+        tray.show(commands, for: row, first: first)
+        tray.isHidden = false
+        slider.backgroundColor = Tokens.background.platform
+        UIView.performWithoutAnimation { layoutSwipe() }
+    }
+
+    func layoutSwipe() {
+        swipe.width = contentView.bounds.width
+        slider.transform = CGAffineTransform(translationX: -swipe.offset, y: 0)
+        tray.layout(swipe)
+    }
+
+    private static func stopAnimations(in view: UIView) {
+        view.layer.removeAllAnimations()
+        view.subviews.forEach(stopAnimations)
+    }
+
+    func endSwipe() {
+        swipe.pulled = 0
+        swipe.leaving = nil
+        slider.transform = .identity
+        slider.backgroundColor = .clear
+        tray.isHidden = true
     }
 }
 

@@ -145,8 +145,9 @@ device's push key and the opening of sealed pushes, which the iOS notification e
   downloads and installs it when asked) and `UpdateRow.swift` (the update at the foot of the
   sidebar: the offer, the download, the restart).
 - `iOS/`: `MailIOSApp.swift` (the navigation stack, with the tabs along the bottom),
-  `Drawer.swift` (the sidebar a swipe to the right opens) and `ThreadListIOS.swift` (a
-  `UITableView` with the swipes).
+  `Drawer.swift` (the sidebar a swipe to the right opens), `ThreadListIOS.swift` (a
+  `UITableView`) and `RowSwipe.swift` (a swipe to the left on its rows: the one to three
+  commands the settings pick, `swipe` in the preferences).
 
 ### apps/marketing (Astro, Tailwind)
 

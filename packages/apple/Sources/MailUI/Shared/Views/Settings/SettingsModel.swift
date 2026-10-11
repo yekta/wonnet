@@ -137,6 +137,25 @@ extension MailStore {
         return (unified, accounts)
     }
 
+    var swipeCommands: [ThreadCommand] { SwipePreference.commands(in: preferences) }
+
+    /// Keeps one to three swipe commands, removed while they are the usual ones.
+    func setSwipeCommands(_ commands: [ThreadCommand]) {
+        guard (1...SwipePreference.most).contains(commands.count) else { return }
+        setPreference(SwipePreference.key, commands == SwipePreference.standard ? nil : SwipePreference.value(commands))
+    }
+
+    func moveSwipeCommand(_ command: ThreadCommand, to index: Int) {
+        var commands = swipeCommands.filter { $0 != command }
+        commands.insert(command, at: min(index, commands.count))
+        setSwipeCommands(commands)
+    }
+
+    /// The commands a swipe could have and doesn't yet.
+    var swipeChoicesLeft: [ThreadCommand] {
+        SwipePreference.choices.filter { !swipeCommands.contains($0) }
+    }
+
     var snippets: [Snippet] { Snippet.all(in: preferences) }
 
     func saveSnippet(_ snippet: Snippet) {
