@@ -114,7 +114,7 @@ enum Theme {
     static let cardWidth: CGFloat = 1000
     static let sidebarWidth: CGFloat = 300
     /// The Mac sidebar sliding in and out: a critically damped spring, as the iOS drawer's.
-    static let sidebarSlide = Animation.smooth(duration: 0.3)
+    static let sidebarSlide = Animation.smooth(duration: 0.25)
     /// How wide the settings' sections may be dragged, and how wide a page grows.
     static let settingsSidebarWidths: ClosedRange<CGFloat> = 200...360
     static let settingsPageWidth: CGFloat = 640
