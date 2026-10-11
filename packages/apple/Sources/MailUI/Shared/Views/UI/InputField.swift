@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A text field on a hairline, with its label above if it has one. With `lines` above one it is a text box
-/// that many lines tall, where Return starts a new line.
+/// that many lines tall, where Return starts a new line. `commit` runs on Return and when it loses focus.
 struct InputField: View {
     var label: String?
     @Binding var text: String
@@ -9,6 +9,7 @@ struct InputField: View {
     var secure = false
     var lines = 1
     var autofocus = false
+    var commit: (() -> Void)?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -44,6 +45,11 @@ struct InputField: View {
             .frame(height: (lines > 1 ? CGFloat(lines) * 18 + 16 : Theme.fieldHeight) * Platform.scale)
             .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Tokens.input.color))
             .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline))
+        }
+        .onSubmit { commit?() }
+        .onChange(of: focused) { _, now in
+            guard !now else { return }
+            commit?()
         }
         .onAppear {
             guard autofocus else { return }

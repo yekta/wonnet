@@ -148,6 +148,16 @@ struct GalleryView: View {
                     FormSection(title: "Settings", detail: "The Mac's settings pages; iOS's are the system's grouped lists.") {
                         SettingsGroup(id: "gallery", title: "A group", detail: "With a line about it.") {
                             SettingsRow {
+                                SettingsLabel(title: "Work", detail: "isaac@example.com · Gmail", dot: Tokens.account1.color, heading: true)
+                            }
+                            SettingsDivider()
+                            SettingsRow {
+                                SettingsLabel(title: "A field", detail: "What it names.")
+                            } trailing: {
+                                InputField(text: $empty, placeholder: "Placeholder").frame(width: Theme.settingsFieldWidth)
+                            }
+                            SettingsDivider()
+                            SettingsRow {
                                 SettingsLabel(title: "A switch", detail: "What it turns on.")
                             } trailing: {
                                 Switch(title: "A switch", isOn: $on)

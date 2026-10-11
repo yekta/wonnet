@@ -44,6 +44,11 @@ extension MailStore {
         }
     }
 
+    /// The line under an account's name: its status, after its address when the name hides it.
+    func subtitle(of account: AccountView) -> String {
+        account.name.isEmpty ? status(of: account) : "\(account.address) · \(status(of: account))"
+    }
+
     func confirmRemoving(_ account: AccountView) {
         confirmation = Confirmation(
             title: "Remove \(account.address)?", message: "Its mail leaves this \(Platform.device) and your other devices. You can add it again.",
@@ -104,7 +109,7 @@ extension MailStore {
         accounts.flatMap { account in
             account.mailboxes.compactMap { mailbox -> (id: String, name: String)? in
                 guard let id = Self.labelID(mailbox.id) else { return nil }
-                return (id, accounts.count > 1 ? "\(mailbox.name) · \(account.address)" : mailbox.name)
+                return (id, accounts.count > 1 ? "\(mailbox.name) · \(account.title)" : mailbox.name)
             }
         }
     }

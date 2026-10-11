@@ -207,7 +207,7 @@ private struct AccountsPage: View {
                 NavigationLink {
                     AccountPage(id: account.id)
                 } label: {
-                    SettingsItem(title: account.address, detail: store.status(of: account)) {
+                    SettingsItem(title: account.title, detail: store.subtitle(of: account)) {
                         Circle().fill(Theme.accountColor(account.color).color).frame(width: 10, height: 10)
                             .frame(width: SettingsTile.size, height: SettingsTile.size)
                     }
@@ -240,8 +240,8 @@ private struct AccountsPage: View {
     }
 }
 
-/// An account: what it is, its colour, its notifications, its signature, and the way to remove
-/// it. It goes back once the account is gone.
+/// An account: what it is, its name, its colour, its notifications, its signature, and the way to
+/// remove it. It goes back once the account is gone.
 private struct AccountPage: View {
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -252,8 +252,11 @@ private struct AccountPage: View {
         SettingsList {
             if let account = store.accounts.first(where: { $0.id == id }) {
                 Section {
+                    LabeledContent("Name") { AccountNameField(account: account) }
                     LabeledContent("Address", value: account.address)
                     LabeledContent("Status", value: store.status(of: account))
+                } footer: {
+                    Text("Shown in the sidebar in place of the address.")
                 }
                 Section("Colour") {
                     SwatchRow(selected: account.color) { store.setAccountColor(account.id, $0) }
@@ -275,7 +278,7 @@ private struct AccountPage: View {
                 }
             }
         }
-        .navigationTitle("Account")
+        .navigationTitle(store.accounts.first(where: { $0.id == id })?.title ?? "Account")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: store.accounts.contains { $0.id == id }) { _, there in
             if !there { dismiss() }
@@ -430,7 +433,7 @@ private struct AddTabPage: View {
                 }
             }
             ForEach(left.accounts, id: \.account.id) { account, mailboxes in
-                Section(account.address) {
+                Section(account.title) {
                     ForEach(mailboxes) { mailbox in row(mailbox) }
                 }
             }

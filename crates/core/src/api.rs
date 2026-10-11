@@ -197,6 +197,11 @@ pub enum Command {
         account: String,
         color: String,
     },
+    /// An empty `name` takes the name away. `{}`.
+    SetAccountName {
+        account: String,
+        name: String,
+    },
     /// `{unified: [Mailbox], accounts: [AccountView]}`.
     Mailboxes,
     /// A `ThreadPage`. `unread` is the inbox's unread threads, and those of `keep` still in the
@@ -475,6 +480,10 @@ pub struct Mailbox {
 pub struct AccountView {
     pub id: String,
     pub address: String,
+    /// What the user calls it; empty when they haven't named it.
+    pub name: String,
+    /// What it is shown as: its name, or its address.
+    pub title: String,
     pub provider: String,
     pub color: String,
     pub status: String,

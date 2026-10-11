@@ -24,6 +24,9 @@ pub const ACCOUNT_COLORS: [&str; 10] = [
     "account-10",
 ];
 
+/// The longest name an account can have, in characters.
+pub const ACCOUNT_NAME_MAX: usize = 40;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provider {
@@ -53,6 +56,9 @@ pub struct Account {
     pub id: String,
     pub provider: Provider,
     pub address: String,
+    /// What the user calls it, "Work"; empty when they haven't named it.
+    #[serde(default)]
+    pub name: String,
     /// `syncing`, `ready`, `reauth` (the provider wants the user to sign in again) or `error`.
     pub status: String,
     /// The theme colour of its dot, `account-1` to `account-10`.

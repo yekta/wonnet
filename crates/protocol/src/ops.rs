@@ -65,6 +65,11 @@ pub enum Op {
         account_id: String,
         color: String,
     },
+    /// An empty `name` takes the name away.
+    SetAccountName {
+        account_id: String,
+        name: String,
+    },
     /// Leaves the list a message came from, by its one-click URL or its mailto address.
     Unsubscribe {
         id: String,
@@ -116,6 +121,7 @@ impl Op {
             | Op::CancelSend { .. }
             | Op::RemoveAccount { .. }
             | Op::SetAccountColor { .. }
+            | Op::SetAccountName { .. }
             | Op::Unsubscribe { .. }
             | Op::SetPreference { .. }
             | Op::SaveDraft { .. }
@@ -157,6 +163,7 @@ impl Op {
             | Op::CancelSend { .. }
             | Op::RemoveAccount { .. }
             | Op::SetAccountColor { .. }
+            | Op::SetAccountName { .. }
             | Op::Unsubscribe { .. }
             | Op::SetPreference { .. }
             | Op::SaveDraft { .. }

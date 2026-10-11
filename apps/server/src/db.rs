@@ -181,6 +181,7 @@ pub struct AccountRow {
     pub user_id: Uuid,
     pub provider: String,
     pub address: String,
+    pub name: String,
     pub login: String,
     pub credentials: Vec<u8>,
     pub sync_state: Value,
@@ -192,7 +193,7 @@ pub struct AccountRow {
 }
 
 pub const ACCOUNT_COLUMNS: &str =
-    "id, user_id, provider, address, login, credentials, sync_state, status, color, identities, rev, deleted";
+    "id, user_id, provider, address, name, login, credentials, sync_state, status, color, identities, rev, deleted";
 
 impl AccountRow {
     pub fn provider(&self) -> Provider {
@@ -210,6 +211,7 @@ impl AccountRow {
             id: self.id.to_string(),
             provider: self.provider(),
             address: self.address.clone(),
+            name: self.name.clone(),
             status: self.status.clone(),
             color: self.color.clone(),
             identities: self.identities.0.clone(),
@@ -316,6 +318,20 @@ pub async fn set_account_color(db: &PgPool, user_id: Uuid, account_id: Uuid, col
     .bind(account_id)
     .bind(user_id)
     .bind(color)
+    .execute(&mut *tx.tx)
+    .await?;
+    tx.commit().await?;
+    Ok(changed.rows_affected() > 0)
+}
+
+pub async fn set_account_name(db: &PgPool, user_id: Uuid, account_id: Uuid, name: &str) -> sqlx::Result<bool> {
+    let mut tx = UserTx::begin(db, user_id).await?;
+    let changed = sqlx::query(
+        "UPDATE accounts SET name = $3, rev = nextval('revs') WHERE id = $1 AND user_id = $2 AND NOT deleted",
+    )
+    .bind(account_id)
+    .bind(user_id)
+    .bind(name)
     .execute(&mut *tx.tx)
     .await?;
     tx.commit().await?;

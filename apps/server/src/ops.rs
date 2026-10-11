@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use mail_protocol::{ACCOUNT_COLORS, Draft, MessageState, Op};
+use mail_protocol::{ACCOUNT_COLORS, ACCOUNT_NAME_MAX, Draft, MessageState, Op};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -53,6 +53,7 @@ pub async fn apply(state: &AppState, user_id: Uuid, op_id: &str, op: Op) -> anyh
             }
         }
         Op::SetAccountColor { account_id, color } => set_account_color(&state.db, user_id, &account_id, &color).await?,
+        Op::SetAccountName { account_id, name } => set_account_name(&state.db, user_id, &account_id, &name).await?,
         Op::Unsubscribe { id } => match unsubscribe::run(state, user_id, &id).await? {
             Ok(()) => Outcome::ok(),
             Err(error) => Outcome::failed(&error),
@@ -214,6 +215,20 @@ async fn set_account_color(db: &PgPool, user_id: Uuid, account_id: &str, color: 
         return Ok(Outcome::failed("No such colour."));
     }
     match db::set_account_color(db, user_id, account_id, color).await? {
+        true => Ok(Outcome::ok()),
+        false => Ok(Outcome::failed("No such account.")),
+    }
+}
+
+async fn set_account_name(db: &PgPool, user_id: Uuid, account_id: &str, name: &str) -> sqlx::Result<Outcome> {
+    let Ok(account_id) = account_id.parse::<Uuid>() else {
+        return Ok(Outcome::failed("No such account."));
+    };
+    let name = name.trim();
+    if name.chars().count() > ACCOUNT_NAME_MAX {
+        return Ok(Outcome::failed("That name is too long."));
+    }
+    match db::set_account_name(db, user_id, account_id, name).await? {
         true => Ok(Outcome::ok()),
         false => Ok(Outcome::failed("No such account.")),
     }

@@ -10,9 +10,9 @@ use serde_json::json;
 
 use crate::store::{Batch, Store};
 
-const ACCOUNTS: [(&str, &str, Provider, &str); 2] = [
-    ("demo-home", "sam@example.com", Provider::Gmail, "account-2"),
-    ("demo-work", "sam@acme.example", Provider::Jmap, "account-5"),
+const ACCOUNTS: [(&str, &str, &str, Provider, &str); 2] = [
+    ("demo-home", "sam@example.com", "", Provider::Gmail, "account-2"),
+    ("demo-work", "sam@acme.example", "Acme", Provider::Jmap, "account-5"),
 ];
 
 /// What each account sends as: its own address, and for work an alias, with their signatures.
@@ -302,10 +302,11 @@ pub fn fill(store: &mut Store, now: i64) -> Result<()> {
     let accounts: Vec<Account> = ACCOUNTS
         .iter()
         .enumerate()
-        .map(|(index, (id, address, provider, color))| Account {
+        .map(|(index, (id, address, name, provider, color))| Account {
             id: id.to_string(),
             provider: *provider,
             address: address.to_string(),
+            name: name.to_string(),
             status: "ready".into(),
             color: color.to_string(),
             identities: IDENTITIES[index]

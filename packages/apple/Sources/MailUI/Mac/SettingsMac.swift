@@ -234,11 +234,17 @@ private struct AccountSettings: View {
             ForEach(store.accounts) { account in
                 SettingsCard {
                     SettingsRow {
-                        SettingsLabel(title: account.address, detail: store.status(of: account), dot: Theme.accountColor(account.color).color)
+                        SettingsLabel(title: account.title, detail: store.subtitle(of: account), dot: Theme.accountColor(account.color).color, heading: true)
                     } trailing: {
                         IconMenu(symbol: .ellipsis, help: "More", circled: false) {
                             Button(role: .destructive) { store.confirmRemoving(account) } label: { Text("Remove Account…") }
                         }
+                    }
+                    SettingsDivider()
+                    SettingsRow {
+                        SettingsLabel(title: "Name", detail: "Shown in the sidebar in place of the address.")
+                    } trailing: {
+                        AccountNameField(account: account)
                     }
                     SettingsDivider()
                     SettingsRow {
@@ -415,7 +421,7 @@ private struct TabRows: View {
             ActionMenu(title: "Add tab", symbol: .plus) {
                 ForEach(left.unified) { mailbox in item(mailbox) }
                 ForEach(left.accounts, id: \.account.id) { account, mailboxes in
-                    Menu(account.address) {
+                    Menu(account.title) {
                         ForEach(mailboxes) { mailbox in item(mailbox) }
                     }
                 }

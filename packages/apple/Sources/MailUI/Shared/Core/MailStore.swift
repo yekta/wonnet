@@ -240,14 +240,14 @@ public final class MailStore {
         setTabs(ids)
     }
 
-    /// A mailbox's name, with its account's address after it when it is one account's other than
+    /// A mailbox's name, with its account's name after it when it is one account's other than
     /// `shownIn`, the account on screen.
     func tabName(_ mailbox: Mailbox, shownIn: String? = nil) -> String {
         let parts = mailbox.id.split(separator: "/").map(String.init)
         guard parts.count > 1, accounts.count > 1, parts[0] != shownIn,
             let account = accounts.first(where: { $0.id == parts[0] })
         else { return mailbox.name }
-        return "\(mailbox.name) · \(account.address)"
+        return "\(mailbox.name) · \(account.title)"
     }
 
     /// The mailbox's name, or "Search" while searching.
@@ -262,7 +262,7 @@ public final class MailStore {
         guard parts.count > 1, let account = accounts.first(where: { $0.id == parts[0] }) else {
             return name == "Inbox" && accounts.count > 1 ? "All Inboxes" : name
         }
-        return "\(name) · \(account.address)"
+        return "\(name) · \(account.title)"
     }
 
     /// Whether a sheet, the palette or a question is up, when the window's keys don't apply.
@@ -1111,6 +1111,19 @@ public final class MailStore {
         Task {
             do {
                 _ = try await bridge.call("set_account_color", ["account": id, "color": color], as: Empty.self)
+            } catch {
+                show(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Names the account, or takes its name away when `name` is empty.
+    func setAccountName(_ account: AccountView, _ name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name != account.name else { return }
+        Task {
+            do {
+                _ = try await bridge.call("set_account_name", ["account": account.id, "name": name], as: Empty.self)
             } catch {
                 show(error.localizedDescription)
             }
