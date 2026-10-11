@@ -27,6 +27,12 @@ public struct MailIOSApp: App {
 
 /// Hears from APNs: this device's token, and the background pushes that take notifications down.
 final class IOSDelegate: NSObject, UIApplicationDelegate {
+    /// Asks APNs for a token once launched: asked any sooner, its answer never comes.
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        application.registerForRemoteNotifications()
+        return true
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Notifier.shared.registered(token: deviceToken)
     }

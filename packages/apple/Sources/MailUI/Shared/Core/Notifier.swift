@@ -63,9 +63,6 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             identifier: "reply", title: "Reply", options: [.authenticationRequired], textInputButtonTitle: "Send", textInputPlaceholder: ""
         )
         center.setNotificationCategories([UNNotificationCategory(identifier: "message", actions: [archive, read, reply], intentIdentifiers: [])])
-        #if os(iOS)
-        UIApplication.shared.registerForRemoteNotifications()
-        #endif
     }
 
     /// Asks once, when there is mail to tell of: after an account is added, not at first launch.
