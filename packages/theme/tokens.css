@@ -17,15 +17,15 @@
 :root,
 .light {
   --background: #f5f6f7;
-  --background-accent: #edeff1;
-  --background-accent-stronger: #e5e7ea;
-  --background-accent-strongest: #d6d8db;
-  --background-accent-larger: #f0f1f3;
-  --background-accent-larger-stronger: #e9ebed;
-  --background-accent-larger-strongest: #e2e4e7;
-  --background-secondary: #f3f3f3;
-  --background-secondary-accent: #e9eaeb;
-  --background-secondary-accent-stronger: #e0e1e3;
+  --background-accent: #e7e9eb;
+  --background-accent-stronger: #dfe1e4;
+  --background-accent-strongest: #d0d2d5;
+  --background-accent-larger: #eaebed;
+  --background-accent-larger-stronger: #e3e5e7;
+  --background-accent-larger-strongest: #dcdee1;
+  --background-secondary: #ededed;
+  --background-secondary-accent: #e3e4e5;
+  --background-secondary-accent-stronger: #dadbdd;
   --card: #ffffff;
   --card-accent: #f0f1f3;
   --popover: #ffffff;
@@ -49,9 +49,9 @@
   --process-foreground: #ffffff;
   --star: #f9775d;
   --star-foreground: #ffffff;
-  --border: #e1e3e6;
+  --border: #dbdde0;
   --border-card: #ebecee;
-  --border-input: #e1e3e6;
+  --border-input: #dbdde0;
   --border-popover: #ebecee;
   --input: #f5f6f7;
   --ring: #4f96f2;
