@@ -12,11 +12,12 @@ struct TimePicker: View {
 
     var body: some View {
         Sheet(title: title) {
-            VStack(spacing: 0) {
-                SearchField(
+            SearchedList(
+                field: SearchField(
                     placeholder: "Tomorrow 9am, in 2 hours, Friday…", text: $text, symbol: .clock,
                     submit: choose, move: { highlighted = highlighted.moved(by: $0, in: choices.count) }
                 )
+            ) {
                 ChoiceList(items: choices, highlighted: highlighted, empty: text.isEmpty ? nil : "That isn't a time I can read.") { index, choice in
                     ChoiceRow(title: choice.name, detail: choice.label, highlighted: index == highlighted) { pick(choice) }
                 }
@@ -51,12 +52,13 @@ struct SnippetPicker: View {
     var body: some View {
         let matches = matches
         Sheet(title: "Snippets") {
-            VStack(spacing: 0) {
-                SearchField(
+            SearchedList(
+                field: SearchField(
                     placeholder: "Find a snippet", text: $query, symbol: .zap,
                     submit: { if matches.indices.contains(highlighted) { pick(matches[highlighted]) } },
                     move: { highlighted = highlighted.moved(by: $0, in: matches.count) }
                 )
+            ) {
                 ChoiceList(items: matches, highlighted: highlighted, empty: empty) { index, snippet in
                     ChoiceRow(title: snippet.name, detail: snippet.text.replacingOccurrences(of: "\n", with: " "), highlighted: index == highlighted) {
                         pick(snippet)

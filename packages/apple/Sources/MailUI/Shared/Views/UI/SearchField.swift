@@ -1,12 +1,19 @@
 import SwiftUI
 
 /// A field that narrows a list: the search icon, the words, and a way to clear them. `.sheet`
-/// sits on a hairline at the top of a sheet and takes the keys that move through the list under
-/// it (↑, ↓, Enter to pick, Esc to leave); `.bar` is the capsule of the top bar.
+/// sits on a hairline at the edge of a sheet, given by `SearchedList`, and takes the keys that
+/// move through the list (↑, ↓, Enter to pick, Esc to leave); `.bar` is the capsule of the top bar.
 struct SearchField: View {
     enum Style {
         case sheet, bar
     }
+
+    /// Where a `.sheet` field sits, over its list or under it.
+    #if os(macOS)
+    static let sheetEdge = VerticalEdge.top
+    #else
+    static let sheetEdge = VerticalEdge.bottom
+    #endif
 
     let placeholder: String
     @Binding var text: String
@@ -43,7 +50,9 @@ struct SearchField: View {
         .padding(.trailing, text.isEmpty ? Space.m : clearInset)
         .frame(height: height)
         .background { if style == .bar { Capsule().strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline) } }
-        .overlay(alignment: .bottom) { if style == .sheet { Rule(color: Tokens.borderCard) } }
+        .overlay(alignment: Self.sheetEdge == .top ? .bottom : .top) {
+            if style == .sheet { Rule(color: Tokens.borderCard) }
+        }
         .onAppear { if autofocus { focused = true } }
         .onChange(of: focusTrigger) { focused = true }
     }
@@ -67,5 +76,20 @@ struct SearchField: View {
         guard style == .bar else { return }
         clearText()
         focused = false
+    }
+}
+
+/// A sheet's list and the field that narrows it: over it on the Mac, under it on iOS, where the
+/// thumb is and the keyboard comes up.
+struct SearchedList<List: View>: View {
+    let field: SearchField
+    @ViewBuilder let list: List
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if SearchField.sheetEdge == .top { field }
+            list
+            if SearchField.sheetEdge == .bottom { field }
+        }
     }
 }

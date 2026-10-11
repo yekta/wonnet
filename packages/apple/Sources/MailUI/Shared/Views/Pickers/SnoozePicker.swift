@@ -11,12 +11,13 @@ struct SnoozePicker: View {
 
     var body: some View {
         Sheet(title: store.remindsInsteadOfSnoozing ? "Remind me if nobody answers" : "Snooze until") {
-            VStack(spacing: 0) {
-                SearchField(
+            SearchedList(
+                field: SearchField(
                     placeholder: "Tomorrow 9am, in 2 hours, fri…", text: $text, symbol: .clock,
                     submit: { pick(highlighted) }, move: { highlighted = highlighted.moved(by: $0, in: choices.count) },
                     escape: { store.snoozing = nil }
                 )
+            ) {
                 ChoiceList(items: choices, highlighted: highlighted, empty: text.isEmpty ? nil : "That isn't a time I know.") { index, choice in
                     ChoiceRow(title: choice.name, detail: choice.label, highlighted: index == highlighted) { pick(index) }
                 }
