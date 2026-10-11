@@ -17,8 +17,8 @@
 :root,
 .light {
   --background: #fbfcfd;
-  --background-accent: #e6e8eb;
-  --background-accent-stronger: #dee0e3;
+  --background-accent: #e8eaed;
+  --background-accent-stronger: #e2e4e7;
   --background-accent-strongest: #d6d8db;
   --background-accent-larger: #f0f1f3;
   --background-accent-larger-stronger: #e9ebed;
@@ -91,8 +91,8 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #161819;
-    --background-accent: #282a2c;
-    --background-accent-stronger: #323436;
+    --background-accent: #25272a;
+    --background-accent-stronger: #2d2f31;
     --background-accent-strongest: #3c3e40;
     --background-accent-larger: #1c1e1f;
     --background-accent-larger-stronger: #222426;

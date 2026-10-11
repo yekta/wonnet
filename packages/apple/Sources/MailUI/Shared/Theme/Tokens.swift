@@ -4,8 +4,8 @@ import SwiftUI
 
 enum Tokens {
     static let background = ThemeColor(light: 0xfbfcfd, dark: 0x161819)
-    static let backgroundAccent = ThemeColor(light: 0xe6e8eb, dark: 0x282a2c)
-    static let backgroundAccentStronger = ThemeColor(light: 0xdee0e3, dark: 0x323436)
+    static let backgroundAccent = ThemeColor(light: 0xe8eaed, dark: 0x25272a)
+    static let backgroundAccentStronger = ThemeColor(light: 0xe2e4e7, dark: 0x2d2f31)
     static let backgroundAccentStrongest = ThemeColor(light: 0xd6d8db, dark: 0x3c3e40)
     static let backgroundAccentLarger = ThemeColor(light: 0xf0f1f3, dark: 0x1c1e1f)
     static let backgroundAccentLargerStronger = ThemeColor(light: 0xe9ebed, dark: 0x222426)
