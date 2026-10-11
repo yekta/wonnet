@@ -136,11 +136,11 @@ struct CommandPalette: View {
             }
         }
         for (index, account) in store.accounts.enumerated() {
-            items.append(PaletteItem(id: "go/\(account.id)", title: "Go to \(account.address)", symbol: .inbox, shortcut: index < 9 ? store.keyLabel("go.account.\(index + 1)") : nil) {
+            items.append(PaletteItem(id: "go/\(account.id)", title: "Go to \(account.title)", symbol: .inbox, shortcut: index < 9 ? store.keyLabel("go.account.\(index + 1)") : nil) {
                 store.select(mailbox: "\(account.id)/inbox")
             })
             for mailbox in account.mailboxes where MailStore.labelID(mailbox.id) == nil && !mailbox.id.hasSuffix("/inbox") {
-                items.append(PaletteItem(id: "go/\(mailbox.id)", title: "Go to \(mailbox.name) · \(account.address)", symbol: Symbol.named(mailbox.symbol)) {
+                items.append(PaletteItem(id: "go/\(mailbox.id)", title: "Go to \(mailbox.name) · \(account.title)", symbol: Symbol.named(mailbox.symbol)) {
                     store.select(mailbox: mailbox.id)
                 })
             }
@@ -153,7 +153,7 @@ struct CommandPalette: View {
         let several = store.accounts.count > 1
         return store.accounts.flatMap { account in
             store.labels(of: account.id).map { label in
-                PaletteItem(id: "go/\(label.id)", title: several ? "\(label.name) · \(account.address)" : label.name, symbol: .tag) {
+                PaletteItem(id: "go/\(label.id)", title: several ? "\(label.name) · \(account.title)" : label.name, symbol: .tag) {
                     store.select(mailbox: label.id)
                 }
             }

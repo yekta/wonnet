@@ -55,23 +55,25 @@ extension SettingsRow where Trailing == EmptyView {
 }
 
 /// What a settings row is about: its name, a line under it, and a symbol or a dot before it.
+/// `heading` sets its name in the heading's weight, for the row that heads a card.
 struct SettingsLabel: View {
     let title: String
     var detail: String?
     var symbol: Symbol?
     var dot: Color?
+    var heading = false
     /// How many lines the detail is cut to, if it is: a snippet's text.
     var detailLines: Int?
 
     var body: some View {
         HStack(spacing: Space.s + 2) {
             if let dot {
-                Circle().fill(dot).frame(width: 8, height: 8)
+                Circle().fill(dot).frame(width: heading ? 10 : 8, height: heading ? 10 : 8)
             } else if let symbol {
                 Image(symbol, size: 14).foregroundStyle(Tokens.mutedForeground.color)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).textStyle(.body).lineLimit(1).truncationMode(.middle)
+                Text(title).textStyle(heading ? .subheading : .body).lineLimit(1).truncationMode(.middle)
                 if let detail {
                     Text(detail).textStyle(.caption).lineLimit(detailLines).fixedSize(horizontal: false, vertical: detailLines == nil)
                 }

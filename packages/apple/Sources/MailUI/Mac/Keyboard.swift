@@ -31,7 +31,7 @@ struct MacCommands: Commands {
         CommandMenu("Go") {
             Button("All Inboxes") { store.select(mailbox: "inbox") }.shortcut("go.account.0", store).disabled(store.sheetOpen)
             ForEach(Array(store.accounts.prefix(9).enumerated()), id: \.element.id) { index, account in
-                Button(account.address) { store.select(mailbox: "\(account.id)/inbox") }
+                Button(account.title) { store.select(mailbox: "\(account.id)/inbox") }
                     .shortcut("go.account.\(index + 1)", store)
                     .disabled(store.sheetOpen)
             }

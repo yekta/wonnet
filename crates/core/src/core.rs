@@ -14,8 +14,8 @@ use chrono::Local;
 use mail_protocol::api::{DevLoginRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse};
 use mail_protocol::wire::{ClientMessage, ServerMessage};
 use mail_protocol::{
-    ACCOUNT_COLORS, Account, Address, Draft, DraftAttachment, Label, Message, MessageState, Op, PROTOCOL_VERSION,
-    Preference, SavedDraft, role,
+    ACCOUNT_COLORS, ACCOUNT_NAME_MAX, Account, Address, Draft, DraftAttachment, Label, Message, MessageState, Op,
+    PROTOCOL_VERSION, Preference, SavedDraft, role,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -424,6 +424,7 @@ impl Core {
                 self.mutate(Op::RemoveAccount { account_id: account }).map(|op_id| json!({ "op_id": op_id }))
             }
             Command::SetAccountColor { account, color } => self.set_account_color(account, color),
+            Command::SetAccountName { account, name } => self.set_account_name(account, &name),
             Command::Mailboxes => self.mailboxes(),
             Command::Threads { mailbox, offset, limit, filter, keep } => {
                 self.threads(&mailbox, offset, limit, filter, &keep)
@@ -1173,6 +1174,18 @@ impl Core {
             bail!("That account is gone.");
         }
         self.mutate(Op::SetAccountColor { account_id: account, color })?;
+        Ok(json!({}))
+    }
+
+    fn set_account_name(&mut self, account: String, name: &str) -> Result<Value> {
+        let name = name.trim();
+        if name.chars().count() > ACCOUNT_NAME_MAX {
+            bail!("Keep the name to {ACCOUNT_NAME_MAX} characters.");
+        }
+        if self.store.account_address(&account).is_none() {
+            bail!("That account is gone.");
+        }
+        self.mutate(Op::SetAccountName { account_id: account, name: name.into() })?;
         Ok(json!({}))
     }
 

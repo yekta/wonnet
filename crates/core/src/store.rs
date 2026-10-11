@@ -30,12 +30,12 @@ use crate::api::{AccountView, Filter, LabelChip, Mailbox, NewMail, Person, Split
 use crate::render::{dates, drafts, rows};
 use crate::search::{self, Condition, Query};
 
-const SCHEMA_VERSION: &str = "4";
+const SCHEMA_VERSION: &str = "5";
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE accounts (id TEXT PRIMARY KEY, provider TEXT NOT NULL, address TEXT NOT NULL, status TEXT NOT NULL,
-    color TEXT NOT NULL, identities TEXT NOT NULL);
+CREATE TABLE accounts (id TEXT PRIMARY KEY, provider TEXT NOT NULL, address TEXT NOT NULL, name TEXT NOT NULL,
+    status TEXT NOT NULL, color TEXT NOT NULL, identities TEXT NOT NULL);
 CREATE TABLE labels (id TEXT PRIMARY KEY, account_id TEXT NOT NULL, name TEXT NOT NULL);
 CREATE TABLE messages (
     id TEXT NOT NULL UNIQUE, account_id TEXT NOT NULL, thread TEXT NOT NULL, thread_id TEXT NOT NULL,
@@ -112,6 +112,7 @@ pub struct LocalAccount {
     pub id: String,
     pub provider: String,
     pub address: String,
+    pub name: String,
     pub status: String,
     pub color: String,
     pub identities: Vec<Identity>,
@@ -436,7 +437,7 @@ impl Store {
                 remove_account(&tx, &account.id, &mut touched.threads)?;
                 continue;
             }
-            // A colour chosen here and not yet confirmed by the server wins.
+            // A colour or a name chosen here and not yet confirmed by the server wins.
             let color = pending
                 .iter()
                 .find_map(|(_, op)| match op {
@@ -444,14 +445,24 @@ impl Store {
                     _ => None,
                 })
                 .unwrap_or(&account.color);
+            let name = pending
+                .iter()
+                .find_map(|(_, op)| match op {
+                    Op::SetAccountName { account_id, name } if *account_id == account.id => Some(name.as_str()),
+                    _ => None,
+                })
+                .unwrap_or(&account.name);
             tx.execute(
-                "INSERT INTO accounts (id, provider, address, status, color, identities) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO accounts (id, provider, address, name, status, color, identities)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT (id) DO UPDATE SET provider = excluded.provider, address = excluded.address,
-                     status = excluded.status, color = excluded.color, identities = excluded.identities",
+                     name = excluded.name, status = excluded.status, color = excluded.color,
+                     identities = excluded.identities",
                 params![
                     account.id,
                     account.provider.as_str(),
                     account.address,
+                    name,
                     account.status,
                     color,
                     serde_json::to_string(&account.identities)?
@@ -564,10 +575,11 @@ impl Store {
     /// Shows an op at once and keeps it for the server.
     pub fn apply_local(&mut self, op_id: &str, op: &Op) -> Result<Touched> {
         let tx = self.db.transaction()?;
-        // A newer value of a preference, a draft or an account's colour replaces one still waiting.
+        // A newer value of a preference, a draft or an account's colour or name replaces one still waiting.
         let replaces = |earlier: &Op| match (earlier, op) {
             (Op::SetPreference { key, .. }, Op::SetPreference { key: new, .. }) => key == new,
-            (Op::SetAccountColor { account_id, .. }, Op::SetAccountColor { account_id: new, .. }) => account_id == new,
+            (Op::SetAccountColor { account_id, .. }, Op::SetAccountColor { account_id: new, .. })
+            | (Op::SetAccountName { account_id, .. }, Op::SetAccountName { account_id: new, .. }) => account_id == new,
             (Op::SaveDraft { draft_id, .. } | Op::DeleteDraft { draft_id }, Op::SaveDraft { draft_id: new, .. })
             | (Op::SaveDraft { draft_id, .. } | Op::DeleteDraft { draft_id }, Op::DeleteDraft { draft_id: new }) => {
                 draft_id == new
@@ -576,7 +588,11 @@ impl Store {
         };
         if matches!(
             op,
-            Op::SetPreference { .. } | Op::SetAccountColor { .. } | Op::SaveDraft { .. } | Op::DeleteDraft { .. }
+            Op::SetPreference { .. }
+                | Op::SetAccountColor { .. }
+                | Op::SetAccountName { .. }
+                | Op::SaveDraft { .. }
+                | Op::DeleteDraft { .. }
         ) {
             for (earlier, _) in pending_ops(&tx)?.into_iter().filter(|(_, earlier)| replaces(earlier)) {
                 tx.execute("DELETE FROM outbox WHERE op_id = ?1", [earlier])?;
@@ -717,17 +733,18 @@ impl Store {
     // ---------- reading ----------
 
     pub fn accounts(&self) -> Result<Vec<LocalAccount>> {
-        let mut statement = self
-            .db
-            .prepare_cached("SELECT id, provider, address, status, color, identities FROM accounts ORDER BY rowid")?;
+        let mut statement = self.db.prepare_cached(
+            "SELECT id, provider, address, name, status, color, identities FROM accounts ORDER BY rowid",
+        )?;
         let rows = statement.query_map([], |row| {
             Ok(LocalAccount {
                 id: row.get(0)?,
                 provider: row.get(1)?,
                 address: row.get(2)?,
-                status: row.get(3)?,
-                color: row.get(4)?,
-                identities: serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or_default(),
+                name: row.get(3)?,
+                status: row.get(4)?,
+                color: row.get(5)?,
+                identities: serde_json::from_str(&row.get::<_, String>(6)?).unwrap_or_default(),
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -760,7 +777,7 @@ impl Store {
             })
             .collect();
         let mut accounts = Vec::new();
-        for LocalAccount { id, provider, address, status, color, identities } in self.accounts()? {
+        for LocalAccount { id, provider, address, name, status, color, identities } in self.accounts()? {
             let mut mailboxes: Vec<Mailbox> = MAILBOXES
                 .iter()
                 .map(|(mailbox, name, symbol)| Mailbox {
@@ -783,7 +800,8 @@ impl Store {
                     symbol: "tag".into(),
                 });
             }
-            accounts.push(AccountView { id, address, provider, color, status, identities, mailboxes });
+            let title = if name.is_empty() { address.clone() } else { name.clone() };
+            accounts.push(AccountView { id, address, name, title, provider, color, status, identities, mailboxes });
         }
         Ok((unified, accounts))
     }
@@ -1489,12 +1507,16 @@ fn waiting_by_message(pending: &[(String, Op)]) -> HashMap<&str, Vec<&Op>> {
     waiting
 }
 
-/// What an op that isn't on messages does here: a preference, a draft, a label, a colour.
+/// What an op that isn't on messages does here: a preference, a draft, a label, a colour, a name.
 fn local_effect(tx: &Transaction, op: &Op) -> Result<Touched> {
     let mut touched = Touched::default();
     match op {
         Op::SetAccountColor { account_id, color } => {
             tx.execute("UPDATE accounts SET color = ?2 WHERE id = ?1", params![account_id, color])?;
+            touched.mailboxes = true;
+        }
+        Op::SetAccountName { account_id, name } => {
+            tx.execute("UPDATE accounts SET name = ?2 WHERE id = ?1", params![account_id, name])?;
             touched.mailboxes = true;
         }
         Op::SetPreference { key, value } => {

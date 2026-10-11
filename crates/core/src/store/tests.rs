@@ -18,6 +18,7 @@ fn account() -> Account {
         id: "a".into(),
         provider: Provider::Jmap,
         address: "me@example.com".into(),
+        name: String::new(),
         status: "ready".into(),
         color: "account-1".into(),
         identities: vec![Identity { name: None, email: "alias@example.com".into(), signature: None }],
@@ -506,6 +507,24 @@ fn an_account_colour_chosen_here_wins_until_the_server_has_it() {
     store.settle("colour", true).unwrap();
     apply(&mut store, &[account()], &[], 3);
     assert_eq!(color(&store), "account-1");
+}
+
+#[test]
+fn an_account_is_shown_by_its_name_once_it_has_one() {
+    let mut store = store();
+    apply(&mut store, &[account()], &[], 1);
+    let shown = |store: &Store| store.mailboxes().unwrap().1[0].title.clone();
+    assert_eq!(shown(&store), "me@example.com");
+
+    store.apply_local("name", &Op::SetAccountName { account_id: "a".into(), name: "Work".into() }).unwrap();
+    assert_eq!(shown(&store), "Work");
+    apply(&mut store, &[account()], &[], 2);
+    assert_eq!(shown(&store), "Work");
+    store.settle("name", true).unwrap();
+    apply(&mut store, &[Account { name: "Home".into(), ..account() }], &[], 3);
+    assert_eq!(shown(&store), "Home");
+    store.apply_local("unname", &Op::SetAccountName { account_id: "a".into(), name: String::new() }).unwrap();
+    assert_eq!(shown(&store), "me@example.com");
 }
 
 #[test]

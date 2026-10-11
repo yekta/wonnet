@@ -29,11 +29,18 @@ struct Mailbox: Codable, Identifiable, Hashable {
 struct AccountView: Codable, Identifiable, Hashable {
     let id: String
     let address: String
+    /// What the user calls it; empty when they haven't named it.
+    let name: String
+    /// What it is shown as: its name, or its address.
+    let title: String
     let provider: String
     let color: String
     let status: String
     let identities: [Identity]
     let mailboxes: [Mailbox]
+
+    /// The longest name the core takes, its `ACCOUNT_NAME_MAX`.
+    static let nameMax = 40
 }
 
 struct Identity: Codable, Hashable {

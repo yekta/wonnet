@@ -96,6 +96,8 @@ enum Theme {
     static let rowHeight: CGFloat = ControlSize.regular.height
     /// A row of a settings group: a regular control with room above and below.
     static let settingsRowHeight: CGFloat = 52
+    /// A field at the end of a settings row.
+    static let settingsFieldWidth: CGFloat = 240
     /// A chip: the smallest thing that can be clicked.
     static let chipHeight: CGFloat = ControlSize.small.height
     /// A bar across the window: the top bar, a sheet's header, a toolbar.
