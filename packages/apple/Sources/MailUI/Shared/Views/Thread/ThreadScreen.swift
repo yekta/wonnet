@@ -121,7 +121,7 @@ struct ThreadScreen: View {
         .padding(.horizontal, pagePadding)
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
-        .background(Rectangle().fill(Tokens.card.color).shadow(.lg))
+        .background(RoundedRectangle(cornerRadius: pageRadius).fill(Tokens.card.color).shadow(.lg))
     }
 
     private var pagePadding: CGFloat {
@@ -129,6 +129,15 @@ struct ThreadScreen: View {
         80
         #else
         Space.l
+        #endif
+    }
+
+    /// The Mac's card floats on the page; the phone's runs edge to edge.
+    private var pageRadius: CGFloat {
+        #if os(macOS)
+        Radius.sm
+        #else
+        0
         #endif
     }
 
