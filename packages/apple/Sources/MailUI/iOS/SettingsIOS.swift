@@ -189,7 +189,7 @@ private struct GeneralPage: View {
         } header: {
             Text("Server")
         } footer: {
-            Text("Wonnet's server syncs your accounts and keeps this \(Platform.device)'s copy of the mail current. Offline, changes wait and are sent once connected.")
+            SettingsFooter("Wonnet's server syncs your accounts and keeps this \(Platform.device)'s copy of the mail current. Offline, changes wait and are sent once connected.")
         }
         .id("server")
     }
@@ -221,14 +221,14 @@ private struct AccountsPage: View {
         } header: {
             Text("Accounts")
         } footer: {
-            Text("Each account's colour marks its mail in the list and its mailboxes in the sidebar.")
+            SettingsFooter("Each account's colour marks its mail in the list and its mailboxes in the sidebar.")
         }
         .id("accounts")
         Section {
             Button("Sign Out", role: .destructive) { signingOut = true }
                 .foregroundStyle(Tokens.destructive.color)
         } footer: {
-            Text("Every account leaves this \(Platform.device). Signing in again brings them back.")
+            SettingsFooter("Every account leaves this \(Platform.device). Signing in again brings them back.")
         }
         .id("sign-out")
         .confirmationDialog("Sign out of Wonnet?", isPresented: $signingOut, titleVisibility: .visible) {
@@ -256,7 +256,7 @@ private struct AccountPage: View {
                     LabeledContent("Address", value: account.address)
                     LabeledContent("Status", value: store.status(of: account))
                 } footer: {
-                    Text("Shown in the sidebar in place of the address.")
+                    SettingsFooter("Shown in the sidebar in place of the address.")
                 }
                 Section("Colour") {
                     SwatchRow(selected: account.color) { store.setAccountColor(account.id, $0) }
@@ -264,7 +264,7 @@ private struct AccountPage: View {
                 Section {
                     Toggle("Notifications", isOn: store.notifies(account))
                 } footer: {
-                    Text("New mail makes a notification and counts on the badge.")
+                    SettingsFooter("New mail makes a notification and counts on the badge.")
                 }
                 SignatureSection(account: account)
                 Section {
@@ -328,7 +328,7 @@ private struct SignatureSection: View {
         } header: {
             Text("Signature")
         } footer: {
-            Text(footer(own: own, provided: provided))
+            SettingsFooter(footer(own: own, provided: provided))
         }
     }
 
@@ -365,7 +365,7 @@ private struct InboxPage: View {
         Section {
             Toggle("Split Inbox", isOn: store.splitInboxOn)
         } footer: {
-            Text("Important mail first, then your splits, then Other: newsletters and notifications.")
+            SettingsFooter("Important mail first, then your splits, then Other: newsletters and notifications.")
         }
         .id("split-inbox")
         Section {
@@ -389,7 +389,7 @@ private struct InboxPage: View {
         } header: {
             Text("Splits")
         } footer: {
-            Text("Hold a split and drag it to move it; swipe it to remove it.")
+            SettingsFooter("Hold a split and drag it to move it; swipe it to remove it.")
         }
         let tabs = store.savedTabs
         Section {
@@ -413,7 +413,7 @@ private struct InboxPage: View {
         } header: {
             Text("Tabs")
         } footer: {
-            Text("The mailboxes along the bottom. Hold a tab and drag it to move it; swipe it to remove it.")
+            SettingsFooter("The mailboxes along the bottom. Hold a tab and drag it to move it; swipe it to remove it.")
         }
         .id("tabs")
     }
@@ -478,7 +478,7 @@ private struct SplitPage: View {
             } header: {
                 Text("From")
             } footer: {
-                Text("Addresses, or @ and a domain for everyone there.")
+                SettingsFooter("Addresses, or @ and a domain for everyone there.")
             }
             if !labels.isEmpty {
                 Section {
@@ -487,7 +487,7 @@ private struct SplitPage: View {
                         ForEach(labels, id: \.id) { label in Text(label.name).tag(Optional(label.id)) }
                     }
                 } footer: {
-                    Text("Mail with the label goes to the split too.")
+                    SettingsFooter("Mail with the label goes to the split too.")
                 }
             }
             if !isNew {
@@ -527,13 +527,13 @@ private struct ReadingPage: View {
         Section {
             Toggle("Dark Mode for Mail", isOn: store.flag("dark_mail", default: true))
         } footer: {
-            Text("In dark mode, newsletters and other designed mail are drawn in dark colours. Each message can show the original.")
+            SettingsFooter("In dark mode, newsletters and other designed mail are drawn in dark colours. Each message can show the original.")
         }
         .id("mail")
         Section {
             Toggle("Load Remote Images", isOn: store.flag("remote_images", default: true))
         } footer: {
-            Text("Off, pictures hosted by the sender wait until you ask for them, so nobody learns when you read their mail.")
+            SettingsFooter("Off, pictures hosted by the sender wait until you ask for them, so nobody learns when you read their mail.")
         }
         Section {
             NavigationLink {
@@ -542,7 +542,7 @@ private struct ReadingPage: View {
                 LabeledContent("Blocked Senders", value: store.blockedSenders.isEmpty ? "None" : "\(store.blockedSenders.count)")
             }
         } footer: {
-            Text("Their new mail goes to the trash. Block someone from a message of theirs.")
+            SettingsFooter("Their new mail goes to the trash. Block someone from a message of theirs.")
         }
         .id("blocked")
     }
@@ -565,7 +565,7 @@ private struct BlockedPage: View {
                         }
                 }
             } footer: {
-                if !blocked.isEmpty { Text("Swipe a sender to unblock them.") }
+                if !blocked.isEmpty { SettingsFooter("Swipe a sender to unblock them.") }
             }
         }
         .navigationTitle("Blocked Senders")
@@ -586,7 +586,7 @@ private struct WritingPage: View {
                 ForEach(MailStore.undoDelays, id: \.self) { Text(MailStore.undoDelayName($0)).tag($0) }
             }
         } footer: {
-            Text("How long a message waits after Send, to be taken back.")
+            SettingsFooter("How long a message waits after Send, to be taken back.")
         }
         .id("sending")
         Section {
@@ -606,7 +606,7 @@ private struct WritingPage: View {
         } header: {
             Text("Snippets")
         } footer: {
-            Text("Type ; and a name while writing to put one in. {first_name} becomes the first recipient's first name.")
+            SettingsFooter("Type ; and a name while writing to put one in. {first_name} becomes the first recipient's first name.")
         }
         .id("snippets")
     }
@@ -631,7 +631,7 @@ private struct SnippetPage: View {
             } header: {
                 Text("Text")
             } footer: {
-                Text("{first_name} becomes the first recipient's first name.")
+                SettingsFooter("{first_name} becomes the first recipient's first name.")
             }
             if !isNew {
                 Section {
@@ -687,6 +687,19 @@ private extension View {
         } else {
             searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
         }
+    }
+}
+
+/// The line under a group saying what it does, small and muted as the Mac's.
+private struct SettingsFooter: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text).textStyle(.caption)
     }
 }
 
