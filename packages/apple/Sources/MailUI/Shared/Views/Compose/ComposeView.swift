@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 /// undo delay, or for a time picked to send it at.
 struct ComposeView: View {
     @Environment(MailStore.self) private var store
+    @Environment(\.pastWindowButtons) private var pastWindowButtons
     @State private var compose: Compose
     /// Typed into the address fields and not yet made a chip.
     @State private var to = ""
@@ -70,6 +71,7 @@ struct ComposeView: View {
             } trailing: {
                 actions
             }
+            .padding(.leading, pastWindowButtons)
             Rule(color: Tokens.borderCard)
             page
         }

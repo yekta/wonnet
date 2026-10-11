@@ -113,6 +113,8 @@ struct ActionButton: View {
     }
 
     fileprivate struct Face: View {
+        static let iconBearing: CGFloat = 3
+
         let title: String
         let symbol: Symbol?
         let variant: Variant
@@ -124,6 +126,9 @@ struct ActionButton: View {
         var body: some View {
             HStack(spacing: Space.xs + 2) {
                 ButtonIcon(symbol: symbol, pending: pending, size: size.icon - 1, tint: foreground)
+                    // An icon's glyph sits inside room of its own, which reads as more space than
+                    // the words have on their side.
+                    .padding(.leading, symbol != nil || pending ? -Self.iconBearing : 0)
                 Text(title).textStyle(size.text, color: foreground)
             }
             .frame(maxWidth: wide ? .infinity : nil)
