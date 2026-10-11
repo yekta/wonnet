@@ -27,6 +27,7 @@ final class ScrollKeeper: NSObject {
     private let report: (CGFloat) -> Void
     private weak var scroll: PlatformScrollView?
     private var restoring = false
+    private var restoreQueued = false
     #if os(iOS)
     private var observations: [NSKeyValueObservation] = []
     #endif
@@ -74,7 +75,7 @@ final class ScrollKeeper: NSObject {
     @objc private func moved() {
         guard !restoring, let scroll else { return }
         guard pending == nil else {
-            restore()
+            restoreSoon()
             return
         }
         let (top, bottom) = Self.range(of: scroll)
@@ -86,8 +87,8 @@ final class ScrollKeeper: NSObject {
         let clamped = lost ? atEnd || offset == at : atEnd && kept - offset > 1 && Self.height(of: scroll) < height
         guard !clamped else {
             lost = true
-            restore()
-            at = Self.offset(of: scroll)
+            at = offset
+            restoreSoon()
             return
         }
         lost = false
@@ -96,7 +97,7 @@ final class ScrollKeeper: NSObject {
     }
 
     @objc private func grew() {
-        restore()
+        restoreSoon()
     }
 
     #if os(macOS)
@@ -123,6 +124,18 @@ final class ScrollKeeper: NSObject {
     /// The offset to get back to: the one restored, else the kept one the content shrank under.
     private var target: CGFloat? {
         pending ?? (lost ? kept : nil)
+    }
+
+    /// Restores once the layout that moved or grew the view is done. Moved back in the middle of
+    /// it, a table lays itself out again, is moved again, and so on until the stack runs out.
+    private func restoreSoon() {
+        guard !restoreQueued else { return }
+        restoreQueued = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            restoreQueued = false
+            restore()
+        }
     }
 
     /// Scrolls as far towards the target as the content allows; done once it is reached.
