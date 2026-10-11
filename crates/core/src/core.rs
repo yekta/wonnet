@@ -773,13 +773,14 @@ impl Core {
         let dark = self.store.preference("dark_mail") != Some(json!(false));
         let me = self.store.me();
         let now = Local::now();
-        let mut people: Vec<Address> = Vec::new();
+        let mut writers: Vec<Address> = Vec::new();
+        let mut recipients: Vec<Address> = Vec::new();
         let mut views = Vec::new();
         let mut missing = Vec::new();
         for (index, message) in messages.iter().enumerate() {
-            people.push(message.from.clone());
-            people.extend(message.recipients.to.iter().cloned());
-            people.extend(message.recipients.cc.iter().cloned());
+            writers.push(message.from.clone());
+            recipients.extend(message.recipients.to.iter().cloned());
+            recipients.extend(message.recipients.cc.iter().cloned());
             let body = self.store.body(&message.id);
             let designed = body.as_ref().and_then(|body| body.html.as_deref()).is_some_and(html::is_designed);
             let page = body.map(|body| html::page(&body, images, dark));
@@ -787,19 +788,11 @@ impl Core {
             if page.is_none() && !failed {
                 missing.push(message.id.clone());
             }
-            let to: Vec<String> = message
-                .recipients
-                .to
-                .iter()
-                .chain(&message.recipients.cc)
-                .map(
-                    |address| {
-                        if me.contains(&address.email) { "me".to_string() } else { address.display().to_string() }
-                    },
-                )
-                .collect();
-            let from_name =
-                if me.contains(&message.from.email) { "me".to_string() } else { message.from.display().to_string() };
+            let shown = |address: &Address| {
+                if me.contains(&address.email) { address.email.clone() } else { address.display().to_string() }
+            };
+            let to: Vec<String> = message.recipients.to.iter().chain(&message.recipients.cc).map(shown).collect();
+            let from_name = shown(&message.from);
             views.push(MessageView {
                 id: message.id.clone(),
                 from_name,
@@ -846,6 +839,7 @@ impl Core {
                 .find(|address| !me.contains(&address.email))
                 .map(|address| address.email.clone()),
         };
+        let (from, to) = rows::participants(&writers, &recipients, &me);
         let view = ThreadView {
             id: thread.to_string(),
             account_id: last.account_id.clone(),
@@ -855,7 +849,8 @@ impl Core {
                 .map(|message| message.subject.clone())
                 .find(|subject| !subject.is_empty())
                 .unwrap_or_else(|| "(no subject)".into()),
-            participants: rows::participants(&people, &me),
+            from,
+            to,
             starred: messages.iter().any(|message| message.starred),
             unread: messages.iter().any(|message| message.unread),
             muted: self.store.preference(&format!("muted:{thread}")) == Some(json!(true)),

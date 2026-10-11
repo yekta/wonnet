@@ -141,12 +141,20 @@ struct ThreadScreen: View {
         #endif
     }
 
+    /// "Roger Cotes to me@example.com", the "to" fainter than the names.
+    private var participants: Text {
+        guard !conversation.to.isEmpty else { return Text(conversation.from) }
+        return Text(conversation.from)
+            + Text(" to ").foregroundStyle(Tokens.mutedStrongerForeground.color)
+            + Text(conversation.to)
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.s + 2) {
             HStack(alignment: .top, spacing: Space.m) {
                 VStack(alignment: .leading, spacing: Space.xs + 2) {
                     Text(conversation.subject).textStyle(.title).textSelection(.enabled)
-                    Text(conversation.participants).textStyle(.label, color: Tokens.mutedStrongerForeground.color)
+                    participants.textStyle(.label, color: Tokens.mutedForeground.color)
                 }
                 Spacer(minLength: 0)
                 StarButton(starred: conversation.starred) { store.toggleStar(conversation.id) }

@@ -36,31 +36,46 @@ pub fn senders(from: &[Address], me: &HashSet<String>) -> String {
     text
 }
 
-/// "Roger & me" under a thread's subject: everyone in it, not only who wrote.
-pub fn participants(people: &[Address], me: &HashSet<String>) -> String {
-    let mut names: Vec<String> = Vec::new();
-    let mut seen = HashSet::new();
-    let mut includes_me = false;
-    for address in people {
-        if !seen.insert(address.email.clone()) {
-            continue;
-        }
-        match me.contains(&address.email) {
-            true => includes_me = true,
-            false => names.push(address.display().split_whitespace().next().unwrap_or(address.display()).to_string()),
-        }
+/// The line under a thread's subject, as who wrote and who they wrote to. Mail one person sent
+/// is "Roger Cotes" to "me@example.com"; a conversation, where several wrote, is everyone in it,
+/// "Roger, Ann & me@example.com", with nothing after. The user's own addresses are written out,
+/// last, so it shows which of their accounts the mail is in.
+pub fn participants(from: &[Address], to: &[Address], me: &HashSet<String>) -> (String, String) {
+    let distinct = |addresses: &[&Address]| -> Vec<Address> {
+        let mut seen = HashSet::new();
+        addresses
+            .iter()
+            .filter(|address| seen.insert(address.email.clone()))
+            .map(|address| (*address).clone())
+            .collect()
+    };
+    let names = |people: &[Address]| -> Vec<String> {
+        let short = people.len() > 1;
+        people
+            .iter()
+            .map(|address| {
+                if me.contains(&address.email) {
+                    return address.email.clone();
+                }
+                let full = address.display();
+                match short {
+                    true => full.split_whitespace().next().unwrap_or(full).to_string(),
+                    false => full.to_string(),
+                }
+            })
+            .collect()
+    };
+    let writers = distinct(&from.iter().collect::<Vec<_>>());
+    if writers.len() > 1 {
+        let (mine, others): (Vec<&Address>, Vec<&Address>) =
+            from.iter().chain(to).partition(|address| me.contains(&address.email));
+        let mut everyone = names(&distinct(&[others, mine].concat()));
+        let last = everyone.pop().unwrap_or_default();
+        return (format!("{} & {last}", everyone.join(", ")), String::new());
     }
-    if includes_me {
-        names.push("me".into());
-    }
-    match names.len() {
-        0 => String::new(),
-        1 => names.remove(0),
-        _ => {
-            let last = names.pop().unwrap_or_default();
-            format!("{} & {last}", names.join(", "))
-        }
-    }
+    let recipients: Vec<&Address> =
+        to.iter().filter(|address| !writers.iter().any(|writer| writer.email == address.email)).collect();
+    (names(&writers).join(", "), names(&distinct(&recipients)).join(", "))
 }
 
 /// A snippet without the invisible words newsletters pad their preview with (`&#847;&zwnj;`
@@ -115,10 +130,24 @@ mod tests {
     }
 
     #[test]
-    fn participants_end_with_me() {
-        let people = [Address::new(None, "me@example.com"), person("Roger Cotes", "r@x.com")];
-        assert_eq!(participants(&people, &me()), "Roger & me");
-        assert_eq!(participants(&[person("Roger Cotes", "r@x.com")], &me()), "Roger");
+    fn mail_one_person_sent_is_from_them_to_its_recipients() {
+        let roger = person("Roger Cotes", "r@x.com");
+        let me_address = Address::new(None, "me@example.com");
+        assert_eq!(
+            participants(std::slice::from_ref(&roger), &[me_address.clone(), me_address.clone()], &me()),
+            ("Roger Cotes".into(), "me@example.com".into())
+        );
+        assert_eq!(participants(&[person("Ann Lee", "a@x.com")], &[], &me()), ("Ann Lee".into(), String::new()));
+    }
+
+    #[test]
+    fn a_conversation_is_everyone_in_it_with_me_last() {
+        let roger = person("Roger Cotes", "r@x.com");
+        let me_address = Address::new(None, "me@example.com");
+        assert_eq!(
+            participants(&[me_address, roger.clone()], &[roger, person("Ann Lee", "a@x.com")], &me()),
+            ("Roger, Ann & me@example.com".into(), String::new())
+        );
     }
 
     #[test]
