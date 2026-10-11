@@ -40,9 +40,10 @@ added to the component, not to the view.
   one lights at `Opacity.lit`.
 - Things side by side have no gap between them: an `HStack(spacing: 0)` of buttons, rows with
   no spacing. The space is inside each control, so hover areas and hit areas touch. Buttons
-  with a face (a circle, a pill) show `Theme.buttonGap` (2pt) between the faces; each button
-  pads half of it inside its hit area, and its hit shape is the whole rectangle. The gap is
-  only drawn, never dead: a view never adds spacing between buttons.
+  with a face (a circle, a pill) show `Theme.buttonGap` (6pt) between the faces, rows one
+  above the other `Theme.rowGap` (2pt); each pads half of it inside its hit area, and its hit
+  shape is the whole rectangle. The gap is only drawn, never dead: a view never adds spacing
+  between buttons.
 - Every button can carry an icon and has a `pending` state; while pending, the spinner stands
   where the icon goes and the button waits.
 - Everything is shown as soon as it is known; what is being fetched again is shown quietly

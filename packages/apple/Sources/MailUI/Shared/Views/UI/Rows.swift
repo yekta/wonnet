@@ -36,7 +36,7 @@ extension ItemRow where Trailing == EmptyView {
 }
 
 /// A row that goes somewhere: a mailbox in the sidebar, Settings. `selected` is where the app
-/// is. `count` is its unread, shown when above zero. Half of `Theme.buttonGap` above and below
+/// is. `count` is its unread, shown when above zero. Half of `Theme.rowGap` above and below
 /// keeps its face off the next row's while the hit areas touch. Without an `action` it is the
 /// face alone, for a list that takes the clicks itself and says when it is hovered.
 struct NavRow<Trailing: View>: View {
@@ -99,7 +99,7 @@ struct NavRow<Trailing: View>: View {
             .frame(height: Theme.rowHeight * Platform.scale)
             .padding(.vertical, verticalPadding * Platform.scale)
             .background(selected ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear)
-            .padding(.vertical, Theme.buttonGap / 2)
+            .padding(.vertical, Theme.rowGap / 2)
             .contentShape(Rectangle())
         }
     }
