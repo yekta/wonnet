@@ -111,6 +111,8 @@ public final class MailStore {
     var confirmation: Confirmation?
     /// A thread a notification asked to show, for iOS to push.
     var requestedThread: String?
+    /// A notification's thread whose mail hasn't synced yet.
+    private var arrivingThread: String?
     /// Threads whose remote images were allowed.
     var imagesShown: Set<String> = []
     /// The mailboxes over the page (Mac).
@@ -479,6 +481,7 @@ public final class MailStore {
                 if mailboxes { await reloadMailboxes() }
                 await reloadThreads()
                 if let open = conversation?.id, threads.contains(open) { await reopen() }
+                if let arriving = arrivingThread, threads.contains(arriving), selected == arriving { open(arriving) }
             }
         case .connection(let state, _):
             connection = state
@@ -636,7 +639,13 @@ public final class MailStore {
     }
 
     func open(_ thread: String) {
+        open(thread, arriving: false)
+    }
+
+    /// One `arriving` may not be on the device yet: it opens once its mail syncs.
+    private func open(_ thread: String, arriving: Bool) {
         selected = thread
+        arrivingThread = nil
         if let draft = row(thread)?.draftId {
             openDraft(draft)
             return
@@ -650,16 +659,24 @@ public final class MailStore {
         }
         Task {
             do {
-                conversation = try await bridge.call("open_thread", ["thread": thread, "images": imagesShown.contains(thread)], as: Conversation.self)
+                conversation = try await openThread(thread)
             } catch {
-                show(error.localizedDescription)
+                guard arriving, selected == thread else {
+                    show(error.localizedDescription)
+                    return
+                }
+                arrivingThread = thread
             }
         }
     }
 
-    /// Opens the thread of a notification.
+    private func openThread(_ thread: String) async throws -> Conversation {
+        try await bridge.call("open_thread", ["thread": thread, "images": imagesShown.contains(thread)], as: Conversation.self)
+    }
+
+    /// Opens the thread of a notification, whose mail may not have synced yet.
     func show(thread: String) {
-        open(thread)
+        open(thread, arriving: true)
         #if os(iOS)
         requestedThread = thread
         #endif
@@ -667,7 +684,7 @@ public final class MailStore {
 
     private func reopen() async {
         guard let open = conversation?.id else { return }
-        let fresh = try? await bridge.call("open_thread", ["thread": open, "images": imagesShown.contains(open)], as: Conversation.self)
+        let fresh = try? await openThread(open)
         guard conversation?.id == open, let fresh else { return }
         conversation = fresh
     }
