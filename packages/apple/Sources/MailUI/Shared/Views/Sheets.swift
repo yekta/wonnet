@@ -6,7 +6,7 @@ enum Modal: Identifiable {
     case palette(PaletteScope)
     case label(Labeling)
     case snooze([String])
-    case shortcuts
+    /// iOS's settings; the Mac's take the window.
     case settings
     case gallery
 
@@ -15,7 +15,6 @@ enum Modal: Identifiable {
         case .palette(let scope): "palette/\(scope)"
         case .label(let labeling): "label/\(labeling.id)"
         case .snooze(let threads): "snooze/\(threads.joined(separator: ","))"
-        case .shortcuts: "shortcuts"
         case .settings: "settings"
         case .gallery: "gallery"
         }
@@ -28,8 +27,9 @@ extension MailStore {
             if let palette { return .palette(palette) }
             if let labeling { return .label(labeling) }
             if let snoozing { return .snooze(snoozing) }
-            if shortcutsOpen { return .shortcuts }
-            if settingsOpen { return .settings }
+            #if os(iOS)
+            if settings != nil { return .settings }
+            #endif
             return galleryOpen ? .gallery : nil
         }
         set {
@@ -37,8 +37,9 @@ extension MailStore {
             palette = nil
             labeling = nil
             snoozing = nil
-            shortcutsOpen = false
-            settingsOpen = false
+            #if os(iOS)
+            closeSettings()
+            #endif
             galleryOpen = false
         }
     }
@@ -62,8 +63,10 @@ private struct MailSheets: ViewModifier {
                     case .palette(let scope): CommandPalette(scope: scope)
                     case .label(let labeling): LabelPicker(labeling: labeling)
                     case .snooze(let threads): SnoozePicker(threads: threads)
-                    case .shortcuts: ShortcutsView()
-                    case .settings: SettingsView()
+                    case .settings:
+                        #if os(iOS)
+                        SettingsSheet()
+                        #endif
                     case .gallery: GalleryView()
                     }
                 }

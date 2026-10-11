@@ -75,7 +75,7 @@ struct CommandPalette: View {
         var items = commands.map { command in
             PaletteItem(
                 id: "command/\(command.rawValue)", title: command.title(store, threads) + suffix, symbol: command.symbol,
-                shortcut: command.shortcut, afterClosing: opensElsewhere.contains(command)
+                shortcut: store.keyLabel(command.rawValue), afterClosing: opensElsewhere.contains(command)
             ) { store.run(command, on: threads) }
         }
         let verb = store.remindsInsteadOfSnoozing ? "Remind me" : "Snooze"
@@ -91,49 +91,51 @@ struct CommandPalette: View {
     private var generalItems: [PaletteItem] {
         let store = store
         var items = [
-            PaletteItem(id: "compose", title: "Compose", symbol: .squarePen, shortcut: "C", afterClosing: true) { store.newMessage() },
-            PaletteItem(id: "undo", title: "Undo", symbol: .undo, shortcut: "Z") { store.undo() },
+            PaletteItem(id: "compose", title: "Compose", symbol: .squarePen, shortcut: store.keyLabel("compose"), afterClosing: true) { store.newMessage() },
+            PaletteItem(id: "undo", title: "Undo", symbol: .undo, shortcut: store.keyLabel("undo")) { store.undo() },
             PaletteItem(id: "check-mail", title: "Check for new mail", symbol: .refreshCw) { Task { await store.checkMail() } },
-            PaletteItem(id: "unread", title: store.filter == .unread ? "Show everything" : "Unread only", symbol: .listFilter, shortcut: "⇧U") {
+            PaletteItem(id: "unread", title: store.filter == .unread ? "Show everything" : "Unread only", symbol: .listFilter, shortcut: store.keyLabel("unreadOnly")) {
                 store.toggleFilter(.unread)
             },
-            PaletteItem(id: "starred", title: store.filter == .starred ? "Show everything" : "Starred only", symbol: .star, shortcut: "⇧S") {
+            PaletteItem(id: "starred", title: store.filter == .starred ? "Show everything" : "Starred only", symbol: .star, shortcut: store.keyLabel("starredOnly")) {
                 store.toggleFilter(.starred)
             },
         ]
         if store.searchRows == nil, !store.rows.isEmpty {
-            items.append(PaletteItem(id: "zero", title: "Get Me To Zero: archive everything here", symbol: .archive, afterClosing: true) { store.archiveAll() })
+            items.append(PaletteItem(id: "zero", title: "Get Me To Zero: archive everything here", symbol: .archive, shortcut: store.keyLabel("zero"), afterClosing: true) { store.archiveAll() })
         }
         if store.canEmpty {
             items.append(PaletteItem(id: "empty", title: "Empty \(store.mailboxName)", symbol: .trash, afterClosing: true) { store.emptyMailbox() })
         }
         if store.conversation == nil, !store.visibleRows.isEmpty {
-            items.append(PaletteItem(id: "select-all", title: "Select all", symbol: .squareCheck, shortcut: "⌘A") { store.selectAll() })
+            items.append(PaletteItem(id: "select-all", title: "Select all", symbol: .squareCheck, shortcut: store.keyLabel("selectAll")) { store.selectAll() })
         }
         if !store.selection.isEmpty {
             items.append(PaletteItem(id: "select-none", title: "Clear the selection", symbol: .x, shortcut: "Esc") { store.clearSelection() })
         }
         if store.splits.count > 1 {
-            items.append(PaletteItem(id: "split-next", title: "Next split", symbol: .chevronRight, shortcut: "Tab") { store.moveSplit(1) })
-            items.append(PaletteItem(id: "split-previous", title: "Previous split", symbol: .chevronLeft, shortcut: "⇧Tab") { store.moveSplit(-1) })
+            items.append(PaletteItem(id: "split-next", title: "Next split", symbol: .chevronRight, shortcut: store.keyLabel("nextSplit")) { store.moveSplit(1) })
+            items.append(PaletteItem(id: "split-previous", title: "Previous split", symbol: .chevronLeft, shortcut: store.keyLabel("previousSplit")) { store.moveSplit(-1) })
         }
-        items += [
-            PaletteItem(id: "settings", title: "Settings", symbol: .settings, shortcut: "⌘,", afterClosing: true) { store.settingsOpen = true },
-            PaletteItem(id: "shortcuts", title: "Keyboard shortcuts", symbol: .keyboard, shortcut: "?", afterClosing: true) { store.shortcutsOpen = true },
-            PaletteItem(id: "gallery", title: "Component gallery", symbol: .monitor, afterClosing: true) { store.galleryOpen = true },
-        ]
+        items.append(PaletteItem(id: "settings", title: "Settings", symbol: .settings, shortcut: store.keyLabel("settings"), afterClosing: true) { store.openSettings() })
+        #if os(macOS)
+        items.append(PaletteItem(id: "keybindings", title: "Keybindings", symbol: .keyboard, shortcut: store.keyLabel("keybindings"), afterClosing: true) {
+            store.openSettings(.keybindings)
+        })
+        #endif
+        items.append(PaletteItem(id: "gallery", title: "Component gallery", symbol: .monitor, afterClosing: true) { store.galleryOpen = true })
         return items
     }
 
     private var mailboxItems: [PaletteItem] {
         let store = store
         var items = store.unified.map { mailbox in
-            PaletteItem(id: "go/\(mailbox.id)", title: "Go to \(mailbox.name)", symbol: Symbol.named(mailbox.symbol), shortcut: Shortcuts.go[mailbox.id]) {
+            PaletteItem(id: "go/\(mailbox.id)", title: "Go to \(mailbox.name)", symbol: Symbol.named(mailbox.symbol), shortcut: store.keyLabel("go.\(mailbox.id)")) {
                 store.select(mailbox: mailbox.id)
             }
         }
         for (index, account) in store.accounts.enumerated() {
-            items.append(PaletteItem(id: "go/\(account.id)", title: "Go to \(account.address)", symbol: .inbox, shortcut: index < 9 ? "⌘\(index + 1)" : nil) {
+            items.append(PaletteItem(id: "go/\(account.id)", title: "Go to \(account.address)", symbol: .inbox, shortcut: index < 9 ? store.keyLabel("go.account.\(index + 1)") : nil) {
                 store.select(mailbox: "\(account.id)/inbox")
             })
             for mailbox in account.mailboxes where MailStore.labelID(mailbox.id) == nil && !mailbox.id.hasSuffix("/inbox") {

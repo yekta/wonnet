@@ -9,7 +9,7 @@ import SwiftUI
 /// is lifted and come back under it. `moved` says where a row landed: its index among the rows
 /// without it and its followers. A click goes to `clicked`, a secondary click opens `menu`, and
 /// a row reads `hovered` from the environment. A vertical list takes the room it is given and
-/// scrolls; a horizontal one is as wide as its rows, or as wide as it is given when it `fills`,
+/// scrolls, or without `scrolls` is as tall as its rows, for a page that scrolls; a horizontal one is as wide as its rows, or as wide as it is given when it `fills`,
 /// with the rows sharing the width.
 struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
     let items: [Item]
@@ -17,6 +17,7 @@ struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
     /// Room before the first row and after the last.
     var inset: CGFloat = 0
     var fills = false
+    var scrolls = true
     var group: (Item) -> String? = { _ in nil }
     var follows: (Item) -> Bool = { _ in false }
     /// The shape a row lifts in: its light, inset from the row's edges.
@@ -35,7 +36,7 @@ struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
         let stack = MovableStack(axis: axis)
         stack.clicked = { [weak coordinator = context.coordinator] in coordinator?.clicked($0) }
         stack.moved = { [weak coordinator = context.coordinator] in coordinator?.moved($0, to: $1) }
-        guard axis == .vertical else { return stack }
+        guard axis == .vertical, scrolls else { return stack }
         let scroll = NSScrollView()
         scroll.documentView = stack
         scroll.drawsBackground = false
@@ -66,10 +67,12 @@ struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
         (view as? NSScrollView)?.documentView as? MovableStack ?? view as? MovableStack
     }
 
-    /// A vertical list takes the room it is offered; a horizontal one is as wide as its rows.
+    /// A vertical list takes the room it is offered, or the height of its rows when it doesn't
+    /// scroll; a horizontal one is as wide as its rows.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
-        guard axis == .horizontal, let stack = Self.stack(of: nsView) else { return proposal.replacingUnspecifiedDimensions() }
+        guard axis == .horizontal || !scrolls, let stack = Self.stack(of: nsView) else { return proposal.replacingUnspecifiedDimensions() }
         let content = stack.contentSize
+        if axis == .vertical { return CGSize(width: proposal.width ?? content.width, height: content.height) }
         return CGSize(width: fills ? proposal.width ?? content.width : content.width, height: content.height)
     }
 

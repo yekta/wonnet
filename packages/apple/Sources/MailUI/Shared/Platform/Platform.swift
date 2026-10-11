@@ -21,9 +21,12 @@ enum Platform {
     static let scale: CGFloat = 1
     /// Whether a selected tab's or row's text is drawn in the stronger weight.
     static let strongSelection = false
+    /// What the device is called in a sentence: "leaves this Mac".
+    static let device = "Mac"
     #else
     static let scale: CGFloat = 1.15
     static let strongSelection = true
+    @MainActor static var device: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
     #endif
 
     static func open(_ url: URL) {

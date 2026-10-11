@@ -61,8 +61,12 @@ struct MacRoot: View {
                 OnboardingView().overlay(alignment: .bottom) { ToastView() }
             } else {
                 ZStack(alignment: .leading) {
+                    // The mail stays under the settings, so going back finds it as it was left.
                     content
-                    if store.sidebarOpen { sidebar }
+                        .opacity(store.settings == nil ? 1 : 0)
+                        .allowsHitTesting(store.settings == nil)
+                    if store.sidebarOpen, store.settings == nil { sidebar }
+                    if let section = store.settings { SettingsRoute(section: section) }
                 }
                 .overlay(alignment: .bottom) { ToastView() }
                 .background(KeyHandler(store: store, focusSearch: { focusSearch += 1 }, sidebarOpen: $store.sidebarOpen))
@@ -85,7 +89,7 @@ struct MacRoot: View {
             SidebarView(
                 showSettings: {
                     showSidebar(false)
-                    store.settingsOpen = true
+                    store.openSettings()
                 },
                 picked: { _ in showSidebar(false) }
             )

@@ -100,10 +100,13 @@ public final class MailStore {
     var labeling: Labeling?
     /// What the command palette shows, while it is open.
     var palette: PaletteScope?
-    var shortcutsOpen = false
     /// The sheet that shows every component, for working on the design.
     var galleryOpen = false
-    var settingsOpen = false
+    /// The settings' page that is open: over the window on the Mac, in a sheet on iOS.
+    var settings: SettingsSection?
+    /// The group of the page a search picked, to scroll to.
+    var settingsTarget: String?
+    var settingsQuery = ""
     /// A question to answer before something that can't be taken back.
     var confirmation: Confirmation?
     /// A thread a notification asked to show, for iOS to push.
@@ -264,7 +267,7 @@ public final class MailStore {
 
     /// Whether a sheet, the palette or a question is up, when the window's keys don't apply.
     var sheetOpen: Bool {
-        compose != nil || snoozing != nil || labeling != nil || palette != nil || shortcutsOpen || settingsOpen || galleryOpen || confirmation != nil
+        compose != nil || snoozing != nil || labeling != nil || palette != nil || settings != nil || galleryOpen || confirmation != nil
     }
 
     // MARK: Starting

@@ -61,15 +61,7 @@ struct Sheet<Content: View, Trailing: View>: View {
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    if #available(iOS 26, *), close == "Close" {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(role: .close) { dismiss() }
-                        }
-                    } else {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(close) { dismiss() }
-                        }
-                    }
+                    SheetCloseItem(title: close) { dismiss() }
                     ToolbarItemGroup(placement: .primaryAction) { trailing }
                 }
         }
@@ -79,6 +71,27 @@ struct Sheet<Content: View, Trailing: View>: View {
         #endif
     }
 }
+
+#if os(iOS)
+/// A sheet's close in iOS's navigation bar: the system's X at its end, or a word such as Cancel
+/// at its start.
+struct SheetCloseItem: ToolbarContent {
+    var title = "Close"
+    let close: () -> Void
+
+    var body: some ToolbarContent {
+        if #available(iOS 26, *), title == "Close" {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .close, action: close)
+            }
+        } else {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(title, action: close)
+            }
+        }
+    }
+}
+#endif
 
 extension Sheet where Trailing == EmptyView {
     init(title: String, size: SheetSize = .small, close: String = "Close", background: ThemeColor = Tokens.popover, @ViewBuilder content: () -> Content) {
