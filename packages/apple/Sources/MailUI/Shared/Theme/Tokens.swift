@@ -9,6 +9,7 @@ enum Tokens {
     static let backgroundAccentStrongest = ThemeColor(light: 0xd6d8db, dark: 0x3c3e40)
     static let backgroundAccentLarger = ThemeColor(light: 0xf0f1f3, dark: 0x1c1e1f)
     static let backgroundAccentLargerStronger = ThemeColor(light: 0xe9ebed, dark: 0x222426)
+    static let backgroundAccentLargerStrongest = ThemeColor(light: 0xe2e4e7, dark: 0x292b2d)
     static let backgroundSecondary = ThemeColor(light: 0xf3f3f3, dark: 0x191919)
     static let backgroundSecondaryAccent = ThemeColor(light: 0xe9eaeb, dark: 0x232425)
     static let backgroundSecondaryAccentStronger = ThemeColor(light: 0xe0e1e3, dark: 0x2c2d2f)
