@@ -26,7 +26,7 @@ public struct MailMacApp: App {
                 }
                 .onOpenURL { url in Task { await store.finishSignIn(url) } }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
         .commands { MacCommands(store: store) }
     }
@@ -48,8 +48,13 @@ final class MacDelegate: NSObject, NSApplicationDelegate {
 }
 
 struct MacRoot: View {
+    /// Past the window's buttons, in the toolbar.
+    private static let pastWindowButtons: CGFloat = 68
+
     @Environment(MailStore.self) private var store
     @State private var focusSearch = 0
+    /// Full screen hides the window's buttons, so it has no toolbar.
+    @State private var fullScreen = false
 
     var body: some View {
         @Bindable var store = store
@@ -72,8 +77,23 @@ struct MacRoot: View {
                 .background(KeyHandler(store: store, focusSearch: { focusSearch += 1 }, sidebarOpen: $store.sidebarOpen))
             }
         }
+        .toolbar {
+            // An item no one sees, for the window to have a toolbar: it puts the window's buttons
+            // in the middle of a bar as tall as ours, on every page. What is beside them is ours,
+            // where the system would place an item further off. Full screen has neither.
+            if !fullScreen {
+                ToolbarItem(placement: .navigation) {
+                    Color.clear.frame(width: 1, height: 1).allowsHitTesting(false)
+                }
+                .withoutSystemGlass()
+            }
+        }
         .frame(minWidth: 860, minHeight: 520)
         .ignoresSafeArea()
+        .windowToolbarUnderTopBar()
+        .environment(\.pastWindowButtons, fullScreen ? 0 : Self.pastWindowButtons)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in fullScreen = true }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in fullScreen = false }
         .mailSheets(store)
     }
 
@@ -85,7 +105,8 @@ struct MacRoot: View {
             .transition(.opacity)
             .zIndex(1)
         VStack(spacing: 0) {
-            Color.clear.frame(height: 38)
+            // Under the window's buttons.
+            Color.clear.frame(height: Theme.barHeight)
             SidebarView(
                 showSettings: {
                     showSidebar(false)
@@ -108,11 +129,6 @@ struct MacRoot: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            Text(store.conversation == nil && store.compose == nil ? store.mailboxName : "")
-                .textStyle(.labelStrong, color: Tokens.mutedForeground.color)
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .allowsHitTesting(false)
             if let compose = store.compose {
                 // Writing is a page of its own, as a thread is, with its bar on top.
                 ComposeView(compose: compose).id(compose.id)
@@ -164,6 +180,7 @@ struct MacTopBar: View {
     @Environment(MailStore.self) private var store
     let focusSearch: Int
     let showSidebar: () -> Void
+    @Environment(\.pastWindowButtons) private var pastWindowButtons
     @State private var query = ""
 
     var body: some View {
@@ -198,6 +215,7 @@ struct MacTopBar: View {
                 }
             }
         }
+        .padding(.leading, pastWindowButtons)
         .onAppear { query = store.searchQuery }
         .onChange(of: query) { _, text in store.search(text) }
         .onChange(of: store.searchQuery) { _, text in if text.isEmpty { query = "" } }

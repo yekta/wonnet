@@ -98,7 +98,8 @@ enum Theme {
     static let settingsRowHeight: CGFloat = 52
     /// A chip: the smallest thing that can be clicked.
     static let chipHeight: CGFloat = ControlSize.small.height
-    /// A bar across the window: the top bar, a sheet's header, a toolbar.
+    /// A bar across the window: the top bar, a sheet's header, a toolbar. On the Mac the top bar
+    /// is the window's toolbar, with the window's buttons in its middle.
     static let barHeight: CGFloat = 52
     /// A search field in a sheet.
     static let searchHeight: CGFloat = ControlSize.large.height
@@ -155,5 +156,18 @@ enum Appearance: String, CaseIterable, Identifiable {
         case .light: .light
         case .dark: .dark
         }
+    }
+}
+
+private struct PastWindowButtonsKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// On the Mac, how far the top bar's controls are moved along: past the window's buttons,
+    /// which full screen hides.
+    var pastWindowButtons: CGFloat {
+        get { self[PastWindowButtonsKey.self] }
+        set { self[PastWindowButtonsKey.self] = newValue }
     }
 }

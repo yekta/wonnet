@@ -4,12 +4,10 @@ import SwiftUI
 
 /// The settings over the whole window: their sections on the left, behind a line that drags
 /// their width, and the open one's page on the right with its title over it. Back, beside the
-/// window's buttons, and Esc go back to the mail.
+/// window's buttons or under the sections, and Esc go back to the mail.
 struct SettingsRoute: View {
-    /// Past the window's buttons, in the bar over the sections.
-    private static let pastWindowButtons: CGFloat = 76
-
     @Environment(MailStore.self) private var store
+    @Environment(\.pastWindowButtons) private var pastWindowButtons
     let section: SettingsSection
     @AppStorage("settings.sidebarWidth") private var sidebarWidth = Double(Theme.sidebarWidth)
 
@@ -18,11 +16,12 @@ struct SettingsRoute: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    IconButton(symbol: .arrowLeft, help: "Back to the mail (Esc)", size: .small, circled: false) { store.closeSettings() }
+                    ActionButton(title: "Back", symbol: .arrowLeft, variant: .ghost) { store.closeSettings() }
+                        .help("Back to the mail (Esc)")
                     Spacer()
                 }
-                .padding(.leading, Self.pastWindowButtons)
-                .frame(height: Self.barHeight)
+                .padding(.leading, pastWindowButtons + Space.l)
+                .frame(height: Theme.barHeight)
                 SettingsSidebar(selected: section)
             }
             .frame(width: min(max(CGFloat(sidebarWidth), widths.lowerBound), widths.upperBound))
@@ -31,16 +30,13 @@ struct SettingsRoute: View {
                 Text(section.title)
                     .textStyle(.labelStrong, color: Tokens.mutedForeground.color)
                     .frame(maxWidth: .infinity)
-                    .frame(height: Self.barHeight)
+                    .frame(height: Theme.barHeight)
                     .allowsHitTesting(false)
                 SettingsPage(section: section)
             }
         }
         .background(Tokens.background.color)
     }
-
-    /// As tall as the strip over the mail, where the window's buttons are.
-    static let barHeight: CGFloat = 30
 }
 
 /// The sections under a search for one of them. While something is typed, the groups found take
@@ -75,6 +71,11 @@ private struct SettingsSidebar: View {
                 }
                 .padding(.vertical, Space.xs)
             }
+            NavRow(title: "Back", symbol: .arrowLeft, verticalPadding: 2) { store.closeSettings() } trailing: {
+                EmptyView()
+            }
+            .help("Back to the mail (Esc)")
+            .rule(.top)
         }
     }
 
@@ -147,10 +148,11 @@ private struct SettingsPage: View {
                 }
                 .frame(maxWidth: Theme.settingsPageWidth, alignment: .leading)
                 .padding(.horizontal, Space.xl)
-                .padding(.top, Space.s)
+                .padding(.top, Space.xl)
                 .padding(.bottom, Space.xxl * 2)
                 .frame(maxWidth: .infinity)
             }
+            .fadesTop()
             .id(section)
             .onChange(of: store.settingsTarget, initial: true) {
                 guard let target = store.settingsTarget else { return }
