@@ -26,7 +26,7 @@ enum SheetSize {
 
 /// What every sheet is made of: its title, a way to close it, and its content. On iOS the title
 /// and the close are the navigation bar's, as the system draws them: the bar fades into the
-/// content and Close is the X at its end; a Cancel stays a word at its start. On the Mac a
+/// content and Close is the X at its start, as is a Cancel in words. On the Mac a
 /// header bar of ours, closed with Esc. `trailing` goes in the bar at its end: on iOS each of
 /// its buttons is an item of the system's bar, so they are the system's buttons, not ours.
 struct Sheet<Content: View, Trailing: View>: View {
@@ -35,8 +35,7 @@ struct Sheet<Content: View, Trailing: View>: View {
     var size: SheetSize = .small
     /// What the close says when "Close" is not it: "Cancel" over a message being written.
     var close = "Close"
-    /// Where the content sits: the popover colour for lists, the page colour for forms.
-    var background: ThemeColor = Tokens.popover
+    var background: ThemeColor = Tokens.background
     @ViewBuilder let content: Content
     @ViewBuilder var trailing: Trailing
 
@@ -66,6 +65,7 @@ struct Sheet<Content: View, Trailing: View>: View {
                 }
         }
         .tint(Tokens.primary.color)
+        .presentationBackground(background.color)
         .presentationDetents(size.detents)
         .presentationDragIndicator(.hidden)
         #endif
@@ -73,19 +73,17 @@ struct Sheet<Content: View, Trailing: View>: View {
 }
 
 #if os(iOS)
-/// A sheet's close in iOS's navigation bar: the system's X at its end, or a word such as Cancel
-/// at its start.
+/// A sheet's close at the start of iOS's navigation bar: the system's X, in the foreground's
+/// colour, or a word such as Cancel.
 struct SheetCloseItem: ToolbarContent {
     var title = "Close"
     let close: () -> Void
 
     var body: some ToolbarContent {
-        if #available(iOS 26, *), title == "Close" {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(role: .close, action: close)
-            }
-        } else {
-            ToolbarItem(placement: .cancellationAction) {
+        ToolbarItem(placement: .cancellationAction) {
+            if #available(iOS 26, *), title == "Close" {
+                Button(role: .close, action: close).tint(Tokens.foreground.color)
+            } else {
                 Button(title, action: close)
             }
         }
@@ -94,7 +92,7 @@ struct SheetCloseItem: ToolbarContent {
 #endif
 
 extension Sheet where Trailing == EmptyView {
-    init(title: String, size: SheetSize = .small, close: String = "Close", background: ThemeColor = Tokens.popover, @ViewBuilder content: () -> Content) {
+    init(title: String, size: SheetSize = .small, close: String = "Close", background: ThemeColor = Tokens.background, @ViewBuilder content: () -> Content) {
         self.init(title: title, size: size, close: close, background: background, content: content, trailing: { EmptyView() })
     }
 }

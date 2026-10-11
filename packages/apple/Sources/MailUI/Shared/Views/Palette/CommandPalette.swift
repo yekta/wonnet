@@ -23,12 +23,13 @@ struct CommandPalette: View {
     var body: some View {
         let found = Self.filter(items, by: query)
         Sheet(title: scope == .labels ? "Go to a label" : "Commands", size: .medium) {
-            VStack(spacing: 0) {
-                SearchField(
+            SearchedList(
+                field: SearchField(
                     placeholder: scope == .labels ? "Go to a label" : "Type a command or a place to go", text: $query,
                     submit: { run(found, highlighted) }, move: { highlighted = highlighted.moved(by: $0, in: found.count) },
                     escape: { store.palette = nil }
                 )
+            ) {
                 ChoiceList(items: found, highlighted: highlighted, empty: "Nothing by that name.") { index, item in
                     ChoiceRow(title: item.title, detail: item.shortcut, symbol: item.symbol, highlighted: index == highlighted) {
                         run(found, index)

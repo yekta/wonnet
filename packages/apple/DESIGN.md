@@ -51,7 +51,7 @@ added to the component, not to the view.
 - The platform's controls are used when they fit, not by default: the switch (`ToggleRow`),
   alerts, menus, iOS's navigation bar for sheets' titles and buttons, Quick Look, the file
   pickers. Segmented controls, dropdowns, fields and buttons are ours.
-- iOS's settings are the system's own: a page sheet of grouped `List`s, on `backgroundSecondary`
+- iOS's settings are the system's own: a page sheet of grouped `List`s, on `background`
   with rows on `popover`, with its `Toggle`s, menu `Picker`s, `TextField`s, pages pushed for
   what is written, swipes to remove and a hold to reorder. The Mac's are ours: the sections
   beside the page, and `SettingsGroup`s of `SettingsRow`s.
@@ -60,11 +60,11 @@ added to the component, not to the view.
   follows the pointer, the rows it passes slide out of its way, and let go it slides into its
   place. Its rows are faces, not buttons: the list takes the clicks and tells each row when it
   is hovered. Nothing else drags: no handle, no edit mode.
-- Sheets go through `Sheet`: on iOS it gets the system's title and Close in the navigation
-  bar, on the Mac our `HeaderBar` and Esc. What trails in the bar is ours on the Mac and the
-  system's plain `Button`s on iOS, the main one `.borderedProminent`: the system draws the bar's
-  buttons, and ours inside it would be a pill in a pill. `SheetSize` picks the window on the
-  Mac and the detents on iOS.
+- Sheets go through `Sheet`, on `background`: on iOS it gets the system's title and its X at
+  the start of the navigation bar, in the foreground's colour; on the Mac our `HeaderBar` and
+  Esc. What trails in the bar is ours on the Mac and the system's plain `Button`s on iOS, the
+  main one `.borderedProminent`: the system draws the bar's buttons, and ours inside it would
+  be a pill in a pill. `SheetSize` picks the window on the Mac and the detents on iOS.
 
 ## Components
 
@@ -76,7 +76,7 @@ added to the component, not to the view.
 | `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `InputField` | A text field with its label above, or a text box of `lines` |
-| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, `.bar` as the top bar's capsule |
+| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`: over the list on the Mac, under it on iOS; `.bar` as the top bar's capsule |
 | `Dropdown` | A choice from a short list, with a label |
 | `Segmented` | A few choices on a line |
 | `ToggleRow` | A switch with its words |

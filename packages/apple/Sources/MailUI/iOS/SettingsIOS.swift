@@ -26,6 +26,7 @@ struct SettingsSheet: View {
             .onChange(of: wide) { _, wide in follow(wide: wide) }
         }
         .tint(Tokens.primary.color)
+        .presentationBackground(Tokens.background.color)
         .presentationSizing(.page)
         .presentationDragIndicator(.visible)
     }
@@ -101,7 +102,7 @@ private struct SettingsSections: View {
                 results
             }
         }
-        .searchable(text: $store.settingsQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+        .bottomSearch($store.settingsQuery)
     }
 
     private func row(_ section: SettingsSection) -> some View {
@@ -334,7 +335,6 @@ private struct InboxPage: View {
             Text("Hold a split and drag it to move it; swipe it to remove it.")
         }
         let tabs = store.savedTabs
-        let left = store.mailboxesForTabs
         Section {
             ForEach(tabs) { tab in
                 Label {
@@ -348,13 +348,8 @@ private struct InboxPage: View {
                 store.moveTab(tabs[index], to: to > index ? to - 1 : to)
             }
             .onDelete { rows in rows.forEach { store.toggleTab(tabs[$0].id) } }
-            Menu {
-                ForEach(left.unified) { mailbox in tabItem(mailbox) }
-                ForEach(left.accounts, id: \.account.id) { account, mailboxes in
-                    Menu(account.address) {
-                        ForEach(mailboxes) { mailbox in tabItem(mailbox) }
-                    }
-                }
+            NavigationLink {
+                AddTabPage()
             } label: {
                 SettingsActionLabel(title: "Add Tab", symbol: .plus)
             }
@@ -365,10 +360,41 @@ private struct InboxPage: View {
         }
         .id("tabs")
     }
+}
 
-    private func tabItem(_ mailbox: Mailbox) -> some View {
-        Button { store.toggleTab(mailbox.id) } label: {
-            Label { Text(mailbox.name) } icon: { Image(Symbol.named(mailbox.symbol), size: 15) }
+/// The mailboxes that are not tabs yet; the one picked joins them and the page goes back.
+private struct AddTabPage: View {
+    @Environment(MailStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let left = store.mailboxesForTabs
+        SettingsList {
+            if !left.unified.isEmpty {
+                Section {
+                    ForEach(left.unified) { mailbox in row(mailbox) }
+                }
+            }
+            ForEach(left.accounts, id: \.account.id) { account, mailboxes in
+                Section(account.address) {
+                    ForEach(mailboxes) { mailbox in row(mailbox) }
+                }
+            }
+        }
+        .navigationTitle("Add Tab")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ mailbox: Mailbox) -> some View {
+        Button {
+            store.toggleTab(mailbox.id)
+            dismiss()
+        } label: {
+            Label {
+                Text(mailbox.name).foregroundStyle(Tokens.foreground.color)
+            } icon: {
+                SettingsTile(symbol: Symbol.named(mailbox.symbol))
+            }
         }
     }
 }
@@ -655,9 +681,21 @@ private struct SettingsList<Content: View>: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Tokens.backgroundSecondary.color.ignoresSafeArea())
+        .background(Tokens.background.color.ignoresSafeArea())
         .font(TextStyle.body.font)
         .foregroundStyle(Tokens.foreground.color)
+    }
+}
+
+private extension View {
+    /// The search, under the list where the system puts it from iOS 26, over it before.
+    @ViewBuilder func bottomSearch(_ text: Binding<String>) -> some View {
+        if #available(iOS 26, *) {
+            searchable(text: text, prompt: "Search")
+                .toolbar { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
+        } else {
+            searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+        }
     }
 }
 

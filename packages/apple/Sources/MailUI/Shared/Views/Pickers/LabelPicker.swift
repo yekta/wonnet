@@ -42,12 +42,13 @@ struct LabelPicker: View {
     var body: some View {
         let choices = choices
         Sheet(title: labeling.move ? "Move to" : "Label") {
-            VStack(spacing: 0) {
-                SearchField(
+            SearchedList(
+                field: SearchField(
                     placeholder: "Find or create a label", text: $query, symbol: .tag,
                     submit: { pick(choices, highlighted) }, move: { highlighted = highlighted.moved(by: $0, in: choices.count) },
                     escape: { store.labeling = nil }
                 )
+            ) {
                 ChoiceList(items: choices, highlighted: highlighted, empty: "No labels yet. Type a name to make one.") { index, choice in
                     row(choice, highlighted: index == highlighted) { pick(choices, index) }
                 }
