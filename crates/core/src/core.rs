@@ -436,6 +436,7 @@ impl Core {
             Command::Contacts { query, limit } => {
                 self.store.contacts(&query, limit).and_then(|contacts| Ok(serde_json::to_value(Contacts { contacts })?))
             }
+            Command::SetAddressBook { people } => self.set_address_book(&people),
             Command::Person { email } => {
                 self.store.person(&email, &Local::now()).and_then(|person| Ok(serde_json::to_value(person)?))
             }
@@ -1166,6 +1167,12 @@ impl Core {
     fn preferences(&self) -> Result<Value> {
         let values = self.store.preferences()?.into_iter().map(|(key, value)| PreferenceValue { key, value }).collect();
         Ok(serde_json::to_value(Preferences { values })?)
+    }
+
+    fn set_address_book(&mut self, people: &[Address]) -> Result<Value> {
+        let touched = self.store.set_address_book(people)?;
+        self.changed(touched);
+        Ok(json!({}))
     }
 
     fn set_preference(&mut self, key: String, value: Option<Value>) -> Result<Value> {

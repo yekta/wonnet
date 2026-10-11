@@ -71,3 +71,13 @@ extension Font {
         Font(Platform.font(size, weight) as CTFont)
     }
 }
+
+extension Image {
+    init(platformImage: PlatformImage) {
+        #if os(macOS)
+        self.init(nsImage: platformImage)
+        #else
+        self.init(uiImage: platformImage)
+        #endif
+    }
+}

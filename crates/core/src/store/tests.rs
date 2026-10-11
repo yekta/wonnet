@@ -392,6 +392,32 @@ fn contacts_rank_people_written_to_and_match_names_and_addresses() {
 }
 
 #[test]
+fn address_book_names_win_over_the_names_mail_came_with() {
+    let mut store = store();
+    let mut bare = message("m1", "t1", "Ann", 1_000);
+    bare.from = Address::new(None, "a.lee@x.com");
+    apply(&mut store, &[account()], &[bare, message("m2", "t2", "Bob", 2_000)], 1);
+    assert_eq!(inbox(&store).iter().map(|row| row.senders.as_str()).collect::<Vec<_>>(), ["Bob", "a.lee"]);
+
+    let book = [Address::new(Some("Ann Lee"), "A.Lee@x.com"), Address::new(Some("Cleo Park"), "cleo@z.com")];
+    let touched = store.set_address_book(&book).unwrap();
+    assert_eq!(touched.threads, HashSet::from(["a:t1".to_string()]));
+    assert_eq!(inbox(&store).iter().map(|row| row.senders.as_str()).collect::<Vec<_>>(), ["Bob", "Ann Lee"]);
+    assert_eq!(store.thread_messages("a:t1").unwrap()[0].from.name.as_deref(), Some("Ann Lee"));
+    assert_eq!(store.person("a.lee@x.com", &Utc::now()).unwrap().initials, "AL");
+    let found = |store: &Store, query: &str| -> Vec<String> {
+        store.contacts(query, 8).unwrap().into_iter().map(|address| address.display().to_string()).collect()
+    };
+    assert_eq!(found(&store, "lee"), ["Ann Lee"]);
+    assert_eq!(found(&store, "cleo"), ["Cleo Park"], "contacts never written to are suggested too");
+
+    assert!(store.set_address_book(&book).unwrap().is_empty(), "nothing changed");
+    store.set_address_book(&[]).unwrap();
+    assert_eq!(inbox(&store)[1].senders, "a.lee");
+    assert!(found(&store, "cleo").is_empty());
+}
+
+#[test]
 fn saved_drafts_show_in_drafts_and_on_their_thread() {
     let mut store = store();
     apply(&mut store, &[account()], &[message("m1", "t1", "Ann", 1_000)], 1);

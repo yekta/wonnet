@@ -331,7 +331,10 @@ public final class MailStore {
             compose = restored
         }
         Notifier.shared.setBadge(unified.first(where: { $0.id == "inbox" })?.unread ?? 0)
-        if !accounts.isEmpty { Notifier.shared.askPermission() }
+        if !accounts.isEmpty {
+            Notifier.shared.askPermission()
+            AddressBook.shared.start(bridge)
+        }
         guard !searchQuery.isEmpty else { return }
         search(searchQuery)
     }
@@ -497,7 +500,10 @@ public final class MailStore {
         if found.unified != listedUnified { listedUnified = found.unified }
         if found.accounts != listedAccounts { listedAccounts = found.accounts }
         Notifier.shared.setBadge(unified.first(where: { $0.id == "inbox" })?.unread ?? 0)
-        if !accounts.isEmpty { Notifier.shared.askPermission() }
+        if !accounts.isEmpty {
+            Notifier.shared.askPermission()
+            AddressBook.shared.start(bridge)
+        }
     }
 
     private func page(offset: Int, limit: Int) async -> ThreadPage? {

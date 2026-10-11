@@ -114,7 +114,8 @@ too) and the Apple kit's `Tokens.swift`. Never edit either by hand: change `toke
 
 - `Shared/Core`: `CoreBridge.swift` calls the Rust core, `Models.swift` is what it answers,
   `MailStore.swift` is the state the views show (`+Actions.swift`: what can be done to threads),
-  `Preferences.swift` the synced settings, `Notifier.swift` notifications and the badge.
+  `Preferences.swift` the synced settings, `Notifier.swift` notifications and the badge,
+  `AddressBook.swift` the device's contacts (their names to the core, their photos to `Avatar`).
 - `Shared/Platform`: `Platform.swift` (what the two systems call differently; sizes are written
   as on the Mac and `Platform.scale` enlarges them on iOS) and `Symbol.swift` (the icons, from
   Lucide's font, `Fonts/lucide.ttf`; a new one is a case with its character from the same

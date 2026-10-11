@@ -12,8 +12,8 @@ use crate::config::Config;
 
 pub const AUTHORIZE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 pub const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-pub const SCOPES: &str = "openid email https://www.googleapis.com/auth/gmail.modify";
-const GMAIL_SCOPE: &str = "https://www.googleapis.com/auth/gmail.modify";
+pub const SCOPES: &str = "openid email https://mail.google.com/";
+const GMAIL_SCOPE: &str = "https://mail.google.com/";
 const ISSUERS: [&str; 2] = ["https://accounts.google.com", "accounts.google.com"];
 
 pub struct Grant {

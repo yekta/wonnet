@@ -55,13 +55,13 @@ The `Dockerfile` builds the server for deploying.
 1. In the [Google Cloud console](https://console.cloud.google.com), create a project and enable the **Gmail API** (APIs & Services → Library).
 2. Under **Google Auth Platform → Branding**, fill in the app's name and your support email.
 3. Under **Audience**, choose **External** and leave the publishing status on **Testing**. Add every Google account that will use the app under **Test users**: up to 100.
-4. Under **Data Access**, add the scopes `openid`, `email` and `https://www.googleapis.com/auth/gmail.modify`.
+4. Under **Data Access**, add the scopes `openid`, `email` and `https://mail.google.com/` (all of Gmail, as IMAP clients ask for).
 5. Under **Clients**, create a client of the type **Web application**, with the authorized redirect URI `{PUBLIC_URL}/auth/google/callback` (for example `http://localhost:3000/auth/google/callback`).
 6. Put its client ID and secret in `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 In Testing mode, Google ends a refresh token after **7 days**: the account then shows "Sign in again" and you remove and add it.
 
-**Before a public launch**, the app has to leave Testing mode. `gmail.modify` is a restricted scope and the server stores the mail it fetches, so Google requires its verification and a yearly **CASA security assessment** (Cloud Application Security Assessment) by an authorized lab. Plan weeks for it, and its cost.
+**Before a public launch**, the app has to leave Testing mode. `https://mail.google.com/` is a restricted scope and the server stores the mail it fetches, so Google requires its verification and a yearly **CASA security assessment** (Cloud Application Security Assessment) by an authorized lab. Plan weeks for it, and its cost.
 
 ### 3. Build the apps
 
