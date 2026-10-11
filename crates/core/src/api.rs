@@ -525,8 +525,10 @@ pub struct ThreadView {
     pub account_id: String,
     pub color: String,
     pub subject: String,
-    /// "Roger & me".
-    pub participants: String,
+    /// Who wrote in the thread, "Roger Cotes".
+    pub from: String,
+    /// Who they wrote to, apart from those who wrote, "me@example.com".
+    pub to: String,
     pub starred: bool,
     pub unread: bool,
     pub muted: bool,

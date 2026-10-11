@@ -146,9 +146,10 @@ fn print_event(event: &Event, rows: &Mutex<Vec<String>>) {
             }
             if let Some(messages) = value["messages"].as_array() {
                 println!(
-                    "#{id} {} — {}",
+                    "#{id} {} — {} to {}",
                     value["subject"].as_str().unwrap_or_default(),
-                    value["participants"].as_str().unwrap_or_default()
+                    value["from"].as_str().unwrap_or_default(),
+                    value["to"].as_str().unwrap_or_default()
                 );
                 for message in messages {
                     let html = message["html"]

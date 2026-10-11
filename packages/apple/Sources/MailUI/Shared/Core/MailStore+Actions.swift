@@ -169,7 +169,7 @@ extension MailStore {
     }
 
     private func confirmBlock(_ threads: [String]) {
-        let senders = threads.count == 1 ? row(threads[0])?.senders ?? conversation?.participants : nil
+        let senders = threads.count == 1 ? row(threads[0])?.senders ?? conversation?.from : nil
         let who = senders.map { "Block \($0)?" } ?? "Block these senders?"
         confirmation = Confirmation(
             title: who, message: "New mail from them goes straight to the trash, and so does this.", action: "Block"

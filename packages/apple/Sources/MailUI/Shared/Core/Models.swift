@@ -99,7 +99,9 @@ struct Conversation: Codable, Identifiable, Hashable {
     let accountId: String
     let color: String
     let subject: String
-    let participants: String
+    /// Who wrote in the thread, and who they wrote to.
+    let from: String
+    let to: String
     let starred: Bool
     let unread: Bool
     let muted: Bool
