@@ -184,7 +184,8 @@ from the apps' tokens. The screenshots come from `docs/screenshots`; the favicon
   complex but common one probably has a modern library already.
 - Do not insert yourself into our code, commits or PRs in any way.
 - Never commit or push unless asked to.
-- After you make code changes, run the checks below and fix what they raise.
+- After you make code changes, run the checks below and fix what they raise. Skip the checks and
+  the build for a change you are sure breaks nothing, like a single number (a padding, an offset).
 
 ## Development
 
