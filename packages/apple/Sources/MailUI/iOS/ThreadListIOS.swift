@@ -23,10 +23,14 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     var bottomInset: CGFloat = 0
     /// What a pull from the top does; the control spins until it returns. None hides it.
     var refresh: (() async -> Void)?
+    /// Told whether the list is scrolled past its first page.
+    var farDown: (Bool) -> Void = { _ in }
+    /// Goes back to the top each time it changes.
+    var toTop = 0
     let open: (String) -> Void
     @ViewBuilder let header: () -> Header
 
-    func makeCoordinator() -> Coordinator { Coordinator(store: store, open: open) }
+    func makeCoordinator() -> Coordinator { Coordinator(store: store, open: open, toTop: toTop) }
 
     func makeUIView(context: Context) -> UITableView {
         let table = ThreadTable(frame: .zero, style: .plain)
@@ -64,8 +68,10 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     func updateUIView(_ table: UITableView, context: Context) {
         context.coordinator.open = open
         context.coordinator.refresh = refresh
+        context.coordinator.farDown = farDown
         context.coordinator.head?.rootView = header()
         context.coordinator.update(rows: rows, editing: editing, checked: checked, ready: ready, headerHeight: headerHeight, loadingMore: loadingMore)
+        context.coordinator.goToTop(toTop)
     }
 
     @MainActor
@@ -73,6 +79,9 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         let store: MailStore
         var open: (String) -> Void
         var refresh: (() async -> Void)?
+        var farDown: (Bool) -> Void = { _ in }
+        private var isFarDown = false
+        private var toTop: Int
         weak var table: UITableView?
         var swiper: RowSwiper?
         var head: UIHostingController<Header>?
@@ -87,9 +96,10 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         /// Keeps the list where it was left, across the app being made anew.
         var keeper: ScrollKeeper?
 
-        init(store: MailStore, open: @escaping (String) -> Void) {
+        init(store: MailStore, open: @escaping (String) -> Void, toTop: Int) {
             self.store = store
             self.open = open
+            self.toTop = toTop
             super.init()
             let rule = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
             rule.backgroundColor = Tokens.border.platform
@@ -238,6 +248,18 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             schedulePrefetch()
+            let far = scrollView.contentOffset.y + scrollView.adjustedContentInset.top > scrollView.bounds.height
+            guard far != isFarDown else { return }
+            isFarDown = far
+            // Scrolls also come while SwiftUI updates the table, when its state can't change.
+            Task { self.farDown(far) }
+        }
+
+        func goToTop(_ request: Int) {
+            guard request != toTop, let table else { return }
+            toTop = request
+            swiper?.close()
+            table.setContentOffset(CGPoint(x: table.contentOffset.x, y: -table.adjustedContentInset.top), animated: true)
         }
 
         @objc func pulled(_ control: UIRefreshControl) {

@@ -62,6 +62,7 @@ struct GalleryView: View {
                             IconButton(symbol: .refreshCw, help: "Pending", pending: true) {}
                             IconButton(symbol: .x, help: "Disabled") {}.disabled(true)
                             FloatingButton(symbol: .squarePen, help: "Compose") {}
+                            FloatingButton(symbol: .arrowUp, help: "Back to Top", small: true) {}
                             IconMenu(symbol: .ellipsis, help: "More") {
                                 Button("One") {}
                                 Button("Two") {}

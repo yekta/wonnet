@@ -18,8 +18,12 @@ struct ThreadListMac: NSViewRepresentable {
     let ready: Bool
     /// The next page is being read: a row at the foot says so.
     let loadingMore: Bool
+    /// Told whether the list is scrolled past its first page.
+    let farDown: (Bool) -> Void
+    /// Goes back to the top each time it changes.
+    let toTop: Int
 
-    func makeCoordinator() -> Coordinator { Coordinator(store: store) }
+    func makeCoordinator() -> Coordinator { Coordinator(store: store, toTop: toTop) }
 
     func makeNSView(context: Context) -> NSScrollView {
         let table = HoverTableView()
@@ -56,7 +60,9 @@ struct ThreadListMac: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         if scroll.contentInsets.top != topInset { pad(scroll) }
         if scroll.isHidden == shown { scroll.isHidden = !shown }
+        context.coordinator.farDown = farDown
         context.coordinator.update(rows: rows, selected: selected, checked: checked, ready: ready, loadingMore: loadingMore)
+        context.coordinator.goToTop(toTop)
     }
 
     /// Pads the rows, not the scroll view, so the padding scrolls with them and the scroller
@@ -76,6 +82,9 @@ struct ThreadListMac: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         let store: MailStore
         weak var table: HoverTableView?
+        var farDown: (Bool) -> Void = { _ in }
+        private var isFarDown = false
+        private var toTop: Int
         private var rows: [ThreadRow] = []
         private var texts: [String: (ThreadRow, RowText)] = [:]
         private var selected: String?
@@ -88,8 +97,9 @@ struct ThreadListMac: NSViewRepresentable {
         /// Keeps the list where it was left, across the window and the app being made anew.
         var keeper: ScrollKeeper?
 
-        init(store: MailStore) {
+        init(store: MailStore, toTop: Int) {
             self.store = store
+            self.toTop = toTop
         }
 
         func update(rows: [ThreadRow], selected: String?, checked: Set<String>, ready: Bool, loadingMore: Bool) {
@@ -179,6 +189,25 @@ struct ThreadListMac: NSViewRepresentable {
 
         @objc func scrolled() {
             schedulePrefetch()
+            guard let scroll = table?.enclosingScrollView else { return }
+            let clip = scroll.contentView.bounds
+            let far = clip.minY + scroll.contentInsets.top > clip.height
+            guard far != isFarDown else { return }
+            isFarDown = far
+            // Scrolls also come while SwiftUI updates the table, when its state can't change.
+            Task { self.farDown(far) }
+        }
+
+        func goToTop(_ request: Int) {
+            guard request != toTop, let scroll = table?.enclosingScrollView else { return }
+            toTop = request
+            let top = NSPoint(x: scroll.contentView.bounds.minX, y: -scroll.contentInsets.top)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                scroll.contentView.animator().setBoundsOrigin(top)
+            } completionHandler: {
+                scroll.reflectScrolledClipView(scroll.contentView)
+            }
         }
 
         /// Asks for the bodies of the rows on screen once the list stops moving.

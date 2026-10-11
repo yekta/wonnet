@@ -139,6 +139,8 @@ struct MailboxScreen: View {
     @Binding var path: [Route]
     @Binding var editing: Bool
     let openDrawer: () -> Void
+    @State private var farDown = false
+    @State private var toTop = 0
 
     var body: some View {
         // The table stays through a change of mailbox, with the empty state over it when there
@@ -147,13 +149,14 @@ struct MailboxScreen: View {
             store: store, rows: store.rows, editing: editing, checked: store.selection, ready: store.listReady,
             loadingMore: store.loadingMore, headerHeight: ListHeader.shows(store) ? ListHeader.height : 0,
             bottomInset: FloatingButton.side + Space.l * 2,
-            refresh: store.checkMail,
+            refresh: store.checkMail, farDown: { farDown = $0 }, toTop: toTop,
             open: { thread in openThread(thread, path: $path, store: store) },
             header: { ListHeader().environment(store) }
         )
         .overlay {
             if store.rows.isEmpty, store.listReady { EmptyList().background(Tokens.background.color) }
         }
+        .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
         .overlay(alignment: .bottomTrailing) {
             if !editing {
                 FloatingButton(symbol: .squarePen, help: "Compose", action: store.newMessage).padding(Space.l)
@@ -215,16 +218,20 @@ struct SearchScreen: View {
     @Environment(MailStore.self) private var store
     @Binding var path: [Route]
     @State private var query = ""
+    @State private var farDown = false
+    @State private var toTop = 0
 
     var body: some View {
         ThreadListIOS(
             store: store, rows: store.searchRows ?? [], editing: false, checked: [], ready: true, keepsScroll: false,
-            headerHeight: 0, refresh: store.searchAgain, open: { thread in openThread(thread, path: $path, store: store) },
+            headerHeight: 0, refresh: store.searchAgain, farDown: { farDown = $0 }, toTop: toTop,
+            open: { thread in openThread(thread, path: $path, store: store) },
             header: { EmptyView() }
         )
         .overlay {
             if store.searchRows?.isEmpty == true { EmptyList().background(Tokens.background.color) }
         }
+        .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
         .safeAreaInset(edge: .top, spacing: 0) {
             HeaderBar {
                 IconButton(symbol: .arrowLeft, help: "Back", circled: false) { path.removeAll { $0 == .search } }
