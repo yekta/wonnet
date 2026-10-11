@@ -558,6 +558,7 @@ fn units(method: &Method, path: &str) -> u32 {
         "/history" => 2,
         "/messages/batchModify" | "/messages/batchDelete" => 50,
         "/watch" => 100,
+        _ if method == Method::GET && path.starts_with("/messages/") => 20,
         _ => 5,
     }
 }
