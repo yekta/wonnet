@@ -78,6 +78,7 @@
   --opacity-disabled: 0.4;
   --opacity-pressed: 0.6;
   --opacity-dimmed: 0.5;
+  --opacity-dimmed-stronger: 0.25;
   --opacity-lit: 0.88;
   --opacity-shadow: 0.1;
   --opacity-shadow-stronger: 0.22;
@@ -153,6 +154,7 @@
     --opacity-disabled: 0.4;
     --opacity-pressed: 0.6;
     --opacity-dimmed: 0.5;
+    --opacity-dimmed-stronger: 0.25;
     --opacity-lit: 0.88;
     --opacity-shadow: 0.25;
     --opacity-shadow-stronger: 0.6;
