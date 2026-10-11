@@ -40,6 +40,7 @@ pub enum ServerMessage {
         protocol: u32,
     },
     /// What changed after the client's cursor. `more` means another batch follows at once.
+    /// Accounts, labels and preferences come whole with the first batch.
     Changes {
         accounts: Vec<Account>,
         labels: Vec<Label>,
@@ -48,6 +49,9 @@ pub enum ServerMessage {
         preferences: Vec<Preference>,
         #[serde(default)]
         drafts: Vec<SavedDraft>,
+        /// The accounts with mail still to come after this batch.
+        #[serde(default)]
+        arriving: Vec<String>,
         cursor: i64,
         more: bool,
     },
