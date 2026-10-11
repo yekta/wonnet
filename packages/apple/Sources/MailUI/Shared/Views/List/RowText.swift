@@ -25,6 +25,10 @@ struct RowText {
     private static func style(_ size: CGFloat, _ weight: PlatformFont.Weight, _ color: ThemeColor) -> [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
+        #if os(macOS)
+        // AppKit squeezes a line by up to 5% before truncating it; truncate instead, at the font's own spacing.
+        paragraph.tighteningFactorForTruncation = 0
+        #endif
         return [.font: Platform.face(size, weight), .foregroundColor: color.platform, .paragraphStyle: paragraph]
     }
 

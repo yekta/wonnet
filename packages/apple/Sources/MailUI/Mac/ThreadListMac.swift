@@ -382,20 +382,20 @@ final class ThreadRowView: NSTableRowView {
             Self.drawSymbol(.paperclip, in: NSRect(x: x, y: middle - 7, width: 14, height: 14), color: Tokens.mutedStrongerForeground.platform)
         }
         x += 24
-        let trailing: CGFloat
+        let dateWidth = ceil(text.date.size().width)
+        let lineWidth = max(starRect.minX - 34 - dateWidth - x, 0)
         if hovering {
-            trailing = (actions.last?.2.minX ?? starRect.minX) - 16
+            let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.m
+            Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
             for (kind, symbol, rect) in actions {
                 let lit = hoveredHit == kind
                 if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccent.platform) }
                 Self.drawSymbol(symbol, in: rect, color: lit ? Tokens.foreground.platform : Tokens.mutedForeground.platform)
             }
         } else {
-            let dateWidth = ceil(text.date.size().width)
             Self.drawLine(text.date, x: starRect.minX - 18 - dateWidth, width: dateWidth + 2, middle: middle)
-            trailing = starRect.minX - 34 - dateWidth
+            Self.drawLine(text.line, x: x, width: lineWidth, middle: middle)
         }
-        Self.drawLine(text.line, x: x, width: max(trailing - x, 0), middle: middle)
         guard row.draftId == nil else { return }
         let starLit = hoveredHit == .star
         if starLit { Self.drawHover(around: starRect, color: Tokens.star.opacity(Opacity.colorTint).platform) }
@@ -414,6 +414,20 @@ final class ThreadRowView: NSTableRowView {
         guard width > 8 else { return }
         let height = ceil(text.size().height)
         text.draw(with: NSRect(x: x, y: middle - height / 2, width: width, height: height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+    }
+
+    /// The line laid out as at rest, faded out before `end` so the actions sit over it without moving it.
+    private static func drawLine(_ text: NSAttributedString, x: CGFloat, width: CGFloat, middle: CGFloat, fadingBefore end: CGFloat) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        guard let fade = CGGradient(colorsSpace: nil, colors: [CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: 1)] as CFArray, locations: nil) else { return }
+        context.saveGState()
+        context.clip(to: NSRect(x: x, y: 0, width: width, height: middle * 2))
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        drawLine(text, x: x, width: width, middle: middle)
+        context.setBlendMode(.destinationOut)
+        context.drawLinearGradient(fade, start: CGPoint(x: end - Space.xxl, y: 0), end: CGPoint(x: end, y: 0), options: [.drawsAfterEndLocation])
+        context.endTransparencyLayer()
+        context.restoreGState()
     }
 
     private static func drawSymbol(_ symbol: Symbol, in rect: NSRect, color: NSColor) {
