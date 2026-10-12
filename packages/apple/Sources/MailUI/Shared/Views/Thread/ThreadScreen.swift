@@ -203,6 +203,8 @@ struct ThreadScreen: View {
             IconButton(symbol: .reply, help: "Reply") { store.reply(.reply, to: conversation.id) }
             IconButton(symbol: .forward, help: "Forward") { store.reply(.forward, to: conversation.id) }
         }
+        // The first circle lines up with the messages; its hit area reaches past them.
+        .padding(.leading, -Theme.buttonGap / 2)
         .padding(.top, Space.xl + 2)
     }
 

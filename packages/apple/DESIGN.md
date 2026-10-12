@@ -43,7 +43,8 @@ added to the component, not to the view.
   with a face (a circle, a pill) show `Theme.buttonGap` (6pt) between the faces, rows one
   above the other `Theme.rowGap` (2pt); each pads half of it inside its hit area, and its hit
   shape is the whole rectangle. The gap is only drawn, never dead: a view never adds spacing
-  between buttons.
+  between buttons. Buttons at the edge of content are pulled out by that half, so the face
+  lines up with the content and the hit area reaches past it.
 - No words end in "…": not a button, a menu item, a status or a placeholder. "Remove Account",
   "Syncing", never "Remove Account…".
 - Every button can carry an icon and has a `pending` state; while pending, the spinner stands
