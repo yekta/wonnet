@@ -100,6 +100,9 @@ struct ThreadListMac: NSViewRepresentable {
         init(store: MailStore, toTop: Int) {
             self.store = store
             self.toTop = toTop
+            // The row selected when the list is made isn't a move to show: the keeper puts the
+            // list back where it was scrolled.
+            selected = store.selected
         }
 
         func update(rows: [ThreadRow], selected: String?, checked: Set<String>, ready: Bool, loadingMore: Bool) {
