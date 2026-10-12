@@ -59,8 +59,8 @@ pub struct UiState {
     pub rows: usize,
     /// How far the list was scrolled, in points.
     pub list_offset: f64,
-    /// How far the open thread was scrolled, in points.
-    pub thread_offset: f64,
+    /// How far the open thread was scrolled, in points; none until it is scrolled.
+    pub thread_offset: Option<f64>,
     /// The threads picked to act on together.
     pub selection: Vec<String>,
     pub search: String,
@@ -87,7 +87,7 @@ impl Default for UiState {
             selected: None,
             rows: 0,
             list_offset: 0.0,
-            thread_offset: 0.0,
+            thread_offset: None,
             selection: Vec::new(),
             search: String::new(),
             compose: None,

@@ -1861,11 +1861,12 @@ mod tests {
         assert_eq!(first["status"]["signed_in"], true);
         assert!(!first["page"]["rows"].as_array().unwrap().is_empty());
         assert!(first["thread"].is_null());
+        assert!(first["ui"]["thread_offset"].is_null(), "no thread was scrolled yet");
 
         let thread = demo.thread("Dinner on Saturday").await;
         let ui = json!({
             "mailbox": "demo-home/inbox", "thread": thread, "selected": thread, "rows": 3, "list_offset": 120.5,
-            "thread_offset": 300.0, "selection": [thread], "search": "dinner",
+            "thread_offset": 0.0, "selection": [thread], "search": "dinner",
             "compose": { "draft": { "text": "hello" } }, "sidebar": true, "unfolded": ["m1"],
             "heights": { "m1": 412.5 }, "body_width": 640.0,
         });
@@ -1873,7 +1874,7 @@ mod tests {
         let boot = demo.call(json!({ "type": "boot" })).await.unwrap();
         assert_eq!(boot["ui"]["mailbox"], "demo-home/inbox");
         assert_eq!(boot["ui"]["list_offset"], 120.5);
-        assert_eq!(boot["ui"]["thread_offset"], 300.0);
+        assert_eq!(boot["ui"]["thread_offset"], 0.0, "scrolled to the top is not never scrolled");
         assert_eq!(boot["ui"]["selection"], json!([thread]));
         assert_eq!(boot["ui"]["compose"]["draft"]["text"], "hello");
         assert_eq!(boot["ui"]["unfolded"], json!(["m1"]));

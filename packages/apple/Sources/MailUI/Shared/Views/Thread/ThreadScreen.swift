@@ -65,7 +65,9 @@ struct ThreadScreen: View {
     }
 
     private func thread(height: CGFloat) -> some View {
-        ScrollViewReader { proxy in
+        // Read as the view is made: its scroll view may report its first layout before it appears.
+        let offset = store.threadOffset
+        return ScrollViewReader { proxy in
             ScrollView {
                 page
                     #if os(macOS)
@@ -77,15 +79,15 @@ struct ThreadScreen: View {
                     // The page around the card: a click there closes the thread, as Newton's did.
                     .background { Tokens.background.color.onTapGesture(perform: store.close) }
                     #endif
-                    .background(ScrollKept(restore: store.threadOffset, report: store.noteThreadScroll))
+                    .background(ScrollKept(restore: offset ?? 0, report: store.noteThreadScroll))
             }
             .onAppear {
-                // The message it was left on, else the first unread one; where it was scrolled to
-                // wins over both.
+                // The message it was left on, else the first unread one; where it was scrolled to,
+                // the top too, wins over both.
                 let kept = store.focusedMessage.flatMap { id in conversation.messages.contains { $0.id == id } ? id : nil }
                 let target = kept ?? conversation.messages.first(where: \.unread)?.id
                 store.focusedMessage = target
-                guard let target, store.threadOffset <= 0 else { return }
+                guard let target, offset == nil else { return }
                 DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
             }
             .onChange(of: store.focusedMessage) { _, id in
