@@ -14,9 +14,14 @@ chrono.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 hex.workspace = true
+hickory-resolver = "0.26"
+image = { version = "0.25", default-features = false, features = ["gif", "ico", "jpeg", "png", "webp"] }
+lol_html = "3"
 mail-builder.workspace = true
 mail-parser.workspace = true
 percent-encoding = "2"
+psl = "2"
+resvg = { version = "0.48", default-features = false }
 reqwest = { workspace = true, features = ["http2"] }
 ring = "0.17"
 serde.workspace = true
@@ -27,6 +32,7 @@ tokio.workspace = true
 tower-http = { version = "0.7", features = ["trace", "set-header"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
+url = "2"
 uuid.workspace = true
 
 [dev-dependencies]

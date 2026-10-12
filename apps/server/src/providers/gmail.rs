@@ -438,6 +438,7 @@ impl Gmail {
                 }
             }
             db::upsert_messages(&state.db, account, &messages).await?;
+            crate::avatars::warm(state, messages.iter().map(|message| message.from.email.as_str()));
             db::delete_messages(&state.db, account, &gone).await?;
         }
         Ok(())

@@ -5,12 +5,14 @@ import UserNotifications
 public enum MessageNotification {
     /// The content, with its title as the sender's name and its body as the message, turned into
     /// a message from the sender. Without the entitlement it stays as it was.
-    public static func fromSender(_ content: UNNotificationContent, email: String, initials: String) async -> UNNotificationContent {
+    public static func fromSender(
+        _ content: UNNotificationContent, email: String, initials: String, avatar: Data?
+    ) async -> UNNotificationContent {
         let sender = INPerson(
             personHandle: INPersonHandle(value: email, type: .emailAddress),
             nameComponents: nil,
             displayName: content.title,
-            image: SenderAvatar.image(initials: initials, email: email).map { INImage(imageData: $0) },
+            image: SenderAvatar.image(initials: initials, email: email, avatar: avatar).map { INImage(imageData: $0) },
             contactIdentifier: nil,
             customIdentifier: email
         )

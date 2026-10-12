@@ -229,6 +229,10 @@ struct PathReply: Codable {
     let path: String
 }
 
+struct AvatarReply: Codable {
+    let path: String?
+}
+
 struct HTMLReply: Codable {
     let html: String
 }

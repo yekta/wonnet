@@ -1037,6 +1037,18 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// The senders of the newest inbox threads, the latest first.
+    pub fn recent_senders(&self, limit: usize) -> Result<Vec<String>> {
+        let mut statement = self.db.prepare_cached(
+            "SELECT lower(m.from_email) FROM (SELECT thread FROM thread_labels WHERE label = 'inbox'
+                 ORDER BY last_date DESC LIMIT 500) l
+             JOIN messages m ON m.thread = l.thread
+             GROUP BY lower(m.from_email) ORDER BY max(m.date) DESC LIMIT ?1",
+        )?;
+        let rows = statement.query_map([limit as i64], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// The messages of a thread that show open (its newest and the unread ones) and have no body.
     pub fn bodies_to_fetch(&self, thread: &str) -> Result<Vec<String>> {
         let mut statement = self.db.prepare_cached(

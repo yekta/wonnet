@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow, bail};
 use chrono::Local;
+use futures_util::StreamExt;
 use mail_protocol::api::{
     DevLoginRequest, DeviceRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse,
 };
@@ -54,6 +55,12 @@ const REFRESH_WAIT: Duration = Duration::from_secs(15);
 const NEW_MAIL_WINDOW: i64 = 2 * 86_400_000;
 /// How long a `Settle` waits at most.
 const SETTLE_WAIT: Duration = Duration::from_secs(25);
+/// How long a sender's picture is kept before the server is asked again, and how long that
+/// they have none.
+const AVATAR_KEPT: Duration = Duration::from_secs(30 * 86_400);
+const AVATAR_KEPT_NONE: Duration = Duration::from_secs(7 * 86_400);
+/// How many senders' pictures are fetched ahead at once.
+const AVATARS_IN_FLIGHT: usize = 4;
 
 enum Input {
     Link(u64, LinkEvent),
@@ -133,6 +140,7 @@ pub fn start(config: Config, sink: Sink) -> Result<Handle> {
         pending: Touched::default(),
         flush_due: false,
         bodies_in_flight: HashSet::new(),
+        prefetching_avatars: false,
         body_failures: HashMap::new(),
         soon: VecDeque::new(),
         later: VecDeque::new(),
@@ -199,6 +207,7 @@ struct Core {
     pending: Touched,
     flush_due: bool,
     bodies_in_flight: HashSet<String>,
+    prefetching_avatars: bool,
     /// The bodies the server failed to fetch: how many times in a row, and when last.
     body_failures: HashMap<String, (u32, Instant)>,
     /// Bodies to ask for: of threads about to be opened, then of the inbox's newest mail.
@@ -248,6 +257,52 @@ fn new_id() -> String {
 fn waits_for_upload(op: &Op) -> bool {
     let Op::Send { draft, .. } = op else { return false };
     draft.attachments.iter().any(|attachment| attachment.upload.is_none() && attachment.path.is_some())
+}
+
+/// Where a sender's picture is kept, and the mark that they have none.
+fn avatar_files(data_dir: &Path, email: &str) -> (PathBuf, PathBuf) {
+    let name = hex::encode(Sha256::digest(email.as_bytes()));
+    let folder = data_dir.join("avatars");
+    (folder.join(&name), folder.join(format!("{name}.none")))
+}
+
+/// What is kept of a sender's picture while it is fresh: the file, or that they have none.
+fn kept_avatar(image: &Path, none: &Path) -> Option<Option<PathBuf>> {
+    if newer_than(image, AVATAR_KEPT) {
+        return Some(Some(image.to_path_buf()));
+    }
+    newer_than(none, AVATAR_KEPT_NONE).then_some(None)
+}
+
+/// Asks the server for a sender's picture and keeps the answer.
+async fn fetch_avatar(
+    http: reqwest::Client,
+    server: String,
+    token: String,
+    email: String,
+    image: PathBuf,
+    none: PathBuf,
+) -> Result<Option<PathBuf>> {
+    let url = format!("/api/avatar?email={}", crate::http::encode(&email));
+    let found = crate::http::download_found(&http, &server, &url, &token).await?;
+    if let Some(folder) = image.parent() {
+        tokio::fs::create_dir_all(folder).await?;
+    }
+    let Some(bytes) = found else {
+        tokio::fs::write(&none, b"").await?;
+        let _ = tokio::fs::remove_file(&image).await;
+        return Ok(None);
+    };
+    let partial = image.with_extension("part");
+    tokio::fs::write(&partial, bytes).await?;
+    tokio::fs::rename(&partial, &image).await?;
+    let _ = tokio::fs::remove_file(&none).await;
+    Ok(Some(image))
+}
+
+fn newer_than(path: &Path, age: Duration) -> bool {
+    let modified = std::fs::metadata(path).and_then(|metadata| metadata.modified());
+    modified.is_ok_and(|modified| modified.elapsed().is_ok_and(|elapsed| elapsed < age))
 }
 
 /// A name that stays one file in one folder.
@@ -469,6 +524,7 @@ impl Core {
             }
             Command::CancelSend { op_id } => self.cancel_send(&op_id),
             Command::OpenAttachment { message, index } => return self.open_attachment(id, &message, index),
+            Command::Avatar { email } => return self.avatar(id, &email),
             Command::PrintThread { thread } => self.print_thread(&thread),
             Command::Search { query } => return self.search(id, query),
             Command::Refresh => return self.refresh(id),
@@ -1491,6 +1547,55 @@ impl Core {
         None
     }
 
+    /// Kept for a month, or a week when the sender had none; when the server can't be reached,
+    /// whatever was found before.
+    fn avatar(&mut self, id: u64, email: &str) -> Option<Result<Value>> {
+        let email = email.trim().to_lowercase();
+        let (image, none) = avatar_files(&self.data_dir, &email);
+        let answer = |path: Option<&Path>| json!({ "path": path.map(|path| path.display().to_string()) });
+        if let Some(kept) = kept_avatar(&image, &none) {
+            return Some(Ok(answer(kept.as_deref())));
+        }
+        let (Some(server), Some(token), false) = (self.server(), self.token(), self.demo) else {
+            return Some(Ok(answer(image.exists().then_some(&image))));
+        };
+        let before = image.clone();
+        self.spawn(fetch_avatar(self.http.clone(), server, token, email, image, none), move |core, result| {
+            let found = result.unwrap_or_else(|_| before.exists().then_some(before));
+            core.reply(id, Ok(answer(found.as_deref())))
+        });
+        None
+    }
+
+    /// Keeps the pictures of the newest inbox mail's senders, so their threads open with them.
+    fn prefetch_avatars(&mut self) {
+        let (Some(server), Some(token), false, false) =
+            (self.server(), self.token(), self.demo, self.prefetching_avatars)
+        else {
+            return;
+        };
+        let missing: Vec<(String, PathBuf, PathBuf)> = (self.store.recent_senders(PREFETCH).unwrap_or_default())
+            .into_iter()
+            .map(|email| {
+                let (image, none) = avatar_files(&self.data_dir, &email);
+                (email, image, none)
+            })
+            .filter(|(_, image, none)| kept_avatar(image, none).is_none())
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        self.prefetching_avatars = true;
+        let http = self.http.clone();
+        let fetches = missing.into_iter().map(move |(email, image, none)| {
+            fetch_avatar(http.clone(), server.clone(), token.clone(), email, image, none)
+        });
+        self.spawn(
+            futures_util::stream::iter(fetches).buffer_unordered(AVATARS_IN_FLIGHT).for_each(|_| async {}),
+            |core, ()| core.prefetching_avatars = false,
+        );
+    }
+
     fn print_thread(&self, thread: &str) -> Result<Value> {
         let messages = self.store.thread_messages(thread)?;
         if messages.is_empty() {
@@ -1690,6 +1795,7 @@ impl Core {
         }
         let missing = self.store.missing_bodies(PREFETCH).unwrap_or_default();
         self.queue_bodies(missing, false);
+        self.prefetch_avatars();
         self.check_settled();
     }
 

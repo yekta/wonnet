@@ -24,8 +24,10 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         let initials = mail["initials"] as? String ?? ""
+        let avatar = (mail["avatar"] as? String).flatMap(URL.init(string:))
         Task {
-            contentHandler(await MessageNotification.fromSender(content, email: email, initials: initials))
+            let picture: Data? = if let avatar { await SenderAvatar.download(avatar) } else { nil }
+            contentHandler(await MessageNotification.fromSender(content, email: email, initials: initials, avatar: picture))
         }
     }
 }

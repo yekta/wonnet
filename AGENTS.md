@@ -75,6 +75,11 @@ What the server and the core agree on.
 - `push.rs`: new inbox mail pushed to the iOS app through APNs, sealed with each device's own key
   so Apple carries only ciphertext; a background push takes a notification down once its mail
   is read or leaves the inbox.
+- `avatars.rs`: senders' pictures, their Gravatar or else their company's logo (its BIMI record's,
+  or the icon its website gives itself), as square JPEGs. Looked up as their mail comes, once for
+  every user, kept, and only ever fetched from public addresses. A push carries a signed address
+  of its sender's, for the notification extension, which has no session. The core fetches the
+  newest senders' ahead, as it does bodies.
 - `seed.rs`: `mail-server seed` gives a Stalwart server a demo user with a few hundred messages.
 - `migrations/`: the schema. `e2e/`: the real router on a fresh database per test, with a fake
   Google; `e2e/stalwart.rs` runs Stalwart, the server and the core together.
@@ -124,7 +129,8 @@ the iOS notification extension uses too. `Sources/MailUI/Shared` is what both us
   `MailStore.swift` is the state the views show (`+Actions.swift`: what can be done to threads),
   `Preferences.swift` the synced settings, `Notifier.swift` notifications (their buttons, the
   push token, taking them down) and the badge,
-  `AddressBook.swift` the device's contacts (their names to the core, their photos to `Avatar`).
+  `AddressBook.swift` the device's contacts (their names to the core, their photos to `Avatar`),
+  `SenderPhotos.swift` the pictures the server found of the others.
 - `Shared/Platform`: `Platform.swift` (what the two systems call differently; sizes are written
   as on the Mac and `Platform.scale` enlarges them on iOS) and `Symbol.swift` (the icons, from
   Lucide's font, `Fonts/lucide.ttf`; a new one is a case with its character from the same

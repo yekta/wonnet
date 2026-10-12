@@ -159,7 +159,8 @@ async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
             tracing::warn!("device {} of user {user_id} has a key that doesn't open", short(&device.token));
             continue;
         };
-        let mut pushes: Vec<Push> = fresh.iter().take(MOST_ALERTS).rev().map(|mail| alert(&key, mail, badge)).collect();
+        let mut pushes: Vec<Push> =
+            fresh.iter().take(MOST_ALERTS).rev().map(|mail| alert(state, &key, mail, badge)).collect();
         if !settled.is_empty() || (fresh.is_empty() && badge_changed) {
             pushes.push(background(&key, &settled, badge));
         }
@@ -205,7 +206,7 @@ struct Push {
 }
 
 /// New mail. Without the extension (or its key) it reads "New mail".
-fn alert(key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Push {
+fn alert(state: &AppState, key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Push {
     let from = mail_protocol::Address { name: mail.from_name.clone(), email: mail.from_email.clone() };
     let content = json!({
         "thread": thread_key(mail.account_id, &mail.thread_id),
@@ -214,6 +215,7 @@ fn alert(key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Push {
         "from": from.display(),
         "email": from.email,
         "initials": from.initials(),
+        "avatar": crate::avatars::signed_url(state, &from.email),
         "subject": mail.subject,
         "snippet": mail.snippet,
     });

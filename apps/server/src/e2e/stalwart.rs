@@ -103,6 +103,12 @@ async fn seeded_mail_reaches_the_core_and_archiving_and_deleting_reach_stalwart(
     let first = rows[0].clone();
     assert!(first["senders"].as_str().unwrap().contains("me ("), "{first}");
 
+    let pictures = core._data.path().join("avatars");
+    eventually("the senders' pictures, looked up ahead", async || {
+        std::fs::read_dir(&pictures).ok().and_then(|mut kept| kept.next()).map(|_| ())
+    })
+    .await;
+
     let thread = first["id"].as_str().unwrap().to_string();
     let opened = core.call(json!({ "type": "open_thread", "thread": thread })).await;
     assert!(opened["messages"].as_array().unwrap().len() > 1);

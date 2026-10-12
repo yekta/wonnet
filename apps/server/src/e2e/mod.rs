@@ -3,6 +3,7 @@
 //! is real.
 
 mod attachments;
+mod avatars;
 mod changes;
 mod push;
 mod rules;
@@ -77,6 +78,8 @@ pub fn config(base: &str) -> Config {
         poll_interval: std::time::Duration::from_millis(300),
         workers: false,
         apns: None,
+        gravatar_url: String::new(),
+        site_url: String::new(),
     }
 }
 
@@ -105,6 +108,7 @@ impl Server {
             background: crate::background_pool(&db),
             db: server_db,
             http: reqwest::Client::new(),
+            avatars: crate::avatars::Avatars::new(reqwest::Client::new(), false),
             hub: Default::default(),
             workers: Default::default(),
             stopping: tokio::sync::watch::channel(false).0,

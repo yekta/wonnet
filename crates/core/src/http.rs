@@ -77,6 +77,15 @@ pub async fn download(http: &reqwest::Client, server: &str, path: &str, token: &
     Ok(answered(request).await?.bytes().await?.to_vec())
 }
 
+/// A file the server may not have: `None` when it answers that it has none.
+pub async fn download_found(http: &reqwest::Client, server: &str, path: &str, token: &str) -> Result<Option<Vec<u8>>> {
+    let response = http.get(url(server, path)).bearer_auth(token).send().await?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    Ok(Some(response.error_for_status()?.bytes().await?.to_vec()))
+}
+
 /// Percent-encodes all but the characters a URL never needs encoded.
 pub fn encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());

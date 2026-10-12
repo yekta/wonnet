@@ -12,8 +12,9 @@ import UIKit
 private typealias SystemFont = UIFont
 #endif
 
-/// A sender's avatar: their contact photo, or their initials on a colour picked from their
-/// address. The app's `Avatar` picks the same colour.
+/// A sender's avatar: their contact photo, the picture the server found (their Gravatar or their
+/// company's logo), or their initials on a colour picked from their address. The app's `Avatar`
+/// picks the same colour.
 public enum SenderAvatar {
     /// Which of the account colours an address gets.
     public static func colorIndex(_ email: String, count: Int) -> Int {
@@ -22,8 +23,17 @@ public enum SenderAvatar {
     }
 
     /// The avatar as image data, for a notification.
-    public static func image(initials: String, email: String) -> Data? {
-        photo(email) ?? drawn(initials: initials, email: email)
+    public static func image(initials: String, email: String, avatar: Data?) -> Data? {
+        photo(email) ?? avatar ?? drawn(initials: initials, email: email)
+    }
+
+    /// The picture at the address a push gives, or nil when the sender has none.
+    public static func download(_ url: URL) async -> Data? {
+        let request = URLRequest(url: url, timeoutInterval: 5)
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200
+        else { return nil }
+        return data
     }
 
     /// Only with access already given: a notification never asks for it.

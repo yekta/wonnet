@@ -287,6 +287,11 @@ pub enum Command {
     Person {
         email: String,
     },
+    /// `{path}`: a sender's picture from the server (their Gravatar or their company's logo) as
+    /// a file on this device, or null when they have none.
+    Avatar {
+        email: String,
+    },
     /// A `Preferences`: every synced preference.
     Preferences,
     /// `value` null removes the key. `{}`.
