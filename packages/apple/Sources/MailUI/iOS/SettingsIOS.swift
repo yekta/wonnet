@@ -185,7 +185,7 @@ private struct GeneralPage: View {
         .id("updates")
         SettingsListSection("Server", footer: "Wonnet's server syncs your accounts and keeps this \(Platform.device)'s copy of the mail current. Offline, changes wait and are sent once connected.") {
             LabeledContent("Address", value: store.server)
-            LabeledContent("Status", value: store.connection == "online" ? "Connected" : store.connection == "connecting" ? "Connecting…" : "Offline")
+            LabeledContent("Status", value: store.connection == "online" ? "Connected" : store.connection == "connecting" ? "Connecting" : "Offline")
         }
         .id("server")
     }

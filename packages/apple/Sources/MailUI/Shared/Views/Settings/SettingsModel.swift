@@ -30,14 +30,14 @@ extension MailStore {
     var connectionText: String {
         switch connection {
         case "online": "Connected"
-        case "connecting": "Connecting…"
+        case "connecting": "Connecting"
         default: "Offline. Changes wait and are sent once connected."
         }
     }
 
     func status(of account: AccountView) -> String {
         switch account.status {
-        case "syncing": "Syncing…"
+        case "syncing": "Syncing"
         case "reauth": "Sign in again: remove the account and add it back"
         case "error": "Can't reach the provider right now"
         default: account.provider == "gmail" ? "Gmail" : "JMAP"

@@ -1,43 +1,5 @@
 import SwiftUI
 
-/// A few choices on a line, one of them chosen: the appearance, the undo delay.
-struct Segmented<Option: Hashable>: View {
-    let options: [Option]
-    @Binding var selection: Option
-    let title: (Option) -> String
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(options, id: \.self) { option in
-                Button {
-                    selection = option
-                } label: {
-                    Segment(title: title(option), chosen: option == selection)
-                }
-                .buttonStyle(.press)
-            }
-        }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.backgroundSecondary.color))
-        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
-    }
-}
-
-private struct Segment: View {
-    let title: String
-    let chosen: Bool
-    @Environment(\.hovered) private var hovered
-
-    var body: some View {
-        Text(title)
-            .textStyle(chosen && Platform.strongSelection ? .labelStrong : .label, color: chosen || hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
-            .padding(.horizontal, Space.m)
-            .frame(height: ControlSize.small.height * Platform.scale)
-            .background(RoundedRectangle(cornerRadius: Radius.xs).fill(chosen ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear))
-            .contentShape(RoundedRectangle(cornerRadius: Radius.xs))
-    }
-}
-
 /// A choice from a short list, under a label: which label, which sender. `none` is the
 /// choice of nothing, shown when `selection` is nil.
 struct Dropdown<Option: Hashable>: View {

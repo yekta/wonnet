@@ -323,7 +323,7 @@ struct MessageCard: View {
                 )
                 .contextMenu {
                     Button("Open") { open(index) }
-                    Button("Save…") { save(index) }
+                    Button("Save") { save(index) }
                 }
             }
         }

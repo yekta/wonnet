@@ -175,7 +175,7 @@ private struct GeneralSettings: View {
             SettingsRow {
                 SettingsLabel(title: "Theme")
             } trailing: {
-                Segmented(options: Appearance.allCases, selection: $store.appearance, title: \.name)
+                ChoiceMenu(options: Appearance.allCases, selection: $store.appearance, title: \.name)
             }
         }
         SettingsGroup(id: "updates", title: "Updates", detail: "New versions are downloaded and installed on their own; a restart finishes them.") {
@@ -214,8 +214,8 @@ private struct VersionRow: View {
         case .idle, .checking: nil
         case .upToDate: "Up to date."
         case .available(let version): "Wonnet \(version) is available."
-        case .downloading(let version, let fraction): "Downloading \(version)… \(Int(fraction * 100))%"
-        case .installing(let version): "Installing \(version)…"
+        case .downloading(let version, let fraction): "Downloading \(version), \(Int(fraction * 100))%"
+        case .installing(let version): "Installing \(version)"
         case .ready(let version): "Wonnet \(version) is installed. Restart to use it."
         case .failed(let message): message
         }
@@ -275,7 +275,7 @@ private struct AccountCard: View, Equatable {
                 SettingsLabel(title: account.title, detail: store.subtitle(of: account), dot: Theme.accountColor(account.color).color, heading: true)
             } trailing: {
                 IconMenu(symbol: .ellipsis, help: "More", circled: false) {
-                    Button(role: .destructive) { store.confirmRemoving(account) } label: { Text("Remove Account…") }
+                    Button(role: .destructive) { store.confirmRemoving(account) } label: { Text("Remove Account") }
                 }
             }
             SettingsDivider()
@@ -567,7 +567,7 @@ private struct WritingSettings: View {
             SettingsRow {
                 SettingsLabel(title: "Undo send", detail: "How long a message waits after Send, to be taken back.")
             } trailing: {
-                Segmented(options: MailStore.undoDelays, selection: $store.undoDelay, title: MailStore.undoDelayName)
+                ChoiceMenu(options: MailStore.undoDelays, selection: $store.undoDelay, title: MailStore.undoDelayName)
             }
         }
         let snippets = store.snippets
@@ -580,7 +580,7 @@ private struct WritingSettings: View {
                     SettingsLabel(title: snippet.name, detail: snippet.text.replacingOccurrences(of: "\n", with: " "), detailLines: 1)
                 } trailing: {
                     IconMenu(symbol: .ellipsis, help: "More", circled: false) {
-                        Button("Edit…") { editing = snippet }
+                        Button("Edit") { editing = snippet }
                         Button("Remove", role: .destructive) { store.setPreference(snippet.key, nil) }
                     }
                 }

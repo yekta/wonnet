@@ -37,7 +37,7 @@ struct AccountNameField: View {
         #endif
     }
 
-    private static let placeholder = "Work, Personal…"
+    private static let placeholder = "Work, Personal"
 
     private func save() {
         store.setAccountName(account, text)

@@ -120,6 +120,7 @@ struct ActionButton: View {
         let size: ControlSize
         let pending: Bool
         let wide: Bool
+        var chevron = false
         @Environment(\.hovered) private var hovered
 
         var body: some View {
@@ -129,6 +130,10 @@ struct ActionButton: View {
                     // the words have on their side.
                     .padding(.leading, symbol != nil || pending ? -Self.iconBearing : 0)
                 Text(title).textStyle(size.text, color: foreground)
+                if chevron {
+                    Image(.chevronDown, size: size.icon - 1).foregroundStyle(foreground)
+                        .padding(.trailing, -Self.iconBearing)
+                }
             }
             .frame(maxWidth: wide ? .infinity : nil)
             .padding(.horizontal, (size.height / 2) * Platform.scale)
@@ -178,6 +183,31 @@ struct ActionMenu<Content: View>: View {
             content
         } label: {
             ActionButton.Face(title: title, symbol: symbol, variant: variant, size: size, pending: false, wide: false)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.press)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+}
+
+/// One of a few choices, as a button with a chevron that opens them: the theme, the undo delay.
+struct ChoiceMenu<Option: Hashable>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    var size: ControlSize = .regular
+    let title: (Option) -> String
+
+    var body: some View {
+        Menu {
+            Picker(selection: $selection) {
+                ForEach(options, id: \.self) { Text(title($0)).tag($0) }
+            } label: {
+                EmptyView()
+            }
+            .pickerStyle(.inline)
+        } label: {
+            ActionButton.Face(title: title(selection), symbol: nil, variant: .outline, size: size, pending: false, wide: false, chevron: true)
         }
         .menuStyle(.button)
         .buttonStyle(.press)

@@ -13,7 +13,7 @@ struct SnoozePicker: View {
         Sheet(title: store.remindsInsteadOfSnoozing ? "Remind me if nobody answers" : "Snooze until") {
             SearchedList(
                 field: SearchField(
-                    placeholder: "Tomorrow 9am, in 2 hours, fri…", text: $text, symbol: .clock,
+                    placeholder: "Tomorrow 9am, in 2 hours, fri", text: $text, symbol: .clock,
                     submit: { pick(highlighted) }, move: { highlighted = highlighted.moved(by: $0, in: choices.count) },
                     escape: { store.snoozing = nil }
                 )

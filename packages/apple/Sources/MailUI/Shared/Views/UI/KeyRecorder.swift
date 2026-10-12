@@ -33,7 +33,7 @@ struct KeyRecorder: View {
         var body: some View {
             Group {
                 if let strokes {
-                    Text(strokes.isEmpty ? "Press keys" : strokes.map(Keys.label).joined(separator: " ") + " …")
+                    Text(strokes.isEmpty ? "Press keys" : strokes.map(Keys.label).joined(separator: " "))
                         .textStyle(.label, color: Tokens.primary.color)
                 } else if let key {
                     KeyCaps(caps: Keys.caps(key))

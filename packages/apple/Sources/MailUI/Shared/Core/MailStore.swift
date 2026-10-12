@@ -955,7 +955,7 @@ public final class MailStore {
                 if let sendAt {
                     show("Sending \(sendAt.formatted(date: .abbreviated, time: .shortened)).", action: "Undo") { self.undoSend(sent.opId) }
                 } else if undoDelay > 0 {
-                    show("Sending…", action: "Undo", duration: TimeInterval(undoDelay)) { self.undoSend(sent.opId) }
+                    show("Sending", action: "Undo", duration: TimeInterval(undoDelay)) { self.undoSend(sent.opId) }
                 }
             } catch {
                 show(error.localizedDescription)
@@ -1134,7 +1134,7 @@ public final class MailStore {
     func removeAccount(_ id: String) {
         Task {
             _ = try? await bridge.call("remove_account", ["account": id], as: Empty.self)
-            show("Removing the account…")
+            show("Removing the account")
         }
     }
 

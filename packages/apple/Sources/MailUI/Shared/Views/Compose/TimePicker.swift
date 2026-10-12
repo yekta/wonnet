@@ -14,7 +14,7 @@ struct TimePicker: View {
         Sheet(title: title) {
             SearchedList(
                 field: SearchField(
-                    placeholder: "Tomorrow 9am, in 2 hours, Friday…", text: $text, symbol: .clock,
+                    placeholder: "Tomorrow 9am, in 2 hours, Friday", text: $text, symbol: .clock,
                     submit: choose, move: { highlighted = highlighted.moved(by: $0, in: choices.count) }
                 )
             ) {

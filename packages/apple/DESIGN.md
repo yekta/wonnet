@@ -24,7 +24,7 @@ added to the component, not to the view.
 - Everything clickable has a hover state, shown at once: no animation on colours. A button's
   face reads `@Environment(\.hovered)`, set by `PressStyle`, which every button uses.
 - Hovered and selected things are filled from two pairs of tokens. Small things (buttons, tabs,
-  segments, the sidebar's rows) hover in `backgroundAccent` and are selected in
+  the sidebar's rows) hover in `backgroundAccent` and are selected in
   `backgroundAccentStronger`. Large things (thread rows, choice rows, a banner) hover in
   `backgroundAccentLarger` and are pressed or highlighted in `backgroundAccentLargerStronger`:
   the same steps dimmer, because a fill across a whole row reads stronger than one behind a
@@ -44,6 +44,8 @@ added to the component, not to the view.
   above the other `Theme.rowGap` (2pt); each pads half of it inside its hit area, and its hit
   shape is the whole rectangle. The gap is only drawn, never dead: a view never adds spacing
   between buttons.
+- No words end in "…": not a button, a menu item, a status or a placeholder. "Remove Account",
+  "Syncing", never "Remove Account…".
 - Every button can carry an icon and has a `pending` state; while pending, the spinner stands
   where the icon goes and the button waits.
 - Everything is shown as soon as it is known; what is being fetched again is shown quietly
@@ -52,7 +54,7 @@ added to the component, not to the view.
   looking, or a toast with the message.
 - The platform's controls are used when they fit, not by default: the switch (`ToggleRow`),
   alerts, menus, iOS's navigation bar for sheets' titles and buttons, Quick Look, the file
-  pickers. Segmented controls, dropdowns, fields and buttons are ours.
+  pickers. Choice menus, dropdowns, fields and buttons are ours.
 - iOS's settings are the system's own: a page sheet of grouped `List`s, on `background`
   with rows on `card`, with its `Toggle`s, menu `Picker`s, `TextField`s, pages pushed for
   what is written, swipes to remove and a hold to reorder, each group a `SettingsListSection`
@@ -81,7 +83,7 @@ added to the component, not to the view.
 | `InputField` | A text field with its label above, or a text box of `lines` |
 | `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`: over the list on the Mac, under it on iOS; `.bar` as the top bar's capsule |
 | `Dropdown` | A choice from a short list, with a label |
-| `Segmented` | A few choices on a line |
+| `ChoiceMenu` | One of a few choices, as a button with a chevron that opens them |
 | `ToggleRow` | A switch with its words |
 | `Disclosure` | A line that opens more |
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |

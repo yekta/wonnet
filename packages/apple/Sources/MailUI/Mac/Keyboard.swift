@@ -12,21 +12,21 @@ struct MacCommands: Commands {
             Button("New Message") { store.newMessage() }.shortcut("compose", store).disabled(store.sheetOpen)
         }
         CommandGroup(after: .appInfo) {
-            Button("Check for Updates…") { store.updater.check(asked: true) }
+            Button("Check for Updates") { store.updater.check(asked: true) }
         }
         CommandGroup(replacing: .appSettings) {
-            Button("Settings…") { store.openSettings() }.shortcut("settings", store).disabled(store.sheetOpen)
+            Button("Settings") { store.openSettings() }.shortcut("settings", store).disabled(store.sheetOpen)
         }
         CommandGroup(replacing: .printItem) {
-            Button("Print…") { store.run(.print) }.shortcut("print", store).disabled(store.sheetOpen || store.current == nil)
+            Button("Print") { store.run(.print) }.shortcut("print", store).disabled(store.sheetOpen || store.current == nil)
         }
         CommandMenu("Message") {
-            Button("Command Palette…") { store.showPalette() }.shortcut("palette", store).disabled(store.sheetOpen)
+            Button("Command Palette") { store.showPalette() }.shortcut("palette", store).disabled(store.sheetOpen)
             Button("Keybindings") { store.openSettings(.keybindings) }.shortcut("keybindings", store).disabled(store.sheetOpen)
             Divider()
             Button("Unsubscribe") { store.run(.unsubscribe) }.shortcut("unsubscribe", store)
                 .disabled(store.sheetOpen || store.current == nil && store.selection.isEmpty)
-            Button("Get Me To Zero…") { store.archiveAll() }.shortcut("zero", store).disabled(store.sheetOpen || store.searchRows != nil || store.rows.isEmpty)
+            Button("Get Me To Zero") { store.archiveAll() }.shortcut("zero", store).disabled(store.sheetOpen || store.searchRows != nil || store.rows.isEmpty)
         }
         CommandMenu("Go") {
             Button("All Inboxes") { store.select(mailbox: "inbox") }.shortcut("go.account.0", store).disabled(store.sheetOpen)

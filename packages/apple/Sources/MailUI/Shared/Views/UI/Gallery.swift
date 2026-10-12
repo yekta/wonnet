@@ -8,7 +8,7 @@ struct GalleryView: View {
     @State private var query = ""
     @State private var on = true
     @State private var off = false
-    @State private var segment = "Light"
+    @State private var theme = "Light"
     @State private var choice: String? = "Work"
     @State private var tab = "important"
     @State private var swatch = "account-3"
@@ -89,7 +89,7 @@ struct GalleryView: View {
                         InputField(label: "Password", text: $text, secure: true)
                         InputField(label: "Lines", text: $empty, placeholder: "A few lines", lines: 3)
                         Dropdown(label: "Dropdown", options: ["Work", "Home"], selection: $choice, none: "None") { $0 }
-                        Segmented(options: ["System", "Light", "Dark"], selection: $segment) { $0 }
+                        ChoiceMenu(options: ["System", "Light", "Dark"], selection: $theme) { $0 }
                         SearchField(placeholder: "Search", text: $query, style: .bar, autofocus: false)
                         Card { SearchField(placeholder: "In a sheet", text: $query, autofocus: false) }
                         ToggleRow(title: "On", detail: "With a line about it.", isOn: $on)
