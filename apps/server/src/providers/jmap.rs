@@ -435,6 +435,7 @@ impl Jmap {
         let list = answers[1]["list"].as_array().cloned().unwrap_or_default();
         let messages: Vec<RemoteMessage> = list.iter().map(|email| remote(email, mailboxes)).collect();
         db::upsert_messages(&state.db, account, &messages).await?;
+        crate::avatars::warm(state, messages.iter().map(|message| message.from.email.as_str()));
         Ok((list.len(), answers[1]["state"].as_str().map(String::from)))
     }
 
@@ -469,6 +470,7 @@ impl Jmap {
                 .map(|email| remote(&email, mailboxes))
                 .collect();
             db::upsert_messages(&state.db, account, &messages).await?;
+            crate::avatars::warm(state, messages.iter().map(|message| message.from.email.as_str()));
             let destroyed: Vec<String> = answers[0]["destroyed"]
                 .as_array()
                 .into_iter()

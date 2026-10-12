@@ -1,4 +1,5 @@
 mod api;
+mod avatars;
 mod changes;
 mod config;
 mod db;
@@ -42,6 +43,7 @@ pub struct Inner {
     /// What runs in the background (LISTEN, the scheduler) has connections of its own.
     pub background: sqlx::PgPool,
     pub http: reqwest::Client,
+    pub avatars: avatars::Avatars,
     pub sealer: seal::Sealer,
     pub hub: hub::Hub,
     pub workers: workers::Workers,
@@ -77,6 +79,7 @@ fn router(state: AppState) -> Router {
         .route("/api/accounts/jmap", post(api::add_jmap))
         .route("/api/dev/login", post(api::dev_login))
         .route("/api/messages/{id}/attachments/{index}", get(api::attachment))
+        .route("/api/avatar", get(avatars::avatar))
         .route("/api/devices", post(api::add_device))
         .route("/api/devices/{token}", delete(api::remove_device))
         .route("/api/uploads", post(api::upload).layer(DefaultBodyLimit::max(api::UPLOAD_LIMIT)))
@@ -141,7 +144,9 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,usvg=error".into()),
+        )
         .init();
     mail_protocol::tls::install();
 
@@ -175,6 +180,7 @@ async fn main() {
         background: background_pool(&db),
         db,
         http: http_client(),
+        avatars: avatars::Avatars::new(avatars::public_client(), true),
         hub: Default::default(),
         workers: Default::default(),
         stopping: tokio::sync::watch::channel(false).0,

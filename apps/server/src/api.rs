@@ -37,7 +37,7 @@ async fn signed_in(state: &AppState, headers: &HeaderMap) -> AppResult<Option<Uu
     user.map(Some).ok_or_else(|| AppError::unauthorized("This session has ended. Sign in again."))
 }
 
-async fn user(state: &AppState, headers: &HeaderMap) -> AppResult<Uuid> {
+pub async fn user(state: &AppState, headers: &HeaderMap) -> AppResult<Uuid> {
     signed_in(state, headers).await?.ok_or_else(|| AppError::unauthorized("Sign in first."))
 }
 

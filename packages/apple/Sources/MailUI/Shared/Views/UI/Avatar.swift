@@ -1,7 +1,8 @@
 import MailPush
 import SwiftUI
 
-/// Someone's contact photo, or a circle with their initials in a colour picked from their address.
+/// Someone's contact photo, else their Gravatar or their company's logo, else a circle with their
+/// initials in a colour picked from their address.
 struct Avatar: View {
     let initials: String
     let email: String
@@ -12,16 +13,27 @@ struct Avatar: View {
         return colors[SenderAvatar.colorIndex(email, count: colors.count)].color
     }
 
+    private var photo: PlatformImage? {
+        let key = email.lowercased()
+        return AddressBook.shared.photos[key] ?? SenderPhotos.shared.photos[key]
+    }
+
     var body: some View {
-        if let photo = AddressBook.shared.photos[email.lowercased()] {
-            Image(platformImage: photo)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size * Platform.scale, height: size * Platform.scale)
-                .clipShape(Circle())
-                .accessibilityHidden(true)
-        } else {
-            initialsCircle
+        Group {
+            if let photo {
+                Image(platformImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size * Platform.scale, height: size * Platform.scale)
+                    .clipShape(Circle())
+                    .accessibilityHidden(true)
+            } else {
+                initialsCircle
+            }
+        }
+        .task(id: email) {
+            guard AddressBook.shared.photos[email.lowercased()] == nil else { return }
+            await SenderPhotos.shared.load(email)
         }
     }
 

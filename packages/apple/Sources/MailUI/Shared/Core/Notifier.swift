@@ -86,7 +86,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             content.categoryIdentifier = "message"
             content.userInfo = ["thread": message.thread]
             Task.detached {
-                let shown = await MessageNotification.fromSender(content, email: message.email, initials: message.initials)
+                let avatar = await SenderPhotos.shared.data(message.email)
+                let shown = await MessageNotification.fromSender(
+                    content, email: message.email, initials: message.initials, avatar: avatar
+                )
                 try? await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: shown, trigger: nil))
             }
         }

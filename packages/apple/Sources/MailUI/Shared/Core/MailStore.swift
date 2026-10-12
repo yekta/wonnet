@@ -299,6 +299,7 @@ public final class MailStore {
             return
         }
         Notifier.shared.bridge = bridge
+        SenderPhotos.shared.bridge = bridge
         Notifier.shared.answer = { [weak self] answer, thread in await self?.answer(answer, thread: thread) }
         Outgoing.prune()
         #if os(macOS)

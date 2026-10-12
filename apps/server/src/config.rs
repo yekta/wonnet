@@ -25,6 +25,9 @@ pub struct Config {
     pub workers: bool,
     /// Push notifications; without them nothing is pushed.
     pub apns: Option<ApnsConfig>,
+    pub gravatar_url: String,
+    /// A company's website, with `{domain}` for its domain.
+    pub site_url: String,
 }
 
 pub struct ApnsConfig {
@@ -81,6 +84,8 @@ impl Config {
             poll_interval: Duration::from_secs(number("POLL_SECONDS", 10)?),
             workers: true,
             apns: ApnsConfig::from_env(),
+            gravatar_url: crate::avatars::GRAVATAR_URL.to_string(),
+            site_url: crate::avatars::SITE_URL.to_string(),
         })
     }
 
