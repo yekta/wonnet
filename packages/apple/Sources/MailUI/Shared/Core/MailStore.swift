@@ -118,9 +118,9 @@ public final class MailStore {
     /// The mailboxes over the page (Mac).
     var sidebarOpen = false
     /// How far the list and the open thread are scrolled, as their views report it; a view made
-    /// anew goes back to it.
+    /// anew goes back to it. A thread not scrolled yet has no offset: it opens on its message.
     @ObservationIgnored var listOffset: CGFloat = 0
-    @ObservationIgnored var threadOffset: CGFloat = 0
+    @ObservationIgnored var threadOffset: CGFloat?
     /// How tall the open thread's bodies were, by message id, when they were `bodyWidth` wide,
     /// so a thread opened again at the same width is laid out before its pages are.
     @ObservationIgnored var bodyHeights: [String: CGFloat] = [:]
@@ -345,7 +345,7 @@ public final class MailStore {
         focusedMessage = ui.focused
         if ui.images, let open = boot.thread?.id { imagesShown.insert(open) }
         listOffset = CGFloat(ui.listOffset)
-        threadOffset = CGFloat(ui.threadOffset)
+        threadOffset = ui.threadOffset.map { CGFloat($0) }
         sidebarOpen = ui.sidebar
         if var restored = ui.compose {
             restored.keep = restored.keep || restored.hasContent
@@ -367,7 +367,7 @@ public final class MailStore {
     private var uiState: UiState {
         UiState(
             mailbox: mailbox, filter: filter, thread: conversation?.id, selected: selected, rows: rows.count,
-            listOffset: Double(listOffset), threadOffset: Double(threadOffset), selection: Array(selection),
+            listOffset: Double(listOffset), threadOffset: threadOffset.map { Double($0) }, selection: Array(selection),
             search: searchQuery, compose: compose, sidebar: sidebarOpen, unfolded: Array(unfoldedMessages),
             focused: focusedMessage, images: conversation.map { imagesShown.contains($0.id) } ?? false,
             heights: bodyHeights.mapValues { Double($0) }, bodyWidth: Double(bodyWidth)
@@ -661,7 +661,7 @@ public final class MailStore {
             unfoldedMessages = []
             originalMessages = []
             focusedMessage = nil
-            threadOffset = 0
+            threadOffset = nil
             bodyHeights = [:]
         }
         Task {
