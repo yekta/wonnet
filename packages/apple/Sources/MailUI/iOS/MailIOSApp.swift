@@ -186,11 +186,20 @@ struct MailboxScreen: View {
         HeaderBar(inset: Space.s) {
             IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: openDrawer)
         } center: {
-            Text(store.baseMailboxName).textStyle(.subheading).lineLimit(1)
+            title.textStyle(.subheading).lineLimit(1)
         } trailing: {
             IconButton(symbol: .search, help: "Search", circled: false) { path.append(.search) }
         }
         .topBar()
+    }
+
+    /// "Inbox · Work", the dot fainter than the names.
+    private var title: Text {
+        let title = store.baseMailboxTitle
+        guard let account = title.account else { return Text(title.name) }
+        return Text(title.name)
+            + Text(" · ").foregroundStyle(Tokens.mutedForeground.color)
+            + Text(account)
     }
 
     private var editingBar: some View {

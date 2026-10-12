@@ -262,12 +262,19 @@ public final class MailStore {
 
     /// The mailbox's name, whether or not a search is on over it.
     var baseMailboxName: String {
+        let title = baseMailboxTitle
+        guard let account = title.account else { return title.name }
+        return "\(title.name) · \(account)"
+    }
+
+    /// The mailbox's name and, when it is one account's, that account's name.
+    var baseMailboxTitle: (name: String, account: String?) {
         let parts = baseMailbox.split(separator: "/").map(String.init)
         let name = allMailboxes.first(where: { $0.id == baseMailbox })?.name ?? "Inbox"
         guard parts.count > 1, let account = accounts.first(where: { $0.id == parts[0] }) else {
-            return name == "Inbox" && accounts.count > 1 ? "All Inboxes" : name
+            return (name == "Inbox" && accounts.count > 1 ? "All Inboxes" : name, nil)
         }
-        return "\(name) · \(account.title)"
+        return (name, account.title)
     }
 
     /// Whether a sheet, the palette or a question is up, when the window's keys don't apply.
