@@ -25,7 +25,7 @@ blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(-
 details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 0 8px; margin: 6px 0;
   border-radius: 9px; background: var(--background-secondary); color: var(--muted-foreground); font-size: 12px; line-height: 18px; letter-spacing: 1px; }
 details.quote > summary::-webkit-details-marker { display: none; }
-body.paper { background: var(--card); color: var(--emphasized-foreground); color-scheme: light; border-radius: var(--radius-sm); padding: 12px; }
+body.paper { background: var(--card-larger); color: var(--emphasized-foreground); color-scheme: light; border-radius: var(--radius-sm); padding: 12px; }
 @media (prefers-color-scheme: dark) {
   body.paper.dark { color: var(--foreground); color-scheme: dark; }
 }
@@ -307,7 +307,7 @@ mod tests {
         assert!(dark.html.contains("class=\"paper dark\""));
         assert!(dark.html.contains("style=\"background:var(--c0);color:var(--c1)\""));
         assert!(dark.html.contains(":root{--c0:#f4f4f5;--c1:#222;}"));
-        assert!(dark.html.contains("body.dark [bgcolor=\"#ffffff\" i]{background-color:#1a1a1a}"));
+        assert!(dark.html.contains("body.dark [bgcolor=\"#ffffff\" i]{background-color:#0f0f0f}"));
         assert!(dark.html.contains("body.dark [color=\"gray\" i]{color:"));
         assert!(dark.html.contains("bgcolor=\"#ffffff\""));
 

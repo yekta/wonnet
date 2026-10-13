@@ -11,8 +11,9 @@ added to the component, not to the view.
   colour, a number for an opacity or a radius: `Tokens.primary.opacity(Opacity.lit)`,
   `.opacity(Opacity.disabled, when: !enabled)`, `.shadow(.md)`. What is missing is added to
   `tokens.json`.
-- The page is `background`: the bars, the sidebar, the list. An open thread, a message being
-  written and a form's card are `card` on it; menus, popups and toasts are `popover`. A
+- The page is `background`: the bars, the sidebar, the list. A message being written and a
+  form's card are `card` on it; an open thread, the one card that fills the page, is
+  `cardLarger`; menus, popups and toasts are `popover`. A
   hairline on the page is `border`; inside a card it is `borderCard`, around a popover
   `borderPopover`. A field is filled with `input` and outlined in `borderInput`.
 - Text comes from the scale, `TextStyle`: `Text("…").textStyle(.caption)`. A view picks a

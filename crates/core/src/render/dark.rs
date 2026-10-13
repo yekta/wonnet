@@ -219,7 +219,7 @@ fn named(name: &str) -> Option<(u8, u8, u8)> {
 /// so white becomes a soft dark and black a soft light, and its hue stays.
 pub fn turned(color: Rgba) -> String {
     let (h, s, l) = to_hsl(color);
-    let turned = 0.10 + 0.83 * (1.0 - l);
+    let turned = 0.06 + 0.83 * (1.0 - l);
     let (r, g, b) = from_hsl(h, s, turned);
     if color.a < 1.0 {
         return format!("rgba({r},{g},{b},{})", (color.a * 100.0).round() / 100.0);
@@ -276,13 +276,13 @@ mod tests {
 
     #[test]
     fn turns_light_dark_and_dark_light_but_keeps_hue() {
-        assert_eq!(turned(parse("#ffffff").unwrap()), "#1a1a1a");
-        assert_eq!(turned(parse("black").unwrap()), "#ededed");
-        assert_eq!(turned(parse("#808080").unwrap()), "#838383");
+        assert_eq!(turned(parse("#ffffff").unwrap()), "#0f0f0f");
+        assert_eq!(turned(parse("black").unwrap()), "#e3e3e3");
+        assert_eq!(turned(parse("#808080").unwrap()), "#797979");
         let (h, _, l) = to_hsl(parse(&turned(parse("#2da44e").unwrap())).unwrap());
         let (hue, _, light) = to_hsl(parse("#2da44e").unwrap());
         assert!((h - hue).abs() < 0.02 && l > light);
-        assert_eq!(turned(parse("rgba(255, 255, 255, 0.5)").unwrap()), "rgba(26,26,26,0.5)");
+        assert_eq!(turned(parse("rgba(255, 255, 255, 0.5)").unwrap()), "rgba(15,15,15,0.5)");
     }
 
     #[test]
@@ -299,8 +299,8 @@ mod tests {
         palette.color("red");
         let css = palette.css();
         assert!(css.starts_with(":root{--c0:#FFF;--c1:rgb(34,34,34);--c2:#ddd;}"));
-        assert!(css.contains("body.dark{--c0:#1a1a1a;--c1:#d1d1d1;--c2:#363636;}"), "{css}");
-        assert!(css.contains("body.dark [bgcolor=\"#f4f4f5\" i]{background-color:#212124}"), "{css}");
+        assert!(css.contains("body.dark{--c0:#0f0f0f;--c1:#c7c7c7;--c2:#2c2c2c;}"), "{css}");
+        assert!(css.contains("body.dark [bgcolor=\"#f4f4f5\" i]{background-color:#171719}"), "{css}");
         assert!(css.contains("body.dark [color=\"red\" i]{color:"));
         assert!(Palette::default().css().is_empty());
     }
