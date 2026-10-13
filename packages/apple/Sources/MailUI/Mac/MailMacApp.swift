@@ -261,8 +261,12 @@ struct MacTopBar: View {
     /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the window.
     private var leadingInset: CGFloat { pastToolbarButton - Space.l }
 
+    /// Its words when there is room, its icon alone when there is not.
     private var compose: some View {
-        ActionButton(title: "Compose", symbol: .squarePen, variant: .outline, action: store.newMessage)
+        ViewThatFits(in: .horizontal) {
+            ActionButton(title: "Compose", symbol: .squarePen, variant: .outline, action: store.newMessage)
+            IconButton(symbol: .squarePen, help: "Compose", action: store.newMessage)
+        }
     }
 }
 #endif
