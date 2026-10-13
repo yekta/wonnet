@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// To, Cc or Bcc: the addresses as chips, a field to type more, and below it the people it could
-/// be. ↑ and ↓ move between them; Tab or Return picks one. A comma, a semicolon or a paste of
-/// many addresses makes chips of them; what can't be sent to is shown in red.
+/// be, each with their picture. ↑ and ↓ move between them; Tab or Return picks one. A comma, a
+/// semicolon or a paste of many addresses makes chips of them; what can't be sent to is shown
+/// in red.
 struct AddressField<Accessory: View>: View {
     @Environment(MailStore.self) private var store
     let label: String
@@ -15,51 +16,18 @@ struct AddressField<Accessory: View>: View {
     @State private var highlighted = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: Space.s + 2) {
-                Text(label).textStyle(.label, color: Tokens.mutedStrongerForeground.color)
-                    .frame(width: 56, height: Theme.chipHeight * Platform.scale, alignment: .leading)
-                FlowLayout(spacing: Space.xs + 2, lineSpacing: Space.xs + 2) {
-                    ForEach(Array(addresses.enumerated()), id: \.offset) { index, address in
-                        Chip(
-                            title: address.name ?? address.email, variant: address.isValid ? .plain : .invalid,
-                            help: address.isValid ? address.text : "“\(address.email)” isn't an address",
-                            remove: { addresses.remove(at: index) }
-                        )
-                    }
-                    TextField("", text: $text)
-                        .textFieldStyle(.plain)
-                        .font(.ui(.body))
-                        .foregroundStyle(Tokens.foreground.color)
-                        .focused($focused)
-                        .frame(minWidth: 120)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.emailAddress)
-                        #endif
-                        .onKeyPress(.downArrow) { moveHighlight(1) }
-                        .onKeyPress(.upArrow) { moveHighlight(-1) }
-                        .onKeyPress(.tab) { pick() ? .handled : .ignored }
-                        .onKeyPress(.return) { pick() ? .handled : .ignored }
-                        .onKeyPress(.escape) {
-                            guard !suggestions.isEmpty else { return .ignored }
-                            suggestions = []
-                            return .handled
-                        }
-                        .onKeyPress(.delete) {
-                            guard text.isEmpty, !addresses.isEmpty else { return .ignored }
-                            addresses.removeLast()
-                            return .handled
-                        }
-                        .onSubmit { _ = pick() }
+        FieldRow(label: label, wraps: true) {
+            FlowLayout(spacing: Space.xs + 2, lineSpacing: Space.xs + 2) {
+                ForEach(Array(addresses.enumerated()), id: \.offset) { index, address in
+                    Chip(
+                        title: address.name ?? address.email, variant: address.isValid ? .plain : .invalid,
+                        help: address.isValid ? address.text : "“\(address.email)” isn't an address",
+                        remove: { addresses.remove(at: index) }
+                    )
                 }
-                accessory
+                field
             }
-            .padding(.horizontal, Space.l)
-            .padding(.vertical, Space.s)
-            .frame(minHeight: Theme.searchHeight * Platform.scale)
-            Rule(color: Tokens.borderCard).padding(.leading, Space.l)
+            accessory
         }
         // Hangs below the field, over what follows it.
         .overlay(alignment: .bottomLeading) {
@@ -67,13 +35,18 @@ struct AddressField<Accessory: View>: View {
                 if focused, !suggestions.isEmpty {
                     PopupCard {
                         ForEach(Array(suggestions.enumerated()), id: \.offset) { index, address in
-                            ChoiceRow(title: address.name ?? address.email, detail: address.name == nil ? nil : address.email, highlighted: index == highlighted) {
+                            ChoiceRow(
+                                title: address.name ?? address.email, detail: address.name == nil ? nil : address.email, avatar: address,
+                                highlighted: index == highlighted
+                            ) {
                                 add(address)
                             }
                         }
                     }
-                    .frame(maxWidth: 380)
-                    .padding(.leading, 56 + Space.l + Space.s + 2)
+                    .frame(maxWidth: 380, alignment: .leading)
+                    .padding(.leading, FieldRow<EmptyView>.contentInset)
+                    .padding(.trailing, Theme.cardInset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -85,6 +58,34 @@ struct AddressField<Accessory: View>: View {
             guard autofocus else { return }
             DispatchQueue.main.async { focused = true }
         }
+    }
+
+    private var field: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .focused($focused)
+            .frame(minWidth: 80)
+            .frame(height: Theme.chipHeight * Platform.scale)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .keyboardType(.emailAddress)
+            #endif
+            .onKeyPress(.downArrow) { moveHighlight(1) }
+            .onKeyPress(.upArrow) { moveHighlight(-1) }
+            .onKeyPress(.tab) { pick() ? .handled : .ignored }
+            .onKeyPress(.return) { pick() ? .handled : .ignored }
+            .onKeyPress(.escape) {
+                guard !suggestions.isEmpty else { return .ignored }
+                suggestions = []
+                return .handled
+            }
+            .onKeyPress(.delete) {
+                guard text.isEmpty, !addresses.isEmpty else { return .ignored }
+                addresses.removeLast()
+                return .handled
+            }
+            .onSubmit { _ = pick() }
     }
 
     /// Makes chips of what is before a comma, a semicolon or a line break.

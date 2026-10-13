@@ -73,19 +73,23 @@ struct Sheet<Content: View, Trailing: View>: View {
 }
 
 #if os(iOS)
-/// A sheet's close at the start of iOS's navigation bar: the system's X, in the foreground's
-/// colour, or a word such as Cancel.
+/// A sheet's close at the start of iOS's navigation bar: the system's X, or a word such as
+/// Cancel, in the foreground's colour either way: only the bar's main button is in the
+/// primary colour.
 struct SheetCloseItem: ToolbarContent {
     var title = "Close"
     let close: () -> Void
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            if #available(iOS 26, *), title == "Close" {
-                Button(role: .close, action: close).tint(Tokens.foreground.color)
-            } else {
-                Button(title, action: close)
+            Group {
+                if #available(iOS 26, *), title == "Close" {
+                    Button(role: .close, action: close)
+                } else {
+                    Button(title, action: close)
+                }
             }
+            .tint(Tokens.foreground.color)
         }
     }
 }

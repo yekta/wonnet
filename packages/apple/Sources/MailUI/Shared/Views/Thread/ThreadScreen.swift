@@ -120,27 +120,10 @@ struct ThreadScreen: View {
             }
             replies
         }
-        .padding(.horizontal, pagePadding)
+        .padding(.horizontal, Theme.cardInset)
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
-        .background(RoundedRectangle(cornerRadius: pageRadius).fill(Tokens.card.color).shadow(.lg))
-    }
-
-    private var pagePadding: CGFloat {
-        #if os(macOS)
-        80
-        #else
-        Space.l
-        #endif
-    }
-
-    /// The Mac's card floats on the page; the phone's runs edge to edge.
-    private var pageRadius: CGFloat {
-        #if os(macOS)
-        Radius.sm
-        #else
-        0
-        #endif
+        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Tokens.card.color).shadow(.lg))
     }
 
     /// "Roger Cotes to me@example.com", the "to" fainter than the names.

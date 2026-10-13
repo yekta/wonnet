@@ -293,6 +293,16 @@ final class BodyTextView: UITextView {
     @objc private func accept() { _ = onKey?(.accept) }
     @objc private func cancel() { _ = onKey?(.cancel) }
 
+    /// As wide as it is given, never as wide as its longest line: the sheet sets the width.
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: super.intrinsicContentSize.height)
+    }
+
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let fit = super.sizeThatFits(size)
+        return CGSize(width: min(fit.width, size.width), height: fit.height)
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         reportHeight()
