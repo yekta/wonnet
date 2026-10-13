@@ -42,6 +42,7 @@ struct GalleryView: View {
                         HStack(spacing: 0) {
                             ActionButton(title: "Primary", symbol: .send, variant: .primary) {}
                             ActionButton(title: "Outline", symbol: .squarePen, variant: .outline) {}
+                            ActionButton(title: "Icon only", symbol: .squarePen, variant: .outline, iconOnly: true) {}
                             ActionButton(title: "Ghost", variant: .ghost) {}
                             ActionButton(title: "Destructive", symbol: .trash, variant: .destructive) {}
                         }
