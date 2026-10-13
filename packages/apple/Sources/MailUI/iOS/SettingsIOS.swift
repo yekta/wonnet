@@ -327,13 +327,10 @@ private struct AddAccountPage: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            AddAccountForm().padding(Space.l)
-        }
-        .background(Tokens.background.color.ignoresSafeArea())
-        .navigationTitle("Add Account")
-        .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: store.accounts.count) { dismiss() }
+        AddAccountFlow()
+            .navigationTitle("Add Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: store.accounts.count) { dismiss() }
     }
 }
 

@@ -98,6 +98,10 @@ enum Theme {
     static let rowHeight: CGFloat = ControlSize.regular.height
     /// A row of a settings group: a regular control with room above and below.
     static let settingsRowHeight: CGFloat = 52
+    /// An option button: a mark beside two lines of words, with room above and below.
+    static let optionHeight: CGFloat = 56
+    /// A form on a page of its own: the first screen's, a server's.
+    static let formWidth: CGFloat = 360
     /// A field at the end of a settings row.
     static let settingsFieldWidth: CGFloat = 240
     /// A chip: the smallest thing that can be clicked.
