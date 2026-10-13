@@ -51,12 +51,7 @@ final class MacDelegate: NSObject, NSApplicationDelegate {
 /// the window's buttons, where the system gives it its clicks; what follows it on the bar is ours,
 /// drawn under the toolbar. This view reads nothing of the mail, so a sync doesn't redraw it.
 struct MacRoot: View {
-    /// Past the window's buttons and the toolbar's button beside them, its margin included.
-    private static let pastToolbarButton: CGFloat = 133
-
     @Environment(MailStore.self) private var store
-    /// Full screen hides the window's buttons.
-    @State private var fullScreen = false
 
     var body: some View {
         MacPages()
@@ -73,14 +68,8 @@ struct MacRoot: View {
             .frame(minWidth: 860, minHeight: 520)
             .ignoresSafeArea()
             .windowToolbarUnderTopBar()
-            .environment(\.pastToolbarButton, Self.pastToolbarButton - (fullScreen ? Self.windowButtons : 0))
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in fullScreen = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in fullScreen = false }
             .mailSheets(store)
     }
-
-    /// How much of the toolbar's start the window's buttons take, which full screen hides.
-    private static let windowButtons: CGFloat = 68
 }
 
 /// The mail, the sidebar over it and the settings; onboarding until an account is added.
@@ -204,8 +193,10 @@ struct MacTopBar: View {
     @Environment(MailStore.self) private var store
     let focusSearch: Int
     let toggleSidebar: () -> Void
-    @Environment(\.pastToolbarButton) private var pastToolbarButton
     @State private var query = ""
+    /// Where the menu button's padded frame ends, from the window's left edge, as the toolbar
+    /// reports it; a usual value until it has.
+    @State private var pastMenu: CGFloat = 133
 
     var body: some View {
         Group {
@@ -244,6 +235,7 @@ struct MacTopBar: View {
                 ToolbarItem(placement: .navigation) {
                     HStack(spacing: 0) {
                         IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)
+                            .background(ToolbarEdge { pastMenu = $0 })
                         // Over the open sidebar, only the menu, which closes it.
                         if store.conversation != nil, !store.sidebarOpen {
                             IconButton(symbol: .arrowLeft, help: "Back (Esc)") { store.close() }
@@ -260,7 +252,7 @@ struct MacTopBar: View {
 
     /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the
     /// window. The title starts where back's circle does, half a button gap past the menu's margin.
-    private var leadingInset: CGFloat { pastToolbarButton + Theme.buttonGap / 2 - Space.l }
+    private var leadingInset: CGFloat { pastMenu + Theme.buttonGap / 2 - Space.l }
 
     /// Its words when there is room, its icon alone when there is not.
     private var compose: some View {
