@@ -266,7 +266,7 @@ struct MacTopBar: View {
     private var compose: some View {
         ViewThatFits(in: .horizontal) {
             ActionButton(title: "Compose", symbol: .squarePen, variant: .outline, action: store.newMessage)
-            IconButton(symbol: .squarePen, help: "Compose", action: store.newMessage)
+            ActionButton(title: "Compose", symbol: .squarePen, variant: .outline, iconOnly: true, action: store.newMessage)
         }
     }
 }

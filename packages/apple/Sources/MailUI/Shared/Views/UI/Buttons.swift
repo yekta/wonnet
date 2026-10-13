@@ -89,7 +89,8 @@ struct ButtonIcon: View {
 
 /// A button with words. `primary` is filled, `outline` is Newton's pill (Compose), `ghost` is
 /// words alone, `destructive` a pill in red. `pending` shows the spinner where the icon goes
-/// and ignores clicks until it is over. Half of `Theme.buttonGap` on each side keeps it off
+/// and ignores clicks until it is over. `iconOnly` is the same button shrunk to its icon in a
+/// circle, with the title as its tooltip. Half of `Theme.buttonGap` on each side keeps it off
 /// its neighbours while the hit areas touch.
 struct ActionButton: View {
     enum Variant {
@@ -102,13 +103,19 @@ struct ActionButton: View {
     var size: ControlSize = .regular
     var pending = false
     var wide = false
+    var iconOnly = false
     let action: () -> Void
 
-    var body: some View {
-        Button(action: { if !pending { action() } }) {
-            Face(title: title, symbol: symbol, variant: variant, size: size, pending: pending, wide: wide)
+    @ViewBuilder var body: some View {
+        let button = Button(action: { if !pending { action() } }) {
+            Face(title: title, symbol: symbol, variant: variant, size: size, pending: pending, wide: wide, iconOnly: iconOnly)
         }
         .buttonStyle(.press)
+        if iconOnly {
+            button.help(title).accessibilityLabel(title)
+        } else {
+            button
+        }
     }
 
     fileprivate struct Face: View {
@@ -120,28 +127,37 @@ struct ActionButton: View {
         let size: ControlSize
         let pending: Bool
         let wide: Bool
+        var iconOnly = false
         var chevron = false
         @Environment(\.hovered) private var hovered
 
         var body: some View {
-            HStack(spacing: Space.xs + 2) {
+            content
+                .frame(maxWidth: wide && !iconOnly ? .infinity : nil)
+                .padding(.horizontal, iconOnly ? 0 : (size.height / 2) * Platform.scale)
+                .frame(width: iconOnly ? size.height * Platform.scale : nil, height: size.height * Platform.scale)
+                .background(Capsule().fill(background))
+            .overlay(Capsule().strokeBorder(border, lineWidth: Theme.hairline))
+                .padding(.horizontal, Theme.buttonGap / 2)
+                .contentShape(Rectangle())
+        }
+
+        @ViewBuilder private var content: some View {
+            if iconOnly {
                 ButtonIcon(symbol: symbol, pending: pending, size: size.icon - 1, tint: foreground)
-                    // An icon's glyph sits inside room of its own, which reads as more space than
-                    // the words have on their side.
-                    .padding(.leading, symbol != nil || pending ? -Self.iconBearing : 0)
-                Text(title).textStyle(size.text, color: foreground).lineLimit(1).fixedSize()
-                if chevron {
-                    Image(.chevronDown, size: size.icon - 1).foregroundStyle(foreground)
-                        .padding(.trailing, -Self.iconBearing)
+            } else {
+                HStack(spacing: Space.xs + 2) {
+                    ButtonIcon(symbol: symbol, pending: pending, size: size.icon - 1, tint: foreground)
+                        // An icon's glyph sits inside room of its own, which reads as more space than
+                        // the words have on their side.
+                        .padding(.leading, symbol != nil || pending ? -Self.iconBearing : 0)
+                    Text(title).textStyle(size.text, color: foreground).lineLimit(1).fixedSize()
+                    if chevron {
+                        Image(.chevronDown, size: size.icon - 1).foregroundStyle(foreground)
+                            .padding(.trailing, -Self.iconBearing)
+                    }
                 }
             }
-            .frame(maxWidth: wide ? .infinity : nil)
-            .padding(.horizontal, (size.height / 2) * Platform.scale)
-            .frame(height: size.height * Platform.scale)
-            .background(Capsule().fill(background))
-            .overlay(Capsule().strokeBorder(border, lineWidth: Theme.hairline))
-            .padding(.horizontal, Theme.buttonGap / 2)
-            .contentShape(Rectangle())
         }
 
         private var foreground: Color {
