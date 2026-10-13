@@ -107,6 +107,8 @@ enum Theme {
     static let barHeight: CGFloat = 52
     /// A search field in a sheet.
     static let searchHeight: CGFloat = ControlSize.large.height
+    /// A popup under a field: suggestions, a combobox's list.
+    static let popupWidth: CGFloat = 380
 
     /// A thread row on the Mac: one line.
     static let macRowHeight: CGFloat = 48

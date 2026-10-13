@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// A field that narrows a list: the search icon, the words, and a way to clear them. `.sheet`
-/// sits on a hairline over a sheet's list, given by `SearchedList`, and takes the keys that
-/// move through the list (↑, ↓, Enter to pick, Esc to leave); `.bar` is the capsule of the top bar.
+/// sits on a hairline over a sheet's list, given by `SearchedList`, and `.popup` over a popup's,
+/// smaller; both take the keys that move through the list (↑, ↓, Enter to pick, Esc to leave).
+/// `.bar` is the capsule of the top bar.
 struct SearchField: View {
     enum Style {
-        case sheet, bar
+        case sheet, popup, bar
     }
 
     let placeholder: String
@@ -44,7 +45,7 @@ struct SearchField: View {
         .frame(height: height)
         .background { if style == .bar { Capsule().strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline) } }
         .overlay(alignment: .bottom) {
-            if style == .sheet { Rule(color: Tokens.borderCard) }
+            if let rule { Rule(color: rule) }
         }
         .onAppear { if autofocus { focused = true } }
         .onChange(of: focusTrigger) { focused = true }
@@ -52,6 +53,14 @@ struct SearchField: View {
 
     private var height: CGFloat {
         (style == .sheet ? Theme.searchHeight : ControlSize.regular.height) * Platform.scale
+    }
+
+    private var rule: ThemeColor? {
+        switch style {
+        case .sheet: Tokens.borderCard
+        case .popup: Tokens.borderPopover
+        case .bar: nil
+        }
     }
 
     /// Clear sits as far from the end as from the top and the bottom.

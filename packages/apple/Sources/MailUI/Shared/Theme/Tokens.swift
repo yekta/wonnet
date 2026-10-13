@@ -19,6 +19,7 @@ enum Tokens {
     static let cardLargerAccent = ThemeColor(light: 0xf0f1f3, dark: 0x1a1b23)
     static let popover = ThemeColor(light: 0xffffff, dark: 0x191a1f)
     static let popoverAccent = ThemeColor(light: 0xeef0f2, dark: 0x212329)
+    static let popoverAccentStronger = ThemeColor(light: 0xe4e6e9, dark: 0x292a30)
     static let foreground = ThemeColor(light: 0x434b52, dark: 0xd0d2d9)
     static let emphasizedForeground = ThemeColor(light: 0x22272b, dark: 0xffffff)
     static let mutedForeground = ThemeColor(light: 0x717171, dark: 0x9a9eab)

@@ -55,6 +55,7 @@ struct MacRoot: View {
 
     var body: some View {
         MacPages()
+            .comboboxHost()
             .toolbar {
                 // Until there is a page, an item no one sees, so the window's buttons sit where the
                 // pages will have them.

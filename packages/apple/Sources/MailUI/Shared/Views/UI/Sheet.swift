@@ -47,6 +47,7 @@ struct Sheet<Content: View, Trailing: View>: View {
         }
         .frame(width: size.frame.width, height: size.frame.height)
         .background(background.color)
+        .comboboxHost()
         #else
         NavigationStack {
             content

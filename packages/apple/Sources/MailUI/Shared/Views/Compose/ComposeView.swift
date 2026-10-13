@@ -129,8 +129,8 @@ struct ComposeView: View {
     /// questions, the autosave and the keeping of the draft when the view goes.
     private var behaviour: some ViewModifier {
         Behaviour(
-            dropping: $dropping, importing: $importing, timing: $timing, pickingSnippet: $pickingSnippet, pickingSender: $pickingSender,
-            warning: $warning, discarding: $discarding, view: self
+            dropping: $dropping, importing: $importing, timing: $timing, pickingSnippet: $pickingSnippet, warning: $warning,
+            discarding: $discarding, view: self
         )
     }
 
@@ -139,7 +139,6 @@ struct ComposeView: View {
         @Binding var importing: Bool
         @Binding var timing: Timing?
         @Binding var pickingSnippet: Bool
-        @Binding var pickingSender: Bool
         @Binding var warning: Warning?
         @Binding var discarding: Bool
         let view: ComposeView
@@ -173,9 +172,6 @@ struct ComposeView: View {
                         pickingSnippet = false
                         view.put(snippet, replacingTrigger: false)
                     }
-                }
-                .sheet(isPresented: $pickingSender) {
-                    SenderPicker(senders: view.senders, current: view.sender, pick: view.choose)
                 }
                 .alert("Send anyway?", isPresented: Binding(get: { warning != nil }, set: { if !$0 { warning = nil } }), presenting: warning) { warning in
                     Button("Send") { view.finish(at: warning.at, archive: warning.archive) }
@@ -232,20 +228,15 @@ struct ComposeView: View {
         }
     }
 
-    /// The address the message goes from, opening the choice of another. Pulled out by the
-    /// button's own padding, so its words line up with the other fields'.
+    /// The address the message goes from, and the choice of another. Pulled out by the face's
+    /// own padding, so its words line up with the other fields'.
     private var from: some View {
-        PlainButton(help: "Send as another address (⌘⇧F)") { pickingSender = true } label: {
-            HStack(spacing: Space.s) {
-                if let sender {
-                    Circle().fill(sender.color).frame(width: 8, height: 8)
-                    Text(sender.name).textStyle(.body).lineLimit(1)
-                    if sender.identity.name != nil {
-                        Text(sender.identity.email).textStyle(.caption).lineLimit(1).truncationMode(.middle)
-                    }
-                }
-                Image(.chevronDown, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
-            }
+        Combobox(
+            title: "Send as", placeholder: "Find an address", choices: senders.map(\.choice), selected: sender?.id, style: .inline,
+            help: "Send as another address (⌘⇧F)", empty: "No address by that name.", open: $pickingSender
+        ) { choice in
+            guard let picked = senders.first(where: { $0.id == choice.id }) else { return }
+            choose(picked)
         }
         .padding(.leading, -Space.xs)
     }
@@ -352,7 +343,7 @@ struct ComposeView: View {
                     }
                 }
             }
-            .frame(maxWidth: 380)
+            .frame(maxWidth: Theme.popupWidth)
             .padding(.leading, Space.l)
             .padding(.bottom, Theme.barHeight + Space.xs)
         }

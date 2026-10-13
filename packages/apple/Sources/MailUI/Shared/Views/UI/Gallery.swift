@@ -10,6 +10,7 @@ struct GalleryView: View {
     @State private var off = false
     @State private var theme = "Light"
     @State private var choice: String? = "Work"
+    @State private var person = "ada"
     @State private var tab = "important"
     @State private var swatch = "account-3"
 
@@ -18,6 +19,13 @@ struct GalleryView: View {
         let name: String
         let count: Int
     }
+
+    private let people = [
+        Choice(id: "ada", title: "Ada Lovelace", detail: "ada@example.com", dot: Tokens.account1.color, keywords: "Work"),
+        Choice(id: "sam", title: "sam@acme.example", detail: "Acme", dot: Tokens.account2.color),
+        Choice(id: "grace", title: "Grace Hopper", detail: "grace@example.com", dot: Tokens.account3.color, keywords: "Home"),
+        Choice(id: "alan", title: "alan@example.com", detail: "Home", dot: Tokens.account3.color),
+    ]
 
     var body: some View {
         Sheet(title: "Components", size: .large, background: Tokens.background) {
@@ -101,6 +109,9 @@ struct GalleryView: View {
                         InputField(label: "Password", text: $text, secure: true)
                         InputField(label: "Lines", text: $empty, placeholder: "A few lines", lines: 3)
                         Dropdown(label: "Dropdown", options: ["Work", "Home"], selection: $choice, none: "None") { $0 }
+                        Combobox(title: "Send as", placeholder: "Find an address", choices: people, selected: person, label: "Combobox") {
+                            person = $0.id
+                        }
                         ChoiceMenu(options: ["System", "Light", "Dark"], selection: $theme) { $0 }
                         SearchField(placeholder: "Search", text: $query, style: .bar, autofocus: false)
                         Card { SearchField(placeholder: "In a sheet", text: $query, autofocus: false) }
