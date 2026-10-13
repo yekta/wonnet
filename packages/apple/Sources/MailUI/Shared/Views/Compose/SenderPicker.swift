@@ -45,7 +45,7 @@ struct SenderPicker: View {
         Sheet(title: "Send as") {
             SearchedList(
                 field: SearchField(
-                    placeholder: "Find an address", text: $query, symbol: .atSign,
+                    placeholder: "Find an address", text: $query,
                     submit: { choose(found, highlighted) }, move: { highlighted = highlighted.moved(by: $0, in: found.count) },
                     escape: { dismiss() }
                 )

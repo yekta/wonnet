@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// How big a sheet is: on the Mac a window of the size, on iOS how far up the screen it comes.
+/// How big a sheet's window is on the Mac. On iOS every sheet comes up the whole screen.
 enum SheetSize {
     /// A short list: labels, times, a person.
     case small
@@ -9,7 +9,6 @@ enum SheetSize {
     /// A page: settings, the shortcuts.
     case large
 
-    #if os(macOS)
     var frame: CGSize {
         switch self {
         case .small: CGSize(width: 400, height: 420)
@@ -17,11 +16,6 @@ enum SheetSize {
         case .large: CGSize(width: 560, height: 640)
         }
     }
-    #else
-    var detents: Set<PresentationDetent> {
-        self == .small ? [.medium, .large] : [.large]
-    }
-    #endif
 }
 
 /// What every sheet is made of: its title, a way to close it, and its content. On iOS the title
@@ -66,16 +60,16 @@ struct Sheet<Content: View, Trailing: View>: View {
         }
         .tint(Tokens.primary.color)
         .presentationBackground(background.color)
-        .presentationDetents(size.detents)
+        .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         #endif
     }
 }
 
 #if os(iOS)
-/// A sheet's close at the start of iOS's navigation bar: the system's X, or a word such as
-/// Cancel, in the foreground's colour either way: only the bar's main button is in the
-/// primary colour.
+/// A sheet's close at the start of iOS's navigation bar: our x on the system's round glass
+/// button, or a word such as Cancel, in the foreground's colour either way: only the bar's main
+/// button is in the primary colour.
 struct SheetCloseItem: ToolbarContent {
     var title = "Close"
     let close: () -> Void
@@ -84,7 +78,10 @@ struct SheetCloseItem: ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Group {
                 if #available(iOS 26, *), title == "Close" {
-                    Button(role: .close, action: close)
+                    Button(role: .close, action: close) {
+                        Image(.x, size: 16).foregroundStyle(Tokens.foreground.color)
+                    }
+                    .accessibilityLabel("Close")
                 } else {
                     Button(title, action: close)
                 }

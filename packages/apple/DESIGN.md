@@ -80,7 +80,13 @@ added to the component, not to the view.
   `Button`s on iOS, the main one `.borderedProminent`: the system draws the bar's buttons, and
   ours inside it would be a pill in a pill. The bar holds the one thing the sheet is for; what
   else can be done is in a toolbar under its content, as the message being written has it.
-  `SheetSize` picks the window on the Mac and the detents on iOS.
+  `SheetSize` picks the window on the Mac; on iOS every sheet comes up the whole screen, in
+  one move, so a list in it is never half shown and then pushed up by the keyboard.
+- What floats over the mail on iOS is on the system's glass, as Motile has it: a `GlassBar` or
+  a `GlassCircle` with its icons `strong`, in the foreground's colour; the sheet's X is ours, on
+  the system's round glass button; the system's search box (`searchField`, in
+  `iOS/GlassIOS.swift`) sits in the bottom bar with its magnifier in the foreground's colour
+  and its placeholder in `mutedStrongerForeground`. Nothing on glass is in the primary colour.
 
 ## Components
 
@@ -93,7 +99,7 @@ added to the component, not to the view.
 | `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `InputField` | A text field with its label above, or a text box of `lines` |
-| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`: over the list on the Mac, under it on iOS; `.bar` as the top bar's capsule |
+| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.bar` as the top bar's capsule |
 | `Dropdown` | A choice from a short list, with a label |
 | `ChoiceMenu` | One of a few choices, as a button with a chevron that opens them |
 | `ToggleRow` | A switch with its words |

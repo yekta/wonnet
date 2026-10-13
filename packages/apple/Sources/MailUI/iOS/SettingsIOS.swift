@@ -102,7 +102,7 @@ private struct SettingsSections: View {
                 results
             }
         }
-        .bottomSearch($store.settingsQuery)
+        .searchField(text: $store.settingsQuery, prompt: "Search")
     }
 
     private func row(_ section: SettingsSection) -> some View {
@@ -705,18 +705,6 @@ private struct SettingsList<Content: View>: View {
         .background(Tokens.background.color.ignoresSafeArea())
         .font(TextStyle.body.font)
         .foregroundStyle(Tokens.foreground.color)
-    }
-}
-
-private extension View {
-    /// The search, under the list where the system puts it from iOS 26, over it before.
-    @ViewBuilder func bottomSearch(_ text: Binding<String>) -> some View {
-        if #available(iOS 26, *) {
-            searchable(text: text, prompt: "Search")
-                .toolbar { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
-        } else {
-            searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
-        }
     }
 }
 
