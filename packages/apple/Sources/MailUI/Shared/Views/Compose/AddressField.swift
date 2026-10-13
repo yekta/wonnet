@@ -71,21 +71,26 @@ struct AddressField<Accessory: View>: View {
             .autocorrectionDisabled()
             .keyboardType(.emailAddress)
             #endif
-            .onKeyPress(.downArrow) { moveHighlight(1) }
-            .onKeyPress(.upArrow) { moveHighlight(-1) }
-            .onKeyPress(.tab) { pick() ? .handled : .ignored }
+            .onFieldKeys(handle)
             .onKeyPress(.return) { pick() ? .handled : .ignored }
-            .onKeyPress(.escape) {
-                guard !suggestions.isEmpty else { return .ignored }
-                suggestions = []
-                return .handled
-            }
-            .onKeyPress(.delete) {
-                guard text.isEmpty, !addresses.isEmpty else { return .ignored }
-                addresses.removeLast()
-                return .handled
-            }
             .onSubmit { _ = pick() }
+    }
+
+    private func handle(_ key: FieldKey) -> KeyPress.Result {
+        guard focused else { return .ignored }
+        switch key {
+        case .down: return moveHighlight(1)
+        case .up: return moveHighlight(-1)
+        case .tab: return pick() ? .handled : .ignored
+        case .escape:
+            guard !suggestions.isEmpty else { return .ignored }
+            suggestions = []
+            return .handled
+        case .delete:
+            guard text.isEmpty, !addresses.isEmpty else { return .ignored }
+            addresses.removeLast()
+            return .handled
+        }
     }
 
     /// Makes chips of what is before a comma, a semicolon or a line break.

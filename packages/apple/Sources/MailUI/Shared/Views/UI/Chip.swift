@@ -16,6 +16,7 @@ struct Chip: View {
     var remove: (() -> Void)?
     var action: (() -> Void)?
     @Environment(\.hovered) private var hovered
+    @Environment(\.onCard) private var onCard
 
     var body: some View {
         if let action, remove == nil {
@@ -44,8 +45,14 @@ struct Chip: View {
         .padding(.horizontal, Space.s + 2)
         .frame(height: Theme.chipHeight * Platform.scale)
         .foregroundStyle(variant == .invalid ? Tokens.destructive.color : Tokens.foreground.color)
-        .background(Capsule().fill(hovered && action != nil ? Tokens.backgroundSecondaryAccent.color : Tokens.backgroundSecondary.color))
+        .background(Capsule().fill(fill.color))
         .overlay(Capsule().strokeBorder(variant == .invalid ? Tokens.destructive.opacity(Opacity.colorBorder).color : .clear, lineWidth: Theme.hairline))
         .contentShape(Capsule())
+    }
+
+    private var fill: ThemeColor {
+        let hovering = hovered && action != nil
+        if onCard { return hovering ? Theme.cardAccentStronger : Theme.cardAccent }
+        return hovering ? Tokens.backgroundSecondaryAccent : Tokens.backgroundSecondary
     }
 }

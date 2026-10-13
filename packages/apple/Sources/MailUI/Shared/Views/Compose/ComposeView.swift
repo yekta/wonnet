@@ -80,7 +80,7 @@ struct ComposeView: View {
                 ScrollView {
                     card
                         .frame(maxWidth: Theme.cardWidth, minHeight: window.size.height - 2 * Space.l)
-                        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.cardFill.color).shadow(.lg))
+                        .pageCard()
                         .padding(.vertical, Space.l)
                         .padding(.horizontal, Space.xl + 4)
                         .frame(maxWidth: .infinity)
