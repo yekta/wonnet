@@ -34,8 +34,10 @@ added to the component, not to the view.
   the stronger one. From dimmest to strongest they go `backgroundAccentLarger`,
   `backgroundAccentLargerStronger`, `backgroundAccent`, `backgroundAccentStronger`, so a small
   thing's hover shows on a selected row. The actions on a hovered thread row hover in
-  `backgroundAccentLargerStrongest`, so they show on the row's fill. What sits on `backgroundSecondary` (a chip) hovers in
-  `backgroundSecondaryAccent`. An accent is never thinned with an opacity: if a step is
+  `backgroundAccentLargerStrongest`, so they show on the row's fill. A chip rests in
+  `backgroundSecondary` and hovers in `backgroundSecondaryAccent`; on the card that fills the
+  page (`.pageCard()`, which sets `onCard`) it rests in `Theme.cardAccent` and hovers in
+  `Theme.cardAccentStronger`, since that card is as dark as `backgroundSecondary`. An accent is never thinned with an opacity: if a step is
   missing, add a token for it. A control with a colour of its own (the star) hovers in a wash
   of it: the colour at `Opacity.colorTint`, lighter in the dark scheme. Pressed is hovered: on
   iOS a press shows the hover's fill. A disabled button shows at `Opacity.disabled`, a filled

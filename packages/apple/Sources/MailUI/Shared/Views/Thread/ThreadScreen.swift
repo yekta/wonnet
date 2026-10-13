@@ -123,7 +123,7 @@ struct ThreadScreen: View {
         .padding(.horizontal, Theme.cardInset)
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
-        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.cardFill.color).shadow(.lg))
+        .pageCard()
     }
 
     /// "Roger Cotes to me@example.com", the "to" fainter than the names.

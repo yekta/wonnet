@@ -30,6 +30,7 @@
   --card-accent: #f0f1f3;
   --card-larger: #ffffff;
   --card-larger-accent: #f0f1f3;
+  --card-larger-accent-stronger: #e6e7ea;
   --popover: #ffffff;
   --popover-accent: #eef0f2;
   --popover-accent-stronger: #e4e6e9;
@@ -110,6 +111,7 @@
     --card-accent: #1e1f26;
     --card-larger: #111218;
     --card-larger-accent: #1a1b23;
+    --card-larger-accent-stronger: #22232b;
     --popover: #191a1f;
     --popover-accent: #212329;
     --popover-accent-stronger: #292a30;

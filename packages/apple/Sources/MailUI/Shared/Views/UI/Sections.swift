@@ -41,6 +41,26 @@ struct Card<Content: View>: View {
     }
 }
 
+extension View {
+    /// The card that fills the page (`Theme.cardFill`), with what is on it told so.
+    func pageCard() -> some View {
+        background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.cardFill.color).shadow(.lg))
+            .environment(\.onCard, true)
+    }
+}
+
+private struct OnCardKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the view is on the card that fills the page, where a chip fills with its accents.
+    var onCard: Bool {
+        get { self[OnCardKey.self] }
+        set { self[OnCardKey.self] = newValue }
+    }
+}
+
 /// Cancel and Save under a form.
 struct FormButtons: View {
     var save = "Save"
