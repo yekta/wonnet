@@ -151,7 +151,7 @@ async fn new_mail_is_pushed_sealed_with_the_devices_key_and_taken_down_once_read
     ops::apply(&server.state, user, "read", read).await.unwrap();
     let pushed = pushed_to(&pushes, DEVICE, 2).await;
     assert_eq!(pushed.len(), 2);
-    assert_eq!(pushed[1].headers["apns-push-type"], "background");
+    assert_eq!(pushed[1].headers["apns-push-type"], "alert", "so the badge is set even when the app was quit");
     assert_eq!(pushed[1].body["aps"]["badge"], 1);
     assert_eq!(open(&pushed[1].body["sealed"]), json!({ "settled": [format!("{}:t1", account.id)] }));
 

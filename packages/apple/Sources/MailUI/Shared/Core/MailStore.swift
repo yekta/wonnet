@@ -306,6 +306,7 @@ public final class MailStore {
         if !demo { updater.start() }
         #endif
         saveWhenLeaving()
+        settleWhenBack()
         WebViewPool.shared.warm()
         Task { await boot() }
     }
@@ -460,6 +461,25 @@ public final class MailStore {
         for name in leaving {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.saveUi() }
+            }
+        }
+    }
+
+    /// Sets the badge and takes down stale notifications as the app comes back: the pushes that
+    /// would have done it while it was away may never have come.
+    private func settleWhenBack() {
+        #if os(macOS)
+        let back = NSApplication.didBecomeActiveNotification
+        #else
+        let back = UIApplication.didBecomeActiveNotification
+        #endif
+        NotificationCenter.default.addObserver(forName: back, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.booted else { return }
+                Task {
+                    await self.reloadMailboxes()
+                    await Notifier.shared.settle(nil)
+                }
             }
         }
     }

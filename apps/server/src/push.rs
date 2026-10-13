@@ -1,7 +1,7 @@
 //! Push notifications through APNs, for the iOS app, which loses the sync socket in the
 //! background. New inbox mail goes to each of the user's devices as an alert whose sender, subject
 //! and snippet are sealed with that device's key: its notification extension opens them, and
-//! Apple only carries ciphertext. When pushed mail is read or leaves the inbox, a background push
+//! Apple only carries ciphertext. When pushed mail is read or leaves the inbox, a silent push
 //! tells the devices to take its notification down. Both carry the inbox's unread count.
 
 use std::collections::{HashMap, HashSet};
@@ -162,7 +162,7 @@ async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
         let mut pushes: Vec<Push> =
             fresh.iter().take(MOST_ALERTS).rev().map(|mail| alert(state, &key, mail, badge)).collect();
         if !settled.is_empty() || (fresh.is_empty() && badge_changed) {
-            pushes.push(background(&key, &settled, badge));
+            pushes.push(settle(&key, &settled, badge));
         }
         let token = short(&device.token);
         let (alerts, total) = (fresh.len().min(MOST_ALERTS), pushes.len());
@@ -199,7 +199,6 @@ fn thread_key(account_id: Uuid, thread_id: &str) -> String {
 }
 
 struct Push {
-    background: bool,
     /// Lets a newer push of the same message replace the notification.
     collapse: Option<String>,
     payload: Value,
@@ -229,16 +228,18 @@ fn alert(state: &AppState, key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Pus
         },
         "sealed": seal(key, &content),
     });
-    Push { background: false, collapse: Some(mail.id.to_string()), payload }
+    Push { collapse: Some(mail.id.to_string()), payload }
 }
 
-/// Takes down the notifications of threads that were read or left the inbox.
-fn background(key: &[u8; KEY_LEN], settled: &[String], badge: i64) -> Push {
+/// Takes down the notifications of threads that were read or left the inbox. An alert with no
+/// text, not a background push: iOS sets its badge even when the app was quit, and throttles
+/// background pushes or drops them.
+fn settle(key: &[u8; KEY_LEN], settled: &[String], badge: i64) -> Push {
     let payload = json!({
         "aps": { "content-available": 1, "badge": badge },
         "sealed": seal(key, &json!({ "settled": settled })),
     });
-    Push { background: true, collapse: None, payload }
+    Push { collapse: None, payload }
 }
 
 /// AES-256-GCM: the nonce, the ciphertext and the tag, in base64, as CryptoKit's sealed box.
@@ -303,14 +304,13 @@ impl Apns {
 
     async fn send(&self, device: &Device, push: &Push) -> Sent {
         let base = if device.sandbox { &self.sandbox_url } else { &self.production_url };
-        let (kind, priority) = if push.background { ("background", "5") } else { ("alert", "10") };
         let mut request = self
             .http
             .post(format!("{base}/3/device/{}", device.token))
             .bearer_auth(self.token())
             .header("apns-topic", &device.topic)
-            .header("apns-push-type", kind)
-            .header("apns-priority", priority)
+            .header("apns-push-type", "alert")
+            .header("apns-priority", "10")
             .json(&push.payload);
         if let Some(collapse) = &push.collapse {
             request = request.header("apns-collapse-id", collapse);
