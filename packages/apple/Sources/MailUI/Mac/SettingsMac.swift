@@ -130,28 +130,35 @@ private struct PaneDivider: View {
 }
 
 /// A section's page: its groups, as wide as a page grows, scrolled to the group a search picked.
+/// The accounts, a card each, scroll in AppKit.
 private struct SettingsPage: View {
     @Environment(MailStore.self) private var store
     let section: SettingsSection
 
     var body: some View {
+        if section == .accounts {
+            AccountSettings().fadesTop()
+        } else {
+            groups
+        }
+    }
+
+    private var groups: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xxl) {
                     switch section {
                     case .general: GeneralSettings()
-                    case .accounts: AccountSettings()
+                    case .accounts: EmptyView()
                     case .inbox: InboxSettings()
                     case .reading: ReadingSettings()
                     case .writing: WritingSettings()
                     case .keybindings: KeybindingSettings()
                     }
                 }
-                .frame(maxWidth: Theme.settingsPageWidth, alignment: .leading)
-                .padding(.horizontal, Space.xl)
+                .settingsPageWidth()
                 .padding(.top, Space.xl)
                 .padding(.bottom, Space.xxl * 2)
-                .frame(maxWidth: .infinity)
             }
             .fadesTop()
             .id(section)
@@ -161,6 +168,15 @@ private struct SettingsPage: View {
                 store.settingsTarget = nil
             }
         }
+    }
+}
+
+private extension View {
+    /// As wide as a settings page grows, in the middle of the room it is given.
+    func settingsPageWidth() -> some View {
+        frame(maxWidth: Theme.settingsPageWidth, alignment: .leading)
+            .padding(.horizontal, Space.xl)
+            .frame(maxWidth: .infinity)
     }
 }
 
@@ -224,50 +240,62 @@ private struct VersionRow: View {
 
 // MARK: Accounts
 
+/// The accounts' cards, under their heading and over Sign out, in a `ScrollStack`: with many
+/// accounts, a SwiftUI `ScrollView` can't keep up with a scroll.
 private struct AccountSettings: View {
     @Environment(MailStore.self) private var store
     @State private var adding = false
 
     var body: some View {
         let accounts = store.accounts
-        VStack(alignment: .leading, spacing: Space.s + 2) {
-            SectionHeading(title: "Accounts", detail: "Each account's colour marks its mail in the list and its mailboxes in the sidebar.")
-                .padding(.horizontal, Space.xs)
-            LazyVStack(spacing: Space.xl) {
-                ForEach(accounts) { account in
-                    AccountCard(account: account, anchor: account.id == accounts.first?.id ? "signatures" : account.id)
-                        .equatable()
-                }
+        ScrollStack(rows: rows(accounts), target: target(accounts))
+            .sheet(isPresented: $adding) {
+                AddAccountSheet().environment(store)
             }
-            ActionButton(title: "Add account", symbol: .plus, variant: .outline) { adding = true }
+    }
+
+    private func rows(_ accounts: [AccountView]) -> [ScrollStack.Row] {
+        let heading = SectionHeading(title: "Accounts", detail: "Each account's colour marks its mail in the list and its mailboxes in the sidebar.")
+            .padding(.horizontal, Space.xs)
+            .padding(.top, Space.xl)
+            .padding(.bottom, Space.s + 2)
+        let cards = accounts.enumerated().map { index, account in
+            // The account changes with its mailboxes' counts as mail syncs, which the card
+            // doesn't show, so it is drawn again only when what it shows changes.
+            let shown: [AnyHashable] = [index == 0, account.address, account.name, account.title, account.color, account.status, account.identities]
+            return ScrollStack.Row(id: account.id, version: shown, content: AnyView(
+                AccountCard(account: account).padding(.top, index == 0 ? 0 : Space.xl).settingsPageWidth()
+            ))
         }
-        .id("accounts")
-        .sheet(isPresented: $adding) {
-            AddAccountSheet().environment(store)
-        }
-        SettingsGroup(id: "sign-out", title: "Wonnet") {
+        let add = ActionButton(title: "Add account", symbol: .plus, variant: .outline) { adding = true }
+            .padding(.top, Space.s + 2)
+        let signOut = SettingsGroup(id: "sign-out", title: "Wonnet") {
             SettingsRow {
                 SettingsLabel(title: "Sign out", detail: "Every account leaves this Mac. Signing in again brings them back.")
             } trailing: {
                 ActionButton(title: "Sign out", symbol: .logOut, variant: .destructive) { store.confirmSigningOut() }
             }
         }
+        .padding(.top, Space.xxl)
+        .padding(.bottom, Space.xxl * 2)
+        return [ScrollStack.Row(id: "accounts", content: AnyView(heading.settingsPageWidth()))] + cards + [
+            ScrollStack.Row(id: "add", content: AnyView(add.settingsPageWidth())),
+            ScrollStack.Row(id: "sign-out", content: AnyView(signOut.settingsPageWidth())),
+        ]
+    }
+
+    /// What a search picked: "signatures" is the first card's.
+    private func target(_ accounts: [AccountView]) -> Binding<String?> {
+        Binding(
+            get: { store.settingsTarget == "signatures" ? accounts.first?.id : store.settingsTarget },
+            set: { store.settingsTarget = $0 }
+        )
     }
 }
 
-/// An account's card. The account changes with its mailboxes' counts as mail syncs, which the
-/// card doesn't show, so it is drawn again only when what it shows changes.
-private struct AccountCard: View, Equatable {
+private struct AccountCard: View {
     @Environment(MailStore.self) private var store
     let account: AccountView
-    /// What a search scrolls to: the first card's signature is the settings' "signatures".
-    let anchor: String
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        let a = lhs.account, b = rhs.account
-        return lhs.anchor == rhs.anchor && a.id == b.id && a.address == b.address && a.name == b.name && a.title == b.title
-            && a.color == b.color && a.status == b.status && a.identities == b.identities
-    }
 
     var body: some View {
         SettingsCard {
@@ -298,7 +326,6 @@ private struct AccountCard: View, Equatable {
             }
             SettingsDivider()
             SignatureRow(account: account)
-                .id(anchor)
         }
     }
 }

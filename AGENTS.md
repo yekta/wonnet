@@ -143,9 +143,11 @@ the iOS notification extension uses too. `Sources/MailUI/Shared` is what both us
   bodies and report their height.
 - `Shared/Views/Sidebar`, `Compose`, `Onboarding`, `Settings`: SwiftUI.
 - `Mac/`: `MailMacApp.swift` (the window, the top bar), `Keyboard.swift` (the single keys),
-  `ThreadListMac.swift` (an `NSTableView`), `AppUpdater.swift` (finds the latest GitHub release,
-  downloads and installs it when asked) and `UpdateRow.swift` (the update at the foot of the
-  sidebar: the offer, the download, the restart).
+  `ThreadListMac.swift` (an `NSTableView`), `ScrollStack.swift` (SwiftUI rows that AppKit
+  scrolls, each in the window only while in sight: the accounts' cards in the settings),
+  `AppUpdater.swift` (finds the latest GitHub release, downloads and installs it when asked) and
+  `UpdateRow.swift` (the update at the foot of the sidebar: the offer, the download, the
+  restart).
 - `iOS/`: `MailIOSApp.swift` (the navigation stack, with the tabs along the bottom),
   `Drawer.swift` (the sidebar a swipe to the right opens), `ThreadListIOS.swift` (a
   `UITableView`) and `RowSwipe.swift` (a swipe to the left on its rows: the one to three
