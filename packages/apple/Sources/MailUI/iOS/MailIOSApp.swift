@@ -163,19 +163,16 @@ struct MailboxScreen: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) { top }
-        .safeAreaInset(edge: .bottom, spacing: 0) { if !editing { MailboxTabBar() } }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if editing {
+                CommandBar(threads: Array(store.selection)).disabled(store.selection.isEmpty)
+            } else {
+                MailboxTabBar()
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .navigationTitle(store.baseMailboxName)
         .onChange(of: editing) { _, on in if !on { store.clearSelection() } }
-        .toolbar {
-            if editing {
-                ToolbarItemGroup(placement: .bottomBar) {
-                    CommandBar(threads: Array(store.selection))
-                        .disabled(store.selection.isEmpty)
-                }
-                .clearGlass()
-            }
-        }
     }
 
     @ViewBuilder private var top: some View {
@@ -272,72 +269,43 @@ struct MailboxTabBar: View {
     }
 }
 
-/// What can be done to threads along the bottom: the usual few, and a menu of the rest.
+/// What can be done to threads along the bottom: the usual few spread across a bar of glass,
+/// with menus for the rest, and Reply on a circle of its own beside it.
 struct CommandBar: View {
     @Environment(MailStore.self) private var store
     let threads: [String]
     var reply = false
 
     var body: some View {
-        if store.applicable([.archive], to: threads).isEmpty {
-            Spacer()
-            Button { store.run(.trash, on: threads) } label: { Image(.trash, size: 18).glassFace() }.accessibilityLabel("Delete")
-        } else {
-            commands
+        HStack(spacing: Space.s) {
+            GlassBar {
+                if store.applicable([.archive], to: threads).isEmpty {
+                    IconButton(symbol: .trash, help: "Delete", circled: false, strong: true) { store.run(.trash, on: threads) }
+                } else {
+                    commands
+                }
+            }
+            if reply {
+                GlassCircle(symbol: .reply, help: "Reply") { store.run(.reply, on: threads) }
+            }
         }
+        .padding(.horizontal, Space.l)
+        .padding(.bottom, Space.s)
     }
 
     @ViewBuilder private var commands: some View {
         ForEach([ThreadCommand.archive, .trash, .snooze]) { command in
-            Button { store.run(command, on: threads) } label: { Image(command.symbol, size: 18).glassFace() }
-                .accessibilityLabel(command.title(store, threads))
-            Spacer()
+            IconButton(symbol: command.symbol, help: command.title(store, threads), circled: false, strong: true) { store.run(command, on: threads) }
         }
-        Menu {
+        IconMenu(symbol: .tag, help: "Label", circled: false, strong: true) {
             ThreadCommandButtons(commands: [.label, .move], threads: threads)
-        } label: {
-            Image(.tag, size: 18).glassFace()
         }
-        .menuStyle(.button).buttonStyle(.plain)
-        .accessibilityLabel("Label")
-        Spacer()
-        Menu {
+        IconMenu(symbol: .ellipsis, help: "More", circled: false, strong: true) {
             ThreadCommandButtons(commands: [.read] + ThreadCommand.more.filter { threads.count == 1 || $0 != .print }, threads: threads)
             if reply {
                 Divider()
                 ThreadCommandButtons(commands: [.replyAll, .forward], threads: threads)
             }
-        } label: {
-            Image(.ellipsis, size: 18).glassFace()
-        }
-        .menuStyle(.button).buttonStyle(.plain)
-        .accessibilityLabel("More")
-        if reply {
-            Spacer()
-            Button { store.run(.reply, on: threads) } label: { Image(.reply, size: 18).glassFace() }.accessibilityLabel("Reply")
-        }
-    }
-}
-
-extension ToolbarContent {
-    /// The bar's controls without the system's frosted pill, so each wears its own clear glass.
-    @ToolbarContentBuilder func clearGlass() -> some ToolbarContent {
-        if #available(iOS 26, *) {
-            sharedBackgroundVisibility(.hidden)
-        } else {
-            self
-        }
-    }
-}
-
-extension View {
-    /// A bar control's face on clear glass: the mail shows through it as it scrolls under.
-    @ViewBuilder func glassFace() -> some View {
-        if #available(iOS 26, *) {
-            padding(.horizontal, Space.m).frame(minWidth: Theme.fieldHeight, minHeight: Theme.fieldHeight)
-                .glassEffect(.clear.interactive(), in: .capsule)
-        } else {
-            self
         }
     }
 }
@@ -357,12 +325,7 @@ struct ThreadScreenIOS: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .bottomBar) {
-                CommandBar(threads: [thread], reply: true)
-            }
-            .clearGlass()
-        }
+        .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true) }
         .onChange(of: store.conversation?.id) { _, open in
             if open == nil { dismiss() }
         }

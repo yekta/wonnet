@@ -83,6 +83,17 @@ struct GalleryView: View {
                             StarButton(starred: false) {}
                             PlainButton(action: {}) { Text("Undo").textStyle(.labelStrong, color: Tokens.primary.color) }
                         }
+                        HStack(spacing: Space.s) {
+                            GlassBar {
+                                IconButton(symbol: .archive, help: "Archive", circled: false, strong: true) {}
+                                IconButton(symbol: .trash, help: "Trash", circled: false, strong: true) {}
+                                IconButton(symbol: .clock, help: "Snooze", circled: false, strong: true) {}
+                                IconMenu(symbol: .ellipsis, help: "More", circled: false, strong: true) {
+                                    Button("One") {}
+                                }
+                            }
+                            GlassCircle(symbol: .reply, help: "Reply") {}
+                        }
                     }
                     FormSection(title: "Fields") {
                         InputField(label: "Name", text: $text, placeholder: "Placeholder")

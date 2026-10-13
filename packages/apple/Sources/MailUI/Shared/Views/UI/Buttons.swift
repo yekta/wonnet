@@ -234,7 +234,7 @@ struct ChoiceMenu<Option: Hashable>: View {
 
 /// An icon in a thin circle, as Newton's toolbars drew them. `active` is lit in the primary
 /// colour: a reminder set, a filter on. `quiet` is drawn fainter, for a control that should
-/// not call for attention.
+/// not call for attention; `strong` in the foreground's colour, for an icon on a bar.
 struct IconButton: View {
     let symbol: Symbol
     var help: String
@@ -242,12 +242,13 @@ struct IconButton: View {
     var active = false
     var circled = true
     var quiet = false
+    var strong = false
     var pending = false
     let action: () -> Void
 
     var body: some View {
         Button(action: { if !pending { action() } }) {
-            IconCircle(symbol: symbol, size: size, active: active, circled: circled, quiet: quiet, pending: pending)
+            IconCircle(symbol: symbol, size: size, active: active, circled: circled, quiet: quiet, strong: strong, pending: pending)
         }
         .buttonStyle(.press)
         .help(help)
@@ -261,13 +262,14 @@ struct IconMenu<Content: View>: View {
     var help: String
     var size: ControlSize = .regular
     var circled = true
+    var strong = false
     @ViewBuilder let content: Content
 
     var body: some View {
         Menu {
             content
         } label: {
-            IconCircle(symbol: symbol, size: size, circled: circled)
+            IconCircle(symbol: symbol, size: size, circled: circled, strong: strong)
         }
         .menuStyle(.button)
         .buttonStyle(.press)
@@ -285,6 +287,7 @@ struct IconCircle: View {
     var active = false
     var circled = true
     var quiet = false
+    var strong = false
     var pending = false
     @Environment(\.hovered) private var hovered
 
@@ -300,6 +303,7 @@ struct IconCircle: View {
     private var tint: Color {
         if active { return Tokens.primary.color }
         if quiet { return hovered ? Tokens.mutedForeground.color : Tokens.mutedStrongerForeground.color }
+        if strong { return Tokens.foreground.color }
         return hovered ? Tokens.foreground.color : Tokens.mutedForeground.color
     }
 }
