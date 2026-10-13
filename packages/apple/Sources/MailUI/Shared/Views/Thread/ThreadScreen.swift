@@ -112,7 +112,7 @@ struct ThreadScreen: View {
                 .onTapGesture { if folded { store.unfoldedMessages.insert(message.id) } }
                 .id(message.id)
                 if message.id != conversation.messages.last?.id {
-                    Rule(color: Tokens.borderCard)
+                    Rule(color: Theme.cardRule)
                 }
             }
             if let draft = conversation.draftId {
@@ -123,7 +123,7 @@ struct ThreadScreen: View {
         .padding(.horizontal, Theme.cardInset)
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
-        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Tokens.cardLarger.color).shadow(.lg))
+        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.cardFill.color).shadow(.lg))
     }
 
     /// "Roger Cotes to me@example.com", the "to" fainter than the names.
@@ -168,7 +168,7 @@ struct ThreadScreen: View {
     /// The reply the user started and didn't send.
     private func draftCard(_ id: String) -> some View {
         VStack(spacing: 0) {
-            Rule(color: Tokens.borderCard)
+            Rule(color: Theme.cardRule)
             HStack(spacing: Space.m) {
                 Image(.pencil, size: 14).foregroundStyle(Tokens.destructive.color)
                 Text("Draft").textStyle(.subheading, color: Tokens.destructive.color)

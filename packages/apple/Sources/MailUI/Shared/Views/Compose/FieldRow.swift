@@ -24,7 +24,7 @@ struct FieldRow<Content: View>: View {
             .padding(.horizontal, Theme.cardInset)
             .padding(.vertical, wraps ? Space.s : 0)
             .frame(minHeight: Theme.searchHeight * Platform.scale)
-            Rule(color: Tokens.borderCard).padding(.horizontal, Theme.cardInset)
+            Rule(color: Theme.cardRule).padding(.horizontal, Theme.cardInset)
         }
     }
 }
