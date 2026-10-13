@@ -51,8 +51,8 @@ final class MacDelegate: NSObject, NSApplicationDelegate {
 /// the window's buttons, where the system gives it its clicks; what follows it on the bar is ours,
 /// drawn under the toolbar. This view reads nothing of the mail, so a sync doesn't redraw it.
 struct MacRoot: View {
-    /// Past the window's buttons and the toolbar's button beside them.
-    private static let pastToolbarButton: CGFloat = 139
+    /// Past the window's buttons and the toolbar's button beside them, its margin included.
+    private static let pastToolbarButton: CGFloat = 133
 
     @Environment(MailStore.self) private var store
     /// Full screen hides the window's buttons.
@@ -242,7 +242,7 @@ struct MacTopBar: View {
             // The mail stays under the settings, which have their own.
             if store.settings == nil {
                 ToolbarItem(placement: .navigation) {
-                    HStack(spacing: Space.s + 2) {
+                    HStack(spacing: 0) {
                         IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)
                         // Over the open sidebar, only the menu, which closes it.
                         if store.conversation != nil, !store.sidebarOpen {
@@ -258,8 +258,9 @@ struct MacTopBar: View {
         .onChange(of: store.searchQuery) { _, text in if text.isEmpty { query = "" } }
     }
 
-    /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the window.
-    private var leadingInset: CGFloat { pastToolbarButton - Space.l }
+    /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the
+    /// window. The title starts where back's circle does, half a button gap past the menu's margin.
+    private var leadingInset: CGFloat { pastToolbarButton + Theme.buttonGap / 2 - Space.l }
 
     /// Its words when there is room, its icon alone when there is not.
     private var compose: some View {
