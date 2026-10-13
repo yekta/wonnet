@@ -67,7 +67,7 @@ enum Tokens {
 
 /// How much of a colour or a view shows: every opacity in the apps is one of these.
 enum Opacity {
-    static let overlay = ThemeNumber(light: 0.15, dark: 0.15)
+    static let overlay = ThemeNumber(light: 0.25, dark: 0.35)
     static let disabled = ThemeNumber(light: 0.4, dark: 0.4)
     static let dimmed = ThemeNumber(light: 0.5, dark: 0.5)
     static let dimmedStronger = ThemeNumber(light: 0.25, dark: 0.25)

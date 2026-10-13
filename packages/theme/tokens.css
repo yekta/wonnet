@@ -76,7 +76,7 @@
   --account-8: #777ad8;
   --account-9: #a06cc4;
   --account-10: #c35f92;
-  --opacity-overlay: 0.15;
+  --opacity-overlay: 0.25;
   --opacity-disabled: 0.4;
   --opacity-dimmed: 0.5;
   --opacity-dimmed-stronger: 0.25;
@@ -153,7 +153,7 @@
     --account-8: #9499fa;
     --account-9: #bf8ae6;
     --account-10: #e57db1;
-    --opacity-overlay: 0.15;
+    --opacity-overlay: 0.35;
     --opacity-disabled: 0.4;
     --opacity-dimmed: 0.5;
     --opacity-dimmed-stronger: 0.25;
