@@ -197,7 +197,8 @@ async fn work(
         flush_ops(state, &account, connection).await?;
         let background = connection.background();
         let synced = background.sync(state, &account).await?;
-        db::set_account_status(&state.db, &account, "ready").await?;
+        let status = if synced.syncing { "syncing" } else { "ready" };
+        db::set_account_status(&state.db, &account, status).await?;
         *backoff = Duration::from_secs(2);
         prefetch(state, &account, &background).await;
         passes.send_modify(|passes| *passes += 1);

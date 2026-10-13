@@ -22,6 +22,8 @@ const CORE: &str = "urn:ietf:params:jmap:core";
 const MAIL: &str = "urn:ietf:params:jmap:mail";
 const SUBMISSION: &str = "urn:ietf:params:jmap:submission";
 const PAGE: usize = 250;
+/// The inbox's newest, fetched before anything else so the list has mail at once.
+const FIRST_PAGE: usize = 50;
 /// How often the event source is asked to ping; a stream silent for three is dead.
 const PING: Duration = Duration::from_secs(30);
 /// An event source is opened again after this long, as the client's timeout would end it.
@@ -364,17 +366,26 @@ impl Jmap {
 
         match sync.email_state.clone() {
             None => {
-                let limit = state.config.initial_sync_limit;
+                // The inbox's newest page comes first, so the list has mail at once; the state is
+                // saved after every page, so a failed pass carries on instead of starting over.
+                let inbox = mailboxes.by_id.iter().find(|(_, mapped)| *mapped == role::INBOX).map(|(id, _)| id.clone());
                 sync.refreshed = true;
+                if let Some(inbox) = inbox {
+                    let (_, email_state) = self.page(state, account, &mailboxes, Some(&inbox), 0, FIRST_PAGE).await?;
+                    sync.email_state = email_state;
+                    db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
+                }
+                let limit = state.config.initial_sync_limit;
                 while sync.synced < limit {
                     let wanted = PAGE.min(limit - sync.synced);
-                    let (count, email_state) = self.page(state, account, &mailboxes, sync.synced, wanted).await?;
+                    let (count, email_state) = self.page(state, account, &mailboxes, None, sync.synced, wanted).await?;
                     sync.email_state = sync.email_state.or(email_state);
                     sync.synced += count;
                     if count < wanted {
                         sync.backfilled = true;
                         break;
                     }
+                    db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
                 }
             }
             Some(since) => match self.changes(state, account, &mailboxes, &since).await {
@@ -391,7 +402,7 @@ impl Jmap {
             let mut position = 0;
             while position < limit {
                 let wanted = PAGE.min(limit - position);
-                let (count, _) = self.page(state, account, &mailboxes, position, wanted).await?;
+                let (count, _) = self.page(state, account, &mailboxes, None, position, wanted).await?;
                 position += count;
                 if count < wanted {
                     break;
@@ -400,31 +411,34 @@ impl Jmap {
             sync.refreshed = true;
         }
         if !sync.backfilled && sync.email_state.is_some() {
-            let (count, _) = self.page(state, account, &mailboxes, sync.synced, PAGE).await?;
+            let (count, _) = self.page(state, account, &mailboxes, None, sync.synced, PAGE).await?;
             sync.synced += count;
             sync.backfilled = count < PAGE;
         }
         db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-        Ok(Synced { backfilling: !sync.backfilled })
+        Ok(Synced { backfilling: !sync.backfilled, syncing: false })
     }
 
-    /// One page of the newest-first listing. Returns how many it had and the Email state.
+    /// One page of the newest-first listing, of one mailbox or of all. Returns how many it had
+    /// and the Email state.
     async fn page(
         &self,
         state: &AppState,
         account: &AccountRow,
         mailboxes: &Mailboxes,
+        mailbox: Option<&str>,
         position: usize,
         limit: usize,
     ) -> anyhow::Result<(usize, Option<String>)> {
+        let mut query = json!({ "sort": [{ "property": "receivedAt", "isAscending": false }], "position": position, "limit": limit });
+        if let Some(mailbox) = mailbox {
+            query["filter"] = json!({ "inMailbox": mailbox });
+        }
         let answers = self
             .call(
                 &[CORE, MAIL],
                 vec![
-                    (
-                        "Email/query",
-                        json!({ "sort": [{ "property": "receivedAt", "isAscending": false }], "position": position, "limit": limit }),
-                    ),
+                    ("Email/query", query),
                     (
                         "Email/get",
                         json!({ "#ids": { "resultOf": "0", "name": "Email/query", "path": "/ids" }, "properties": EMAIL_PROPERTIES }),
