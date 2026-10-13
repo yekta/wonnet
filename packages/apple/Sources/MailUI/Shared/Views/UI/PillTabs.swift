@@ -16,7 +16,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
     var body: some View {
         MovableList(
             items: tabs, axis: .horizontal, group: { _ in reorder == nil ? nil : "tabs" },
-            rowInset: EdgeInsets(top: 0, leading: 1, bottom: 0, trailing: 1), rowRadius: Radius.md,
+            rowInset: EdgeInsets(top: 0, leading: Space.xs / 2, bottom: 0, trailing: Space.xs / 2), rowRadius: Radius.md,
             clicked: pick, moved: moved, menu: menu
         ) { tab in
             Face(symbol: symbol(tab), title: title(tab), count: count(tab), chosen: tab.id == selected)
@@ -47,7 +47,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
             .padding(.horizontal, Space.m * Platform.scale)
             .frame(height: ControlSize.regular.height * Platform.scale)
             .background(RoundedRectangle(cornerRadius: Radius.md).fill(chosen ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear))
-            .padding(.horizontal, 1)
+            .padding(.horizontal, Space.xs / 2)
             .contentShape(Rectangle())
         }
 
