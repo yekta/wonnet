@@ -242,7 +242,7 @@ struct MacTopBar: View {
             // The mail stays under the settings, which have their own.
             if store.settings == nil {
                 ToolbarItem(placement: .navigation) {
-                    HStack(spacing: Self.buttonSpacing) {
+                    HStack(spacing: 0) {
                         IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)
                         // Over the open sidebar, only the menu, which closes it.
                         if store.conversation != nil, !store.sidebarOpen {
@@ -258,12 +258,9 @@ struct MacTopBar: View {
         .onChange(of: store.searchQuery) { _, text in if text.isEmpty { query = "" } }
     }
 
-    /// Between the menu and back buttons in the toolbar.
-    private static let buttonSpacing: CGFloat = Space.s
-
     /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the
-    /// window. The title starts where back's circle does: the gap and the circle's margin on.
-    private var leadingInset: CGFloat { pastToolbarButton + Self.buttonSpacing + Theme.buttonGap / 2 - Space.l }
+    /// window. The title starts where back's circle does, half a button gap past the menu's margin.
+    private var leadingInset: CGFloat { pastToolbarButton + Theme.buttonGap / 2 - Space.l }
 
     private var compose: some View {
         ActionButton(title: "Compose", symbol: .squarePen, variant: .outline, action: store.newMessage)
