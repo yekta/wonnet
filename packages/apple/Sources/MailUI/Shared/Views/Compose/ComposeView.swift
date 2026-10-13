@@ -33,6 +33,7 @@ struct ComposeView: View {
     @State private var notice: String?
     @State private var bodyHeight: CGFloat = 80
     @State private var editing = BodyEditing()
+    @FocusState private var subjectFocused: Bool
 
     fileprivate enum Timing: String, Identifiable {
         case sendLater, remind
@@ -224,8 +225,9 @@ struct ComposeView: View {
                 Spacer(minLength: 0)
             }
         }
-        FieldRow(label: "Subject") {
+        FieldRow(label: "Subject", focus: { subjectFocused = true }) {
             TextField("", text: $compose.draft.subject).textFieldStyle(.plain)
+                .focused($subjectFocused)
                 .onSubmit { editing.focus() }
         }
     }

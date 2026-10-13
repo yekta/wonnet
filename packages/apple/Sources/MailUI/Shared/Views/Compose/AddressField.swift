@@ -16,7 +16,7 @@ struct AddressField<Accessory: View>: View {
     @State private var highlighted = 0
 
     var body: some View {
-        FieldRow(label: label, wraps: true) {
+        FieldRow(label: label, wraps: true, focus: { focused = true }) {
             FlowLayout(spacing: Space.xs + 2, lineSpacing: Space.xs + 2) {
                 ForEach(Array(addresses.enumerated()), id: \.offset) { index, address in
                     Chip(
