@@ -398,10 +398,8 @@ private struct AddAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Sheet(title: "Add account", size: .small, background: Tokens.background) {
-            ScrollView {
-                AddAccountForm().padding(Space.xl)
-            }
+        Sheet(title: "Add account", size: .medium, background: Tokens.background) {
+            AddAccountFlow()
         }
         .onChange(of: store.accounts.count) { dismiss() }
     }
