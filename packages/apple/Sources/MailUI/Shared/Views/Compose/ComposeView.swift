@@ -79,7 +79,7 @@ struct ComposeView: View {
                 ScrollView {
                     card
                         .frame(maxWidth: Theme.cardWidth, minHeight: window.size.height - 2 * Space.l)
-                        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Tokens.card.color).shadow(.lg))
+                        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.cardFill.color).shadow(.lg))
                         .padding(.vertical, Space.l)
                         .padding(.horizontal, Space.xl + 4)
                         .frame(maxWidth: .infinity)
@@ -91,13 +91,13 @@ struct ComposeView: View {
         .background(Tokens.background.color)
         .modifier(behaviour)
         #else
-        Sheet(title: title, size: .large, close: "Cancel", background: Tokens.card) {
+        Sheet(title: title, size: .large, close: "Cancel") {
             VStack(spacing: 0) {
                 ScrollView {
                     card
                 }
                 .scrollDismissesKeyboard(.interactively)
-                Rule(color: Tokens.borderCard)
+                Rule(color: Theme.cardRule)
                 toolbar
             }
             .modifier(behaviour)
@@ -117,7 +117,7 @@ struct ComposeView: View {
                 Notice(text: notice, tone: .error, symbol: .circleAlert)
                     .padding(.horizontal, Theme.cardInset)
                     .padding(.vertical, Space.m)
-                Rule(color: Tokens.borderCard).padding(.horizontal, Theme.cardInset)
+                Rule(color: Theme.cardRule).padding(.horizontal, Theme.cardInset)
             }
             fields
             message
@@ -270,7 +270,7 @@ struct ComposeView: View {
                         .textStyle(.label, color: Tokens.mutedStrongerForeground.color)
                         .textSelection(.enabled)
                         .padding(.leading, Space.m)
-                        .overlay(alignment: .leading) { Rectangle().fill(Tokens.borderCard.color).frame(width: 2) }
+                        .overlay(alignment: .leading) { Rectangle().fill(Theme.cardRule.color).frame(width: 2) }
                 }
             }
             if !compose.draft.attachments.isEmpty || compose.remindAt != nil {

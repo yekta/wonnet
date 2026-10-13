@@ -11,11 +11,12 @@ added to the component, not to the view.
   colour, a number for an opacity or a radius: `Tokens.primary.opacity(Opacity.lit)`,
   `.opacity(Opacity.disabled, when: !enabled)`, `.shadow(.md)`. What is missing is added to
   `tokens.json`.
-- The page is `background`: the bars, the sidebar, the list. A message being written and a
-  form's card are `card` on it; an open thread, the one card that fills the page, is
-  `cardLarger`; menus, popups and toasts are `popover`. A
-  hairline on the page is `border`; inside a card it is `borderCard`, around a popover
-  `borderPopover`. A field is filled with `input` and outlined in `borderInput`.
+- The page is `background`: the bars, the sidebar, the list. A form's card is `card` on it. The
+  one card that fills the page, an open thread or a message being written, is `Theme.cardFill`:
+  `cardLarger` on the Mac, where it floats on the page, and `background` on iOS, where it is
+  the page. Menus, popups and toasts are `popover`. A hairline on the page is `border`; inside
+  a card it is `borderCard` (`Theme.cardRule` in the card that fills the page), around a
+  popover `borderPopover`. A field is filled with `input` and outlined in `borderInput`.
 - Text comes from the scale, `TextStyle`: `Text("…").textStyle(.caption)`. A view picks a
   style, never a size. A style carries its usual colour; `color:` overrides it.
 - Distances come from `Space`: `xs` 4, `s` 8, `m` 12, `l` 16, `xl` 20, `xxl` 28. Heights of

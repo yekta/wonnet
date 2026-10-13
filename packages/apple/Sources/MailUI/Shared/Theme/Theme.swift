@@ -117,14 +117,19 @@ enum Theme {
     static let iosAccountBarWidth: CGFloat = 3
     /// The widest the list and the thread's card grow on the Mac.
     static let cardWidth: CGFloat = 1000
-    /// From a card's edge to what it holds: the thread's messages, a message being written. The
-    /// Mac's card floats on the page; the phone's runs edge to edge.
+    /// A card that fills the page: the thread's messages, a message being written. The Mac's
+    /// floats on the page, `cardLarger` with `borderCard` hairlines, inset from its edges; the
+    /// phone's is the page itself, `background` with `border` hairlines, edge to edge.
     #if os(macOS)
     static let cardInset: CGFloat = 80
     static let cardRadius: CGFloat = Radius.sm
+    static let cardFill = Tokens.cardLarger
+    static let cardRule = Tokens.borderCard
     #else
     static let cardInset: CGFloat = Space.l
     static let cardRadius: CGFloat = 0
+    static let cardFill = Tokens.background
+    static let cardRule = Tokens.border
     #endif
     static let sidebarWidth: CGFloat = 300
     /// The Mac sidebar sliding in and out: a critically damped spring, as the iOS drawer's.
