@@ -371,12 +371,9 @@ fn contacts_rank_people_written_to_and_match_names_and_addresses() {
     ann.recipients.cc = vec![Address::new(Some("Annie Hall"), "annie@y.com")];
     let mut robot = message("m2", "t2", "Robot", 2_000);
     robot.from = Address::new(Some("Ann's shop"), "noreply@annshop.com");
-    apply(
-        &mut store,
-        &[account()],
-        &[ann, robot, mine("m3", "t3", "annie@y.com", 3_000), mine("m4", "t4", "zed@z.com", 4_000)],
-        1,
-    );
+    let mut to_annie = mine("m3", "t3", "annie@y.com", 3_000);
+    to_annie.recipients.to = vec![Address::new(Some("Annie Hall"), "annie@y.com")];
+    apply(&mut store, &[account()], &[ann, robot, to_annie, mine("m4", "t4", "zed@z.com", 4_000)], 1);
     let found = |query: &str| -> Vec<String> {
         store.contacts(query, 8).unwrap().into_iter().map(|address| address.email).collect()
     };
@@ -390,6 +387,46 @@ fn contacts_rank_people_written_to_and_match_names_and_addresses() {
     let person = store.person("ANNIE@y.com", &Utc::now()).unwrap();
     assert_eq!((person.name.as_str(), person.initials.as_str()), ("Annie Hall", "AH"));
     assert_eq!(person.threads.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(), ["a:t3", "a:t1"]);
+}
+
+#[test]
+fn contacts_match_the_typed_address_first_and_are_named_by_their_own_mail() {
+    let mut store = store();
+    let mut close = mine("m1", "t1", "pa@y.com.tr", 1_000);
+    close.recipients.to.push(Address::new(Some("Pat Jones"), "pat@y.com"));
+    let mut again = mine("m2", "t2", "pa@y.com.tr", 2_000);
+    again.recipients.to.push(Address::new(Some("Pat Jones"), "pat@y.com"));
+    let mut once = message("m3", "t3", "Once", 3_000);
+    once.from = Address::new(Some("pa@y.com"), "pa@y.com");
+    once.recipients.to = vec![Address::new(Some("Kuldeep kumar"), "pa@y.com.tr")];
+    let mut patrick = message("m4", "t4", "Patrick", 4_000);
+    patrick.from = Address::new(Some("Patrick"), "pat@y.com");
+    let mut bob = message("m5", "t5", "Bob", 5_000);
+    bob.from = Address::new(Some("Bob"), "rob@z.com");
+    let mut robert = message("m6", "t6", "Robert", 6_000);
+    robert.from = Address::new(Some("Robert"), "rob@z.com");
+    let mut spam = message("m7", "t7", "Spammer", 7_000);
+    spam.labels = vec!["spam".into()];
+    apply(&mut store, &[account()], &[close, again, once, patrick, bob, robert, spam], 1);
+    let found = |query: &str| -> Vec<String> {
+        store.contacts(query, 8).unwrap().into_iter().map(|address| address.display().to_string()).collect()
+    };
+    let emails = |query: &str| -> Vec<String> {
+        store.contacts(query, 8).unwrap().into_iter().map(|address| address.email).collect()
+    };
+    assert_eq!(
+        emails("pa@y.com"),
+        ["pa@y.com", "pa@y.com.tr"],
+        "the address typed comes before the one written to more"
+    );
+    assert_eq!(emails("pa@y"), ["pa@y.com.tr", "pa@y.com"], "both begun, the one written to more first");
+    assert_eq!(found("pat"), ["Pat Jones"], "the user's own name for them, not the one their mail came with");
+    assert!(found("patrick").is_empty());
+    assert!(found("kuldeep").is_empty(), "a third party's To line names no one");
+    assert_eq!(found("rob"), ["Robert"], "their latest name, when the user has none");
+    assert!(found("bob").is_empty(), "the old name is forgotten");
+    assert!(found("spam").is_empty());
+    assert!(found("pa@y.com\u{10FFFF}").is_empty());
 }
 
 #[test]

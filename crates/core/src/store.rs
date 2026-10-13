@@ -30,7 +30,7 @@ use crate::api::{AccountView, Filter, LabelChip, Mailbox, NewMail, Person, Split
 use crate::render::{dates, drafts, rows};
 use crate::search::{self, Condition, Query};
 
-const SCHEMA_VERSION: &str = "5";
+const SCHEMA_VERSION: &str = "6";
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -1165,17 +1165,19 @@ impl Store {
 
     // ---------- people ----------
 
-    /// The people whose name or address starts with every word of `query`, those the user wrote
-    /// to most first.
+    /// The people whose name or address starts with every word of `query`: the address itself,
+    /// then the addresses and the names it begins, then the rest, each those the user wrote to
+    /// most first.
     pub fn contacts(&self, query: &str, limit: usize) -> Result<Vec<Address>> {
-        let words: Vec<String> = query.to_lowercase().split_whitespace().map(String::from).collect();
-        let mut found = Vec::new();
+        let query = query.trim().to_lowercase();
+        let words: Vec<&str> = query.split_whitespace().collect();
         let Some(first) = words.first() else {
             let mut statement = self.db.prepare_cached(
                 "SELECT c.email, COALESCE(b.name, c.name), c.sent FROM contacts c LEFT JOIN address_book b USING (email)
                  ORDER BY (c.sent * 4 + c.received) DESC, c.last DESC LIMIT ?1",
             )?;
             let rows = statement.query_map([(limit * 4) as i64], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+            let mut found = Vec::new();
             for row in rows {
                 let (email, name, sent): (String, Option<String>, i64) = row?;
                 if sent > 0 || !is_robot(&email) {
@@ -1193,20 +1195,21 @@ impl Store {
         let rows = statement.query_map(params![first, format!("{first}\u{10FFFF}")], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?;
+        let mut found = Vec::new();
         for row in rows {
             let (email, name, sent): (String, Option<String>, i64) = row?;
             if sent == 0 && is_robot(&email) {
                 continue;
             }
             let known = contact_words(&email, name.as_deref());
-            if words[1..].iter().all(|word| known.iter().any(|known| known.starts_with(word.as_str()))) {
-                found.push(Address { name, email });
-                if found.len() == limit {
-                    break;
-                }
+            if !words[1..].iter().all(|word| known.iter().any(|known| known.starts_with(word))) {
+                continue;
             }
+            let address = Address { name, email };
+            found.push((closeness(&address, &query), address));
         }
-        Ok(found)
+        found.sort_by_key(|(closeness, _)| *closeness);
+        Ok(found.into_iter().map(|(_, address)| address).take(limit).collect())
     }
 
     /// Someone, and the latest threads with them.
@@ -1258,6 +1261,7 @@ impl Store {
         for email in &gone {
             tx.execute("DELETE FROM address_book WHERE email = ?1", [email])?;
             tx.execute("DELETE FROM contacts WHERE email = ?1 AND sent = 0 AND received = 0", [email])?;
+            index_contact(&tx, email)?;
         }
         for (email, name) in &renamed {
             tx.execute("INSERT OR REPLACE INTO address_book (email, name) VALUES (?1, ?2)", [email, name])?;
@@ -1265,11 +1269,7 @@ impl Store {
                 "INSERT OR IGNORE INTO contacts (email, name, sent, received, last) VALUES (?1, ?2, 0, 0, 0)",
                 [email, name],
             )?;
-            let mut statement =
-                tx.prepare_cached("INSERT OR IGNORE INTO contact_words (word, email) VALUES (?1, ?2)")?;
-            for word in contact_words(email, Some(name)) {
-                statement.execute(params![word, email])?;
-            }
+            index_contact(&tx, email)?;
         }
         let mut touched = Touched::default();
         {
@@ -1450,7 +1450,23 @@ fn named(db: &Connection, address: &Address) -> Result<Address> {
     })
 }
 
-/// The words a contact is found by: its address, the address's parts, its name's words.
+/// How closely a contact matches `query`, closest first: its address, an address it begins,
+/// a name it begins, a word within.
+fn closeness(address: &Address, query: &str) -> u8 {
+    if address.email == query {
+        return 0;
+    }
+    if address.email.starts_with(query) {
+        return 1;
+    }
+    if address.name.as_deref().is_some_and(|name| name.to_lowercase().starts_with(query)) {
+        return 2;
+    }
+    3
+}
+
+/// The words a contact is found by: its address, the address's parts, its name's words. An
+/// address written as a name is not a name.
 fn contact_words(email: &str, name: Option<&str>) -> Vec<String> {
     let mut words = vec![email.to_string()];
     if let Some((local, domain)) = email.split_once('@') {
@@ -1462,7 +1478,7 @@ fn contact_words(email: &str, name: Option<&str>) -> Vec<String> {
         words.extend(
             name.to_lowercase()
                 .split(|c: char| c.is_whitespace() || ",.()\"'<>".contains(c))
-                .filter(|word| !word.is_empty())
+                .filter(|word| !word.is_empty() && !word.contains('@'))
                 .map(String::from),
         );
     }
@@ -1471,8 +1487,32 @@ fn contact_words(email: &str, name: Option<&str>) -> Vec<String> {
     words
 }
 
-/// Counts the people of a new message: whom the user wrote to, and who wrote.
+/// Writes again the words a contact is found by, from its address and its names: the one its
+/// mail came with and the address book's.
+fn index_contact(tx: &Transaction, email: &str) -> Result<()> {
+    tx.prepare_cached("DELETE FROM contact_words WHERE email = ?1")?.execute([email])?;
+    let names: Vec<Option<String>> = tx
+        .prepare_cached(
+            "SELECT name FROM contacts WHERE email = ?1 UNION SELECT name FROM address_book WHERE email = ?1",
+        )?
+        .query_map([email], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut statement = tx.prepare_cached("INSERT OR IGNORE INTO contact_words (word, email) VALUES (?1, ?2)")?;
+    for name in &names {
+        for word in contact_words(email, name.as_deref()) {
+            statement.execute(params![word, email])?;
+        }
+    }
+    Ok(())
+}
+
+/// Counts the people of a new message: whom the user wrote to, and who wrote. Spam counts for
+/// nothing. A name comes from the user's own mail, as they addressed the person, or else from
+/// the person's own From line; what a third party wrote in a To line names no one.
 fn remember_people(tx: &Transaction, message: &Message, me: &HashSet<String>) -> Result<()> {
+    if message.labels.iter().any(|label| label == role::SPAM) {
+        return Ok(());
+    }
     let from_me = me.contains(&message.from.email);
     let recipients = message.recipients.to.iter().chain(&message.recipients.cc).chain(&message.recipients.bcc);
     let mut seen = HashSet::new();
@@ -1480,26 +1520,25 @@ fn remember_people(tx: &Transaction, message: &Message, me: &HashSet<String>) ->
         if address.email.is_empty() || me.contains(&address.email) || !seen.insert(address.email.as_str()) {
             continue;
         }
-        let sent = from_me as i64;
-        let received = (index == 0) as i64;
-        let known: Option<Option<String>> = tx
-            .prepare_cached("SELECT name FROM contacts WHERE email = ?1")?
-            .query_row([&address.email], |row| row.get(0))
+        let sender = index == 0;
+        let name = if sender || from_me { address.name.as_deref() } else { None };
+        let known: Option<(Option<String>, i64)> = tx
+            .prepare_cached("SELECT name, sent FROM contacts WHERE email = ?1")?
+            .query_row([&address.email], |row| Ok((row.get(0)?, row.get(1)?)))
             .optional()?;
+        let named = match &known {
+            None => true,
+            Some((old, sent)) => name.is_some() && (from_me || old.is_none() || *sent == 0),
+        };
         tx.prepare_cached(
             "INSERT INTO contacts (email, name, sent, received, last) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT (email) DO UPDATE SET sent = sent + excluded.sent, received = received + excluded.received,
-                 name = CASE WHEN excluded.name IS NOT NULL AND excluded.last >= last THEN excluded.name ELSE name END,
+                 name = CASE WHEN ?6 AND excluded.last >= last THEN excluded.name ELSE name END,
                  last = max(last, excluded.last)",
         )?
-        .execute(params![address.email, address.name, sent, received, message.date])?;
-        let renamed = address.name.is_some() && known.as_ref().is_some_and(|name| *name != address.name);
-        if known.is_none() || renamed {
-            let mut statement =
-                tx.prepare_cached("INSERT OR IGNORE INTO contact_words (word, email) VALUES (?1, ?2)")?;
-            for word in contact_words(&address.email, address.name.as_deref()) {
-                statement.execute(params![word, address.email])?;
-            }
+        .execute(params![address.email, name, from_me as i64, sender as i64, message.date, named])?;
+        if known.as_ref().is_none_or(|(old, _)| named && old.as_deref() != name) {
+            index_contact(tx, &address.email)?;
         }
     }
     Ok(())
