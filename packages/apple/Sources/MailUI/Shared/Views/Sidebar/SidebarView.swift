@@ -93,7 +93,7 @@ struct SidebarView: View {
     private func accountRow(_ account: AccountView) -> some View {
         NavRow(title: account.title, dot: Theme.accountColor(account.color).color, action: nil) {
             if account.status == "syncing" {
-                ProgressView().controlSize(.mini)
+                Spinner()
             } else if account.status == "reauth" || account.status == "error" {
                 Image(.circleAlert, size: 13).foregroundStyle(Tokens.destructive.color)
             }

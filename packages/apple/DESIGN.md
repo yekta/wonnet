@@ -109,6 +109,7 @@ added to the component, not to the view.
 | `ToggleRow` | A switch with its words |
 | `Disclosure` | A line that opens more |
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |
+| `Spinner` | The small spinner in the muted text colour, for what is still coming: a mailbox syncing after its title, the next page of a list, an update; `size` fixes its box |
 | `ItemRow` | A thing in a list with its controls at the end |
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |
 | `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, with a check when it is the one in force; and the list that scrolls to the highlighted one |

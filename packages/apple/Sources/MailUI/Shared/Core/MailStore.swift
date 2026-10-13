@@ -277,6 +277,15 @@ public final class MailStore {
         return (name, account.title)
     }
 
+    /// The mailbox's mail is still coming: its account's, or any account's in a unified mailbox.
+    var mailboxSyncing: Bool {
+        if connection == "connecting" && accounts.isEmpty { return true }
+        let syncing = accounts.filter { $0.status == "syncing" }
+        let parts = baseMailbox.split(separator: "/")
+        guard parts.count > 1, let account = parts.first else { return !syncing.isEmpty }
+        return syncing.contains { $0.id == account }
+    }
+
     /// Whether a sheet, the palette or a question is up, when the window's keys don't apply.
     var sheetOpen: Bool {
         compose != nil || snoozing != nil || labeling != nil || palette != nil || settings != nil || galleryOpen || confirmation != nil

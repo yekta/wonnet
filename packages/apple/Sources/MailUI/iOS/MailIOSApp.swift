@@ -321,7 +321,7 @@ struct ThreadScreenIOS: View {
             if let conversation = store.conversation, conversation.id == thread {
                 ThreadScreen(conversation: conversation)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spinner().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationBarTitleDisplayMode(.inline)

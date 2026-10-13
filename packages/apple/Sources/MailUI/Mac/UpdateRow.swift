@@ -39,7 +39,7 @@ struct UpdateRow: View {
     }
 
     private var spinner: some View {
-        ProgressView().controlSize(.mini)
+        Spinner()
     }
 
     /// The icon and the title, with `accessory` at the end; under them the detail, the download's
