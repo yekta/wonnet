@@ -58,9 +58,10 @@ added to the component, not to the view.
 - The platform's controls are used when they fit, not by default: the switch (`ToggleRow`),
   alerts, menus, iOS's navigation bar for sheets' titles and buttons, Quick Look, the file
   pickers. Choice menus, dropdowns, fields and buttons are ours.
-- A menu or a dropdown holds a few choices, as many as fit a glance. A list that can grow
-  (addresses to send as, labels, times) is a `Sheet` with a `SearchField` that narrows a
-  `ChoiceList`, never a menu to scroll.
+- A menu or a dropdown holds a few choices, as many as fit a glance. A list that can grow is
+  never a menu to scroll: a choice of one thing (the address to send as) is a `Combobox`, a
+  popup under its face on the Mac and a sheet on iOS; what is done to a thread (labels, times)
+  is a `Sheet` with a `SearchField` that narrows a `ChoiceList`.
 - The primary colour is for the one thing a page is for: Send over a message, the switch
   that is on, a selected row's check. Nothing else is blue: a sheet's Cancel, an icon in a
   bar and a link are in the foreground's colour.
@@ -99,8 +100,9 @@ added to the component, not to the view.
 | `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `InputField` | A text field with its label above, or a text box of `lines` |
-| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.bar` as the top bar's capsule |
+| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.popup` the same, smaller, at the top of a popup; `.bar` as the top bar's capsule |
 | `Dropdown` | A choice from a short list, with a label |
+| `Combobox` | A choice from a list that can grow, found by typing: its face shows the one in force, a `.field` with a label or `.inline` words; opens a popup with a `SearchField` over a `ChoiceList` on the Mac, drawn by the window's or the sheet's `comboboxHost` so nothing is over it, a sheet on iOS |
 | `ChoiceMenu` | One of a few choices, as a button with a chevron that opens them |
 | `ToggleRow` | A switch with its words |
 | `Disclosure` | A line that opens more |
@@ -108,7 +110,7 @@ added to the component, not to the view.
 | `ItemRow` | A thing in a list with its controls at the end |
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |
 | `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, with a check when it is the one in force; and the list that scrolls to the highlighted one |
-| `PopupCard` | A card over the page for suggestions |
+| `PopupCard` | A card over the page for suggestions; `inset` is the space to its edges |
 | `TabStrip` | Tabs on a line with counts |
 | `PillTabs` | Tabs on a line with an icon and a count, the chosen one filled in a rounded rectangle; dragged to reorder, with a menu on each |
 | `BottomTabs` | Tabs across the bottom of the screen, full width, each an icon over its name and count; held and dragged to reorder (iOS) |

@@ -29,6 +29,7 @@ struct ChoiceRow: View {
         let checked: Bool
         let highlighted: Bool
         @Environment(\.hovered) private var hovered
+        @Environment(\.onPopover) private var onPopover
 
         var body: some View {
             HStack(spacing: Space.s + 2) {
@@ -50,8 +51,15 @@ struct ChoiceRow: View {
             }
             .padding(.horizontal, Space.s + 2)
             .frame(minHeight: Theme.rowHeight * Platform.scale)
-            .background(RoundedRectangle(cornerRadius: Radius.sm).fill(highlighted ? Tokens.backgroundAccentLargerStronger.color : hovered ? Tokens.backgroundAccentLarger.color : .clear))
+            .background(RoundedRectangle(cornerRadius: Radius.sm).fill(fill))
             .contentShape(Rectangle())
+        }
+
+        /// On a popover, which is lighter than the page, the fills are the popover's own.
+        private var fill: Color {
+            if highlighted { return (onPopover ? Tokens.popoverAccentStronger : Tokens.backgroundAccentLargerStronger).color }
+            if hovered { return (onPopover ? Tokens.popoverAccent : Tokens.backgroundAccentLarger).color }
+            return .clear
         }
     }
 }
@@ -94,17 +102,32 @@ extension Int {
     }
 }
 
-/// A card floating over the page, for suggestions and short menus.
+/// A card floating over the page, for suggestions and short menus. `inset` is the space to its
+/// edges; none when the content keeps its own, as a combobox's field and list do.
 struct PopupCard<Content: View>: View {
+    var inset: CGFloat = Space.xs + 2
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
-            .padding(Space.xs + 2)
+            .padding(inset)
             .background(
                 RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.popover.color)
                     .shadow(.md, Opacity.shadowStronger)
             )
             .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.borderPopover.color, lineWidth: Theme.hairline))
+            .environment(\.onPopover, true)
+    }
+}
+
+private struct OnPopoverKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the view is on a `PopupCard`, whose rows hover and highlight in its own fills.
+    var onPopover: Bool {
+        get { self[OnPopoverKey.self] }
+        set { self[OnPopoverKey.self] = newValue }
     }
 }

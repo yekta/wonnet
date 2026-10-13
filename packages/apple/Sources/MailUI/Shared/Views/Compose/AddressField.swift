@@ -43,7 +43,7 @@ struct AddressField<Accessory: View>: View {
                             }
                         }
                     }
-                    .frame(maxWidth: 380, alignment: .leading)
+                    .frame(maxWidth: Theme.popupWidth, alignment: .leading)
                     .padding(.leading, FieldRow<EmptyView>.contentInset)
                     .padding(.trailing, Theme.cardInset)
                     .frame(maxWidth: .infinity, alignment: .leading)
