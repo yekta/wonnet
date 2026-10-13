@@ -198,8 +198,8 @@ private struct MacPages: View {
     }
 }
 
-/// Search and compose above the list; back and the thread's actions above a thread. The menu,
-/// and back beside it, are the toolbar's.
+/// The mailbox's name, its tabs, search and compose above the list; back and the thread's
+/// actions above a thread. The menu, and back beside it, are the toolbar's.
 struct MacTopBar: View {
     @Environment(MailStore.self) private var store
     let focusSearch: Int
@@ -218,11 +218,7 @@ struct MacTopBar: View {
             } else {
                 HeaderBar(leadingInset: leadingInset) {
                     if store.conversation == nil {
-                        SearchField(
-                            placeholder: "Search", text: $query, style: .bar, autofocus: false, focusTrigger: focusSearch,
-                            submit: { store.search(query) }, escape: store.endSearch, clear: store.endSearch
-                        )
-                        .frame(maxWidth: 240)
+                        MailboxTitle()
                     }
                 } center: {
                     if let open = store.conversation {
@@ -231,6 +227,13 @@ struct MacTopBar: View {
                         MailboxTabs()
                     }
                 } trailing: {
+                    if store.conversation == nil {
+                        SearchField(
+                            placeholder: "Search", text: $query, style: .bar, autofocus: false, focusTrigger: focusSearch,
+                            submit: { store.search(query) }, escape: store.endSearch, clear: store.endSearch
+                        )
+                        .frame(width: 160)
+                    }
                     compose
                 }
             }
