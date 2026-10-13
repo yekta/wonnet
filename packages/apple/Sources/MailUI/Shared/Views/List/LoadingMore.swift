@@ -6,7 +6,7 @@ struct LoadingMore: View {
 
     var body: some View {
         HStack(spacing: Space.s) {
-            ProgressView().controlSize(.mini)
+            Spinner()
             Text("Loading more").textStyle(.caption)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
