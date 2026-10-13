@@ -128,6 +128,8 @@ struct GalleryView: View {
                         PopupCard {
                             ChoiceRow(title: "Highlighted", detail: "Detail", symbol: .clock, highlighted: true) {}
                             ChoiceRow(title: "A choice", detail: "⌘K", symbol: .command) {}
+                            ChoiceRow(title: "Ada Lovelace", detail: "ada@example.com", avatar: Address(name: "Ada Lovelace", email: "ada@example.com")) {}
+                            ChoiceRow(title: "Sam Lee", detail: "sam@acme.example", dot: Tokens.account2.color, checked: true) {}
                             ChoiceRow(title: "Plain") {}
                         }
                         TabStrip(

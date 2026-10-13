@@ -1,17 +1,21 @@
 import SwiftUI
 
-/// One choice of a short list: a suggestion, a time, a snippet. `highlighted` is the one the
-/// arrow keys are on.
+/// One choice of a short list: a suggestion, a time, a snippet, a sender. It starts with a
+/// `symbol`, an account's `dot` or a person's `avatar`; `checked` is the one in force, with a
+/// check at its end. `highlighted` is the one the arrow keys are on.
 struct ChoiceRow: View {
     let title: String
     var detail: String?
     var symbol: Symbol?
+    var dot: Color?
+    var avatar: Address?
+    var checked = false
     var highlighted = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Face(title: title, detail: detail, symbol: symbol, highlighted: highlighted)
+            Face(title: title, detail: detail, symbol: symbol, dot: dot, avatar: avatar, checked: checked, highlighted: highlighted)
         }
         .buttonStyle(.press)
     }
@@ -20,18 +24,28 @@ struct ChoiceRow: View {
         let title: String
         let detail: String?
         let symbol: Symbol?
+        let dot: Color?
+        let avatar: Address?
+        let checked: Bool
         let highlighted: Bool
         @Environment(\.hovered) private var hovered
 
         var body: some View {
             HStack(spacing: Space.s + 2) {
-                if let symbol {
+                if let avatar {
+                    Avatar(initials: avatar.initials, email: avatar.email, size: 24)
+                } else if let dot {
+                    Circle().fill(dot).frame(width: 8, height: 8).frame(width: 14)
+                } else if let symbol {
                     Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
                 }
                 Text(title).textStyle(.body).lineLimit(1)
                 Spacer(minLength: Space.m)
                 if let detail {
-                    Text(detail).textStyle(.caption).lineLimit(1)
+                    Text(detail).textStyle(.caption).lineLimit(1).truncationMode(.middle)
+                }
+                if checked {
+                    Image(.check, size: 14).foregroundStyle(Tokens.foreground.color)
                 }
             }
             .padding(.horizontal, Space.s + 2)

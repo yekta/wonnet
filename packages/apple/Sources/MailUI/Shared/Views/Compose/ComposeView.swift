@@ -2,8 +2,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Writing a message: who it goes to and from, its subject, its text with the signature and the
-/// quote under it, and its files. It is kept as a draft as it is written. Sending waits for the
-/// undo delay, or for a time picked to send it at.
+/// quote under it, and its files. It is kept as a draft as it is written. The bar on top has
+/// Send alone; everything else about the message is in the toolbar under it. Sending waits for
+/// the undo delay, or for a time picked to send it at.
 struct ComposeView: View {
     @Environment(MailStore.self) private var store
     @State private var compose: Compose
@@ -16,9 +17,12 @@ struct ComposeView: View {
     @State private var edited = false
     @State private var closing = false
     @State private var showQuote = false
-        @State private var importing = false
+    @State private var importing = false
     @State private var timing: Timing?
     @State private var pickingSnippet = false
+    @State private var pickingSender = false
+    /// The address line a shortcut opened, to put the cursor in it.
+    @State private var revealed: String?
     /// The word after a `;` at the caret, while there is one.
     @State private var trigger: String?
     @State private var triggerIndex = 0
@@ -27,7 +31,7 @@ struct ComposeView: View {
     @State private var dropping = false
     /// A line about something that went wrong, under the title.
     @State private var notice: String?
-    @State private var bodyHeight: CGFloat = 160
+    @State private var bodyHeight: CGFloat = 80
     @State private var editing = BodyEditing()
 
     fileprivate enum Timing: String, Identifiable {
@@ -41,16 +45,6 @@ struct ComposeView: View {
         let message: String
         let at: Date?
         let archive: Bool
-    }
-
-    /// An address the message can be from: one of an account's identities.
-    private struct Sender: Hashable {
-        let account: String
-        let identity: Identity
-        let first: Bool
-
-        var key: String { account + "\n" + identity.email }
-        var text: String { identity.name.map { "\($0) <\(identity.email)>" } ?? identity.email }
     }
 
     init(compose: Compose) {
@@ -67,7 +61,9 @@ struct ComposeView: View {
             HeaderBar(title: title) {
                 EmptyView()
             } trailing: {
-                actions
+                ActionButton(title: "Send", symbol: .send, variant: .primary) { send() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(cannotSend)
             }
             .toolbar {
                 if store.settings == nil {
@@ -78,55 +74,62 @@ struct ComposeView: View {
                     .withoutSystemGlass()
                 }
             }
-            Rule(color: Tokens.borderCard)
-            page
+            Rule()
+            GeometryReader { window in
+                ScrollView {
+                    card
+                        .frame(maxWidth: Theme.cardWidth, minHeight: window.size.height - 2 * Space.l)
+                        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Tokens.card.color).shadow(.lg))
+                        .padding(.vertical, Space.l)
+                        .padding(.horizontal, Space.xl + 4)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            Rule()
+            toolbar
         }
+        .background(Tokens.background.color)
         .modifier(behaviour)
         #else
         Sheet(title: title, size: .large, close: "Cancel", background: Tokens.card) {
-            page.modifier(behaviour)
+            VStack(spacing: 0) {
+                ScrollView {
+                    card
+                }
+                .scrollDismissesKeyboard(.interactively)
+                Rule(color: Tokens.borderCard)
+                toolbar
+            }
+            .modifier(behaviour)
         } trailing: {
-            actions
+            Button("Send") { send() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(cannotSend)
         }
         #endif
     }
 
-    private var page: some View {
+    /// The message: its head, then its text, with the whole of the card's rest for writing.
+    private var card: some View {
         VStack(spacing: 0) {
             if let notice {
-                Notice(text: notice, tone: .error)
-                    .padding(.horizontal, Space.l)
-                    .padding(.vertical, Space.s)
+                Notice(text: notice, tone: .error, symbol: .circleAlert)
+                    .padding(.horizontal, Theme.cardInset)
+                    .padding(.vertical, Space.m)
+                Rule(color: Tokens.borderCard).padding(.horizontal, Theme.cardInset)
             }
-            ScrollView {
-                VStack(spacing: 0) {
-                    fields
-                    message
-                }
-                #if os(macOS)
-                .frame(maxWidth: Theme.cardWidth)
-                .background(Tokens.card.color)
-                .padding(.top, Space.l)
-                .padding(.horizontal, Space.xl + 4)
-                .frame(maxWidth: .infinity)
-                #endif
-            }
-            .scrollDismissesKeyboard(.interactively)
-            #if os(macOS)
-            .background(Tokens.background.color)
-            #endif
-            Rule(color: Tokens.borderCard)
-            toolbar
+            fields
+            message
         }
-        .background(Tokens.card.color)
     }
 
     /// What happens around the page on both platforms: drops, the file picker, the sheets, the
     /// questions, the autosave and the keeping of the draft when the view goes.
     private var behaviour: some ViewModifier {
         Behaviour(
-            dropping: $dropping, importing: $importing, timing: $timing, pickingSnippet: $pickingSnippet, warning: $warning,
-            discarding: $discarding, view: self
+            dropping: $dropping, importing: $importing, timing: $timing, pickingSnippet: $pickingSnippet, pickingSender: $pickingSender,
+            warning: $warning, discarding: $discarding, view: self
         )
     }
 
@@ -135,6 +138,7 @@ struct ComposeView: View {
         @Binding var importing: Bool
         @Binding var timing: Timing?
         @Binding var pickingSnippet: Bool
+        @Binding var pickingSender: Bool
         @Binding var warning: Warning?
         @Binding var discarding: Bool
         let view: ComposeView
@@ -169,6 +173,9 @@ struct ComposeView: View {
                         view.put(snippet, replacingTrigger: false)
                     }
                 }
+                .sheet(isPresented: $pickingSender) {
+                    SenderPicker(senders: view.senders, current: view.sender, pick: view.choose)
+                }
                 .alert("Send anyway?", isPresented: Binding(get: { warning != nil }, set: { if !$0 { warning = nil } }), presenting: warning) { warning in
                     Button("Send") { view.finish(at: warning.at, archive: warning.archive) }
                     Button("Keep writing", role: .cancel) {}
@@ -196,63 +203,49 @@ struct ComposeView: View {
 
     // MARK: Parts
 
-    /// Send later, send and archive, and Send: at the end of the bar. On iOS they are the
-    /// navigation bar's own buttons, Send the prominent one.
-    private var actions: some View {
-        #if os(macOS)
-        HStack(spacing: 0) {
-            IconButton(symbol: .calendarClock, help: "Send later (⌘⇧L)") { timing = .sendLater }
-                .keyboardShortcut("l", modifiers: [.command, .shift])
-            if compose.thread != nil {
-                IconButton(symbol: .archive, help: "Send and archive (⌘⇧↩)") { send(archive: true) }
-                    .keyboardShortcut(.return, modifiers: [.command, .shift])
-            }
-            ActionButton(title: "Send", symbol: .send, variant: .primary) { send() }
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(cannotSend)
-        }
-        #else
-        Group {
-            Button { timing = .sendLater } label: { Image(.calendarClock) }
-                .accessibilityLabel("Send later")
-                .keyboardShortcut("l", modifiers: [.command, .shift])
-            if compose.thread != nil {
-                Button { send(archive: true) } label: { Image(.archive) }
-                    .accessibilityLabel("Send and archive")
-                    .keyboardShortcut(.return, modifiers: [.command, .shift])
-            }
-            Button("Send") { send() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(cannotSend)
-        }
-        #endif
-    }
-
     private var cannotSend: Bool {
         assembled.draft.to.isEmpty && assembled.draft.cc.isEmpty && assembled.draft.bcc.isEmpty
     }
 
     @ViewBuilder private var fields: some View {
-        if senders.count > 1 {
-            row("From") {
-                Dropdown(options: senders, selection: Binding(get: { sender }, set: { $0.map(choose) }), title: \.text)
-                    .frame(maxWidth: 420)
-                Spacer()
-            }
-        }
         AddressField(label: "To", addresses: $compose.draft.to, text: $to, autofocus: compose.draft.to.isEmpty) {
             if !compose.showCc {
-                ActionButton(title: "Cc Bcc", variant: .ghost) { compose.showCc = true }
+                ActionButton(title: "Cc Bcc", variant: .ghost, size: .small) { reveal("Cc") }
+                    .padding(.trailing, -Theme.buttonGap / 2)
             }
         }
         if compose.showCc {
-            AddressField(label: "Cc", addresses: $compose.draft.cc, text: $cc)
-            AddressField(label: "Bcc", addresses: $compose.draft.bcc, text: $bcc)
+            AddressField(label: "Cc", addresses: $compose.draft.cc, text: $cc, autofocus: revealed == "Cc")
+            AddressField(label: "Bcc", addresses: $compose.draft.bcc, text: $bcc, autofocus: revealed == "Bcc")
         }
-        row("Subject") {
+        if senders.count > 1 {
+            FieldRow(label: "From") {
+                from
+                Spacer(minLength: 0)
+            }
+        }
+        FieldRow(label: "Subject") {
             TextField("", text: $compose.draft.subject).textFieldStyle(.plain)
+                .onSubmit { editing.focus() }
         }
+    }
+
+    /// The address the message goes from, opening the choice of another. Pulled out by the
+    /// button's own padding, so its words line up with the other fields'.
+    private var from: some View {
+        PlainButton(help: "Send as another address (⌘⇧F)") { pickingSender = true } label: {
+            HStack(spacing: Space.s) {
+                if let sender {
+                    Circle().fill(sender.color).frame(width: 8, height: 8)
+                    Text(sender.name).textStyle(.body).lineLimit(1)
+                    if sender.identity.name != nil {
+                        Text(sender.identity.email).textStyle(.caption).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                Image(.chevronDown, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
+            }
+        }
+        .padding(.leading, -Space.xs)
     }
 
     private var message: some View {
@@ -266,7 +259,7 @@ struct ComposeView: View {
                 onKey: triggerKey,
                 onPaste: { incoming in Task { add(await Outgoing.stage(incoming)) } }
             )
-            .frame(height: max(bodyHeight, 160))
+            .frame(height: max(bodyHeight, 80))
             if let signature {
                 Text(signature).textStyle(.body, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
             }
@@ -294,19 +287,31 @@ struct ComposeView: View {
                 }
             }
         }
-        .padding(.horizontal, Space.l)
+        .padding(.horizontal, Theme.cardInset)
         .padding(.vertical, Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // The rest of the card is for writing too: a click anywhere in it puts the caret there.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .onTapGesture { editing.focus() }
     }
 
+    /// Everything about the message but sending it, under the card: its files, a snippet, when
+    /// to send it, a reminder, and the way to throw it away at the far end.
     private var toolbar: some View {
         HStack(spacing: 0) {
             IconButton(symbol: .paperclip, help: "Attach files (⌘⇧U)") { importing = true }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
             IconButton(symbol: .zap, help: "Snippets (⌘;), or type ; and a name") { pickingSnippet = true }
                 .keyboardShortcut(";", modifiers: .command)
+            IconButton(symbol: .calendarClock, help: "Send later (⌘⇧L)") { timing = .sendLater }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
             IconButton(symbol: .alarmClock, help: "Remind me if nobody replies (⌘⇧H)", active: compose.remindAt != nil) { timing = .remind }
-            .keyboardShortcut("h", modifiers: [.command, .shift])
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+            if compose.thread != nil {
+                IconButton(symbol: .archive, help: "Send and archive (⌘⇧↩)") { send(archive: true) }
+                    .keyboardShortcut(.return, modifiers: [.command, .shift])
+                    .disabled(cannotSend)
+            }
             if compose.draft.inReplyTo != nil {
                 IconButton(symbol: .handshake, help: "Instant Intro: move who introduced you to Bcc (⌘⇧I)", action: instantIntro)
                     .keyboardShortcut("i", modifiers: [.command, .shift])
@@ -319,10 +324,15 @@ struct ComposeView: View {
         .frame(height: Theme.barHeight)
     }
 
-    /// The shortcuts that have no button of their own.
+    /// The shortcuts that have no button of their own: the ones that open a line of the head.
     fileprivate var shortcuts: some View {
         Group {
             Button("Close") { close() }.keyboardShortcut("w")
+            Button("Cc") { reveal("Cc") }.keyboardShortcut("c", modifiers: [.command, .shift])
+            Button("Bcc") { reveal("Bcc") }.keyboardShortcut("b", modifiers: [.command, .shift])
+            if senders.count > 1 {
+                Button("Send as") { pickingSender = true }.keyboardShortcut("f", modifiers: [.command, .shift])
+            }
         }
         .opacity(0)
         .allowsHitTesting(false)
@@ -343,20 +353,6 @@ struct ComposeView: View {
             .frame(maxWidth: 380)
             .padding(.leading, Space.l)
             .padding(.bottom, Theme.barHeight + Space.xs)
-        }
-    }
-
-    private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Space.s + 2) {
-                Text(label).textStyle(.label, color: Tokens.mutedStrongerForeground.color).frame(width: 56, alignment: .leading)
-                content()
-            }
-            .font(.ui(.body))
-            .foregroundStyle(Tokens.foreground.color)
-            .padding(.horizontal, Space.l)
-            .frame(height: Theme.searchHeight * Platform.scale)
-            Rule(color: Tokens.borderCard).padding(.leading, Space.l)
         }
     }
 
@@ -383,16 +379,11 @@ struct ComposeView: View {
         return outgoing
     }
 
-    private var senders: [Sender] {
-        store.accounts.flatMap { account in
-            let identities = account.identities.isEmpty ? [Identity(name: nil, email: account.address, signature: nil)] : account.identities
-            return identities.enumerated().map { index, identity in Sender(account: account.id, identity: identity, first: index == 0) }
-        }
-    }
+    fileprivate var senders: [Sender] { Sender.all(in: store.accounts) }
 
-    private var sender: Sender? {
+    fileprivate var sender: Sender? {
         senders.first { option in
-            guard option.account == compose.draft.accountId else { return false }
+            guard option.account.id == compose.draft.accountId else { return false }
             guard let from = compose.draft.from else { return option.first }
             return option.identity.email.caseInsensitiveCompare(from.email) == .orderedSame
         }
@@ -411,8 +402,14 @@ struct ComposeView: View {
 
     // MARK: Doing
 
-    private func choose(_ sender: Sender) {
-        compose.draft.accountId = sender.account
+    /// Shows the Cc and Bcc lines, with the cursor in the one asked for.
+    private func reveal(_ line: String) {
+        revealed = line
+        compose.showCc = true
+    }
+
+    fileprivate func choose(_ sender: Sender) {
+        compose.draft.accountId = sender.account.id
         compose.draft.from = sender.first ? nil : Address(name: sender.identity.name, email: sender.identity.email)
         compose.from = sender.identity.email
     }
@@ -503,7 +500,7 @@ struct ComposeView: View {
 
     /// Gone without Send or Back: swiped away on iOS. Kept as when closed.
     fileprivate func left() {
-        guard !closing, timing == nil, !pickingSnippet, !importing else { return }
+        guard !closing, timing == nil, !pickingSnippet, !pickingSender, !importing else { return }
         store.closeCompose(assembled, keep: edited || compose.keep || compose.draftId != nil)
     }
 

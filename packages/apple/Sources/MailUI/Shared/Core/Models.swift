@@ -143,6 +143,14 @@ struct Address: Codable, Hashable {
         guard let name else { return email }
         return "\(name) <\(email)>"
     }
+
+    /// The first letters of the first two words of the name, else the address's first letter.
+    var initials: String {
+        let words = (name ?? "").split(whereSeparator: \.isWhitespace).prefix(2)
+        let letters = words.compactMap { $0.first.map { String($0).uppercased() } }.joined()
+        guard letters.isEmpty else { return letters }
+        return email.first.map { String($0).uppercased() } ?? "?"
+    }
 }
 
 struct Draft: Codable, Hashable {

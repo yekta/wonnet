@@ -56,6 +56,12 @@ added to the component, not to the view.
 - The platform's controls are used when they fit, not by default: the switch (`ToggleRow`),
   alerts, menus, iOS's navigation bar for sheets' titles and buttons, Quick Look, the file
   pickers. Choice menus, dropdowns, fields and buttons are ours.
+- A menu or a dropdown holds a few choices, as many as fit a glance. A list that can grow
+  (addresses to send as, labels, times) is a `Sheet` with a `SearchField` that narrows a
+  `ChoiceList`, never a menu to scroll.
+- The primary colour is for the one thing a page is for: Send over a message, the switch
+  that is on, a selected row's check. Nothing else is blue: a sheet's Cancel, an icon in a
+  bar and a link are in the foreground's colour.
 - iOS's settings are the system's own: a page sheet of grouped `List`s, on `background`
   with rows on `card`, with its `Toggle`s, menu `Picker`s, `TextField`s, pages pushed for
   what is written, swipes to remove and a hold to reorder, each group a `SettingsListSection`
@@ -66,11 +72,13 @@ added to the component, not to the view.
   follows the pointer, the rows it passes slide out of its way, and let go it slides into its
   place. Its rows are faces, not buttons: the list takes the clicks and tells each row when it
   is hovered. Nothing else drags: no handle, no edit mode.
-- Sheets go through `Sheet`, on `background`: on iOS it gets the system's title and its X at
-  the start of the navigation bar, in the foreground's colour; on the Mac our `HeaderBar` and
-  Esc. What trails in the bar is ours on the Mac and the system's plain `Button`s on iOS, the
-  main one `.borderedProminent`: the system draws the bar's buttons, and ours inside it would
-  be a pill in a pill. `SheetSize` picks the window on the Mac and the detents on iOS.
+- Sheets go through `Sheet`, on `background`: on iOS it gets the system's title and its X, or
+  its Cancel, at the start of the navigation bar, in the foreground's colour; on the Mac our
+  `HeaderBar` and Esc. What trails in the bar is ours on the Mac and the system's plain
+  `Button`s on iOS, the main one `.borderedProminent`: the system draws the bar's buttons, and
+  ours inside it would be a pill in a pill. The bar holds the one thing the sheet is for; what
+  else can be done is in a toolbar under its content, as the message being written has it.
+  `SheetSize` picks the window on the Mac and the detents on iOS.
 
 ## Components
 
@@ -90,7 +98,7 @@ added to the component, not to the view.
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |
 | `ItemRow` | A thing in a list with its controls at the end |
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |
-| `ChoiceRow`, `ChoiceList` | One choice under a field, and the list that scrolls to the highlighted one |
+| `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, with a check when it is the one in force; and the list that scrolls to the highlighted one |
 | `PopupCard` | A card over the page for suggestions |
 | `TabStrip` | Tabs on a line with counts |
 | `PillTabs` | Tabs on a line with an icon and a count, the chosen one filled in a rounded rectangle; dragged to reorder, with a menu on each |
