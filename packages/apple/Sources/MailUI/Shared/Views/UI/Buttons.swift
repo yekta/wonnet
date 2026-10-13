@@ -129,7 +129,7 @@ struct ActionButton: View {
                     // An icon's glyph sits inside room of its own, which reads as more space than
                     // the words have on their side.
                     .padding(.leading, symbol != nil || pending ? -Self.iconBearing : 0)
-                Text(title).textStyle(size.text, color: foreground)
+                Text(title).textStyle(size.text, color: foreground).lineLimit(1).fixedSize()
                 if chevron {
                     Image(.chevronDown, size: size.icon - 1).foregroundStyle(foreground)
                         .padding(.trailing, -Self.iconBearing)
