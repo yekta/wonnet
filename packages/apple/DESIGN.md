@@ -87,8 +87,9 @@ added to the component, not to the view.
 | Component | What it is |
 | --- | --- |
 | `ActionButton`, `ActionMenu` | Words, an optional icon, four variants (`primary`, `outline`, `ghost`, `destructive`), three sizes, `pending`, `wide`, `iconOnly`; the menu opens one |
-| `IconButton`, `IconMenu`, `IconCircle` | An icon in a thin circle; `active`, `quiet`, `circled`, `pending` |
+| `IconButton`, `IconMenu`, `IconCircle` | An icon in a thin circle; `active`, `quiet`, `strong` (the foreground's colour, on a bar), `circled`, `pending` |
 | `FloatingButton` | An icon on a bordered circle of the page's colour, with a little shadow, over a page: Compose over the list on iOS; `small`, the way back to the top of a list scrolled past its first page |
+| `GlassBar`, `GlassCircle` | A bar floating over a page on the system's glass (the page's colour on a bordered capsule before iOS 26): icon buttons spread evenly across a capsule, and one action on a circle beside it; the commands under an open thread and a selection on iOS |
 | `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `InputField` | A text field with its label above, or a text box of `lines` |
