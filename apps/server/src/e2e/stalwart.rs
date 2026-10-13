@@ -95,13 +95,13 @@ async fn seeded_mail_reaches_the_core_and_archiving_and_deleting_reach_stalwart(
     let mut core = Driver::start(&server.base);
     core.call(json!({ "type": "add_jmap_account", "url": stalwart, "username": email, "password": PASSWORD })).await;
 
-    let rows = eventually("the inbox in the core", async || {
+    // The inbox comes first; the replies sent from the thread follow with the rest of the mail.
+    let rows = eventually("the inbox in the core, with what was sent", async || {
         let rows = inbox_rows(&mut core).await;
-        (!rows.is_empty()).then_some(rows)
+        rows.first()?["senders"].as_str()?.contains("me (").then_some(rows)
     })
     .await;
     let first = rows[0].clone();
-    assert!(first["senders"].as_str().unwrap().contains("me ("), "{first}");
 
     let pictures = core._data.path().join("avatars");
     eventually("the senders' pictures, looked up ahead", async || {

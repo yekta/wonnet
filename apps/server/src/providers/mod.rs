@@ -54,9 +54,12 @@ pub struct Batch {
     pub provider_ids: Vec<String>,
 }
 
-/// What a sync step did: whether older mail is still waiting to be fetched.
+/// What a sync pass left to do.
 pub struct Synced {
+    /// Older mail is still to come: the next pass follows soon.
     pub backfilling: bool,
+    /// The first listing is still under way: the account stays `syncing`.
+    pub syncing: bool,
 }
 
 impl Connection {

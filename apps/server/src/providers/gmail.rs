@@ -1,6 +1,7 @@
 //! Gmail through its REST API. The first sync lists the last 90 days (or INITIAL_SYNC_LIMIT
-//! messages), then older mail is backfilled a page at a time; after that history.list says what
-//! changed since the last historyId.
+//! messages) a page at a time, the inbox before the rest and a small page first so the list has
+//! mail at once; then older mail is backfilled a page at a time; after that history.list says
+//! what changed since the last historyId.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -24,7 +25,11 @@ use crate::{AppState, mime};
 
 pub const API_URL: &str = "https://gmail.googleapis.com/gmail/v1/users/me";
 const PAGE: usize = 500;
+/// The first page of a new account: what the burst of its quota fetches at once.
+const FIRST_PAGE: usize = 20;
+const REFRESH_PAGE: usize = 100;
 const BACKFILL_PAGE: usize = 100;
+const RECENT: &str = "newer_than:90d";
 const CONCURRENT_GETS: usize = 8;
 /// Gmail lets each user spend 6,000 quota units a minute on our project; requests are paced so
 /// that no minute, burst included, spends more.
@@ -134,10 +139,22 @@ struct SyncState {
     backfill_token: Option<String>,
     #[serde(default)]
     backfilled: bool,
-    /// The last 90 days were fetched again for what was added after they were first synced
-    /// (`bulk`, `unsubscribe`), keeping the history id.
+    /// The last 90 days were listed whole: at first, and again for what was added after they
+    /// were first synced (`bulk`, `unsubscribe`), keeping the history id.
     #[serde(default)]
     refreshed: bool,
+    #[serde(default)]
+    refresh: Refresh,
+}
+
+/// Where the listing of the last 90 days stands: the inbox first, then the rest, newest first.
+#[derive(Deserialize, Default, serde::Serialize)]
+struct Refresh {
+    #[serde(default)]
+    inbox_listed: bool,
+    page_token: Option<String>,
+    #[serde(default)]
+    fetched: usize,
 }
 
 impl Gmail {
@@ -297,44 +314,86 @@ impl Gmail {
         let mut sync: SyncState = serde_json::from_value(account.sync_state.clone()).unwrap_or_default();
         let labels = self.sync_labels(state, account).await?;
 
-        let Some(history_id) = sync.history_id.clone() else {
-            let profile: Value = self.get("/profile", &[]).await?;
-            let history_id = profile["historyId"].as_str().unwrap_or_default().to_string();
-            let limit = state.config.initial_sync_limit;
-            let ids = self.list("newer_than:90d", limit, None).await?.0;
-            self.fetch_and_store(state, account, &labels, &ids).await?;
-            sync.history_id = Some(history_id);
-            sync.refreshed = true;
+        match sync.history_id.clone() {
+            // The history id is kept before the listing starts, so what arrives meanwhile is
+            // caught up on later, and saved at once, so a failed pass carries on instead of
+            // starting over.
+            None => {
+                let profile: Value = self.get("/profile", &[]).await?;
+                sync.history_id = Some(profile["historyId"].as_str().unwrap_or_default().to_string());
+                sync.refreshed = false;
+                sync.refresh = Refresh::default();
+                db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
+            }
+            Some(history_id) => match self.history(&history_id).await {
+                Ok((changed, deleted, latest)) => {
+                    self.fetch_and_store(state, account, &labels, &changed).await?;
+                    db::delete_messages(&state.db, account, &deleted).await?;
+                    sync.history_id = Some(latest);
+                }
+                Err(error) if error.is::<NotFound>() => {
+                    tracing::info!("Gmail history of {} expired, syncing again", account.address);
+                    sync.history_id = None;
+                    db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
+                    return Ok(Synced { backfilling: true, syncing: true });
+                }
+                Err(error) => return Err(error),
+            },
+        }
+
+        if !sync.refreshed {
+            self.refresh_page(state, account, &labels, &mut sync).await?;
             db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-            return Ok(Synced { backfilling: true });
-        };
-
-        match self.history(&history_id).await {
-            Ok((changed, deleted, latest)) => {
-                self.fetch_and_store(state, account, &labels, &changed).await?;
-                db::delete_messages(&state.db, account, &deleted).await?;
-                sync.history_id = Some(latest);
-            }
-            Err(error) if error.is::<NotFound>() => {
-                tracing::info!("Gmail history of {} expired, syncing again", account.address);
-                sync.history_id = None;
-            }
-            Err(error) => return Err(error),
+            return Ok(Synced { backfilling: true, syncing: !sync.refreshed });
         }
-
-        if !sync.refreshed && sync.history_id.is_some() {
-            let ids = self.list("newer_than:90d", state.config.initial_sync_limit, None).await?.0;
-            self.fetch_and_store(state, account, &labels, &ids).await?;
-            sync.refreshed = true;
-        }
-        if !sync.backfilled && sync.history_id.is_some() {
+        if !sync.backfilled {
             let (ids, next) = self.list("older_than:90d", BACKFILL_PAGE, sync.backfill_token.clone()).await?;
             self.fetch_and_store(state, account, &labels, &ids).await?;
             sync.backfilled = next.is_none();
             sync.backfill_token = next;
         }
         db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-        Ok(Synced { backfilling: !sync.backfilled })
+        Ok(Synced { backfilling: !sync.backfilled, syncing: false })
+    }
+
+    /// One page of the last 90 days: the inbox's until it is listed, then everyone else's. Up to
+    /// INITIAL_SYNC_LIMIT messages in all.
+    async fn refresh_page(
+        &self,
+        state: &AppState,
+        account: &AccountRow,
+        labels: &HashMap<String, Uuid>,
+        sync: &mut SyncState,
+    ) -> anyhow::Result<()> {
+        let refresh = &mut sync.refresh;
+        let limit = state.config.initial_sync_limit;
+        let query = match refresh.inbox_listed {
+            true => format!("{RECENT} -in:inbox"),
+            false => format!("{RECENT} in:inbox"),
+        };
+        let page = match refresh.fetched {
+            0 => FIRST_PAGE,
+            _ => REFRESH_PAGE,
+        };
+        let wanted = page.min(limit.saturating_sub(refresh.fetched));
+        if wanted == 0 {
+            sync.refreshed = true;
+            return Ok(());
+        }
+        let (ids, next) = self.list(&query, wanted, refresh.page_token.take()).await?;
+        self.fetch_and_store(state, account, labels, &ids).await?;
+        refresh.fetched += ids.len();
+        refresh.page_token = next;
+        if refresh.page_token.is_none() {
+            match refresh.inbox_listed {
+                true => sync.refreshed = true,
+                false => refresh.inbox_listed = true,
+            }
+        }
+        if refresh.fetched >= limit {
+            sync.refreshed = true;
+        }
+        Ok(())
     }
 
     async fn sync_labels(&self, state: &AppState, account: &AccountRow) -> anyhow::Result<HashMap<String, Uuid>> {

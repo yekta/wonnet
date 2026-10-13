@@ -5,6 +5,7 @@
 mod attachments;
 mod avatars;
 mod changes;
+mod first_sync;
 mod push;
 mod rules;
 mod search;
@@ -14,7 +15,7 @@ mod stalwart;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use axum::extract::{Form, Path};
+use axum::extract::{Form, Path, Query};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine;
@@ -51,6 +52,12 @@ struct FakeGoogle {
     modified: Vec<Value>,
     /// How many sends Gmail refuses next, saying the user's quota is spent.
     refused_sends: usize,
+    /// The messages at Gmail, newest first, each with its label ids.
+    mailbox: Vec<(String, Vec<String>)>,
+    /// The listings asked for: each query and its page token.
+    listed: Vec<(String, Option<String>)>,
+    /// How many message fetches Gmail refuses next.
+    refused_fetches: usize,
 }
 
 /// What every message at the fake Gmail is: a note with a PDF attached.
@@ -190,6 +197,19 @@ impl Server {
         self.google.lock().unwrap().refused_sends = count;
     }
 
+    /// What the fake Gmail holds, newest first.
+    pub fn fill(&self, mailbox: Vec<(String, Vec<String>)>) {
+        self.google.lock().unwrap().mailbox = mailbox;
+    }
+
+    pub fn listed(&self) -> Vec<(String, Option<String>)> {
+        self.google.lock().unwrap().listed.clone()
+    }
+
+    pub fn refuse_fetches(&self, count: usize) {
+        self.google.lock().unwrap().refused_fetches = count;
+    }
+
     pub fn modified(&self) -> Vec<Value> {
         self.google.lock().unwrap().modified.clone()
     }
@@ -236,8 +256,56 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         };
         async move { answer }
     };
-    let message =
-        |Path(id): Path<String>| async move { Json(json!({ "id": id, "raw": URL_SAFE_NO_PAD.encode(RAW_MESSAGE) })) };
+    // A message's raw MIME, or its metadata with the labels the mailbox gives it.
+    let fetched = google.clone();
+    let message = move |Path(id): Path<String>, Query(query): Query<HashMap<String, String>>| {
+        let mut google = fetched.lock().unwrap();
+        let answer = if google.refused_fetches > 0 {
+            google.refused_fetches -= 1;
+            (axum::http::StatusCode::BAD_REQUEST, Json(json!({})))
+        } else if query.get("format").map(String::as_str) == Some("raw") {
+            (axum::http::StatusCode::OK, Json(json!({ "id": id, "raw": URL_SAFE_NO_PAD.encode(RAW_MESSAGE) })))
+        } else {
+            let index = google.mailbox.iter().position(|(other, _)| *other == id).unwrap_or_default();
+            let labels = google.mailbox.get(index).map(|(_, labels)| labels.clone()).unwrap_or_default();
+            let date = 1_700_000_000_000 - index as i64 * 1000;
+            let payload = json!({ "headers": [{ "name": "From", "value": "Cy <cy@example.com>" }] });
+            let metadata = json!({ "id": id, "threadId": id, "labelIds": labels, "internalDate": date.to_string(), "payload": payload });
+            (axum::http::StatusCode::OK, Json(metadata))
+        };
+        async move { answer }
+    };
+    // The mailbox by query (`in:inbox`, `-in:inbox`, nothing older than 90 days), paged by offset.
+    let listing = google.clone();
+    let list = move |Query(query): Query<HashMap<String, String>>| {
+        let mut google = listing.lock().unwrap();
+        let q = query.get("q").cloned().unwrap_or_default();
+        let token = query.get("pageToken").cloned();
+        google.listed.push((q.clone(), token.clone()));
+        let wanted: Vec<&String> = google
+            .mailbox
+            .iter()
+            .filter(|(_, labels)| {
+                let inbox = labels.iter().any(|label| label == "INBOX");
+                if q.contains("older_than") {
+                    return false;
+                }
+                if q.contains("-in:inbox") {
+                    return !inbox;
+                }
+                !q.contains("in:inbox") || inbox
+            })
+            .map(|(id, _)| id)
+            .collect();
+        let offset: usize = token.and_then(|token| token.parse().ok()).unwrap_or(0);
+        let size: usize = query.get("maxResults").and_then(|size| size.parse().ok()).unwrap_or(100);
+        let page: Vec<Value> = wanted.iter().skip(offset).take(size).map(|id| json!({ "id": id })).collect();
+        let mut answer = json!({ "messages": page });
+        if offset + size < wanted.len() {
+            answer["nextPageToken"] = json!((offset + size).to_string());
+        }
+        async move { Json(answer) }
+    };
     let send_as = || async {
         Json(json!({ "sendAs": [
             { "sendAsEmail": "ann@gmail.com", "displayName": "Ann Lee", "isPrimary": true, "isDefault": true },
@@ -272,7 +340,7 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         .route("/profile", get(|| async { Json(json!({ "historyId": "1" })) }))
         .route("/labels", get(|| async { Json(json!({ "labels": [] })) }).post(create_label))
         .route("/messages/batchModify", post(modify))
-        .route("/messages", get(|| async { Json(json!({})) }))
+        .route("/messages", get(list))
         .route("/history", get(|| async { Json(json!({ "historyId": "1" })) }))
         .route("/messages/{id}", get(message))
         .route("/settings/sendAs", get(send_as));
