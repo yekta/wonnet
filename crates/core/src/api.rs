@@ -307,10 +307,13 @@ pub enum Command {
         #[serde(default)]
         account: Option<String>,
     },
-    /// `{draft, from}`. The draft keeps the text quoted in `quote`.
+    /// `{draft, from}`. The draft keeps the text quoted in `quote`. It answers `message`, else
+    /// the thread's last message from someone else.
     ReplyDraft {
         thread: String,
         kind: ReplyKind,
+        #[serde(default)]
+        message: Option<String>,
     },
     /// Keeps a draft, on this device at once and on the user's other devices through the server.
     /// `{id}`; a new one is made when `draft_id` is none.

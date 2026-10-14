@@ -515,7 +515,7 @@ impl Core {
             Command::Preferences => self.preferences(),
             Command::SetPreference { key, value } => self.set_preference(key, value),
             Command::NewDraft { account } => self.new_draft(account),
-            Command::ReplyDraft { thread, kind } => self.reply_draft(&thread, kind),
+            Command::ReplyDraft { thread, kind, message } => self.reply_draft(&thread, kind, message.as_deref()),
             Command::SaveDraft { draft_id, draft } => self.save_draft(draft_id, draft),
             Command::OpenDraft { draft_id } => self.open_draft(&draft_id),
             Command::DeleteDraft { draft_id } => self.mutate(Op::DeleteDraft { draft_id }).map(|_| json!({})),
@@ -1394,10 +1394,13 @@ impl Core {
         Ok(serde_json::to_value(DraftReply { id: None, draft, from: account.address })?)
     }
 
-    fn reply_draft(&self, thread: &str, kind: ReplyKind) -> Result<Value> {
+    fn reply_draft(&self, thread: &str, kind: ReplyKind, message: Option<&str>) -> Result<Value> {
         let messages = self.store.thread_messages(thread)?;
         let me = self.store.me();
-        let answered = messages.iter().rev().find(|message| !me.contains(&message.from.email)).or(messages.last());
+        let answered = match message {
+            Some(id) => messages.iter().find(|message| message.id == id),
+            None => messages.iter().rev().find(|message| !me.contains(&message.from.email)).or(messages.last()),
+        };
         let Some(message) = answered else { bail!("This conversation is gone.") };
         let body = self
             .store
@@ -2072,6 +2075,21 @@ mod tests {
         assert_eq!(reply, json!({ "message": "Unsubscribed.", "undo": false, "url": null }));
         let mum = demo.thread("Call me").await;
         assert!(demo.call(json!({ "type": "act", "action": "unsubscribe", "threads": [mum] })).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_reply_to_an_earlier_message_quotes_that_message() {
+        let mut demo = Demo::start();
+        let thread = demo.thread("Photos from the hike").await;
+        let view = demo.call(json!({ "type": "open_thread", "thread": thread })).await.unwrap();
+        let first = view["messages"][0]["id"].clone();
+        let reply = demo
+            .call(json!({ "type": "reply_draft", "thread": thread, "kind": "reply", "message": first }))
+            .await
+            .unwrap();
+        let quote = reply["draft"]["quote"].as_str().unwrap();
+        assert!(quote.contains("> Finally sorted the photos."), "{quote}");
+        assert!(!quote.contains("Attached."), "{quote}");
     }
 
     #[tokio::test]
