@@ -318,12 +318,13 @@ struct IconCircle: View {
     var strong = false
     var pending = false
     @Environment(\.hovered) private var hovered
+    @Environment(\.onCard) private var onCard
 
     var body: some View {
         ButtonIcon(symbol: symbol, pending: pending, size: size.icon, tint: tint)
             .frame(width: size.height * Platform.scale, height: size.height * Platform.scale)
             .background(Circle().fill(hovered ? Tokens.backgroundAccent.color : .clear))
-            .overlay(Circle().strokeBorder(circled ? Tokens.border.color : .clear, lineWidth: Theme.hairline))
+            .overlay(Circle().strokeBorder(circled ? (onCard ? Theme.cardRule : Tokens.border).color : .clear, lineWidth: Theme.hairline))
             .padding(.horizontal, Theme.buttonGap / 2)
             .contentShape(Rectangle())
     }
