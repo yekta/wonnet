@@ -402,11 +402,11 @@ export function Demo() {
                     onClose={() => setOpenId(null)}
                   />
                 ) : (
-                  <div className="absolute inset-0 flex flex-col">
+                  <div className="absolute inset-0 flex flex-col overflow-y-auto py-4">
                     {rows.length === 0 ? (
                       <EmptyList message={empty} />
                     ) : (
-                      <div className="mx-auto min-h-0 w-[1000px] flex-1 overflow-y-auto pt-4 pb-4">
+                      <div className="mx-auto w-[1000px] shrink-0">
                         {rows.map((thread, index) => (
                           <ThreadRow
                             key={thread.id}
