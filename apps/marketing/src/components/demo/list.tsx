@@ -1,0 +1,222 @@
+import {
+  ArchiveIcon,
+  ClockIcon,
+  InboxIcon,
+  MailIcon,
+  MailOpenIcon,
+  PaperclipIcon,
+  SearchIcon,
+  SendIcon,
+  StarIcon,
+  Trash2Icon,
+  type LucideIcon,
+} from "lucide-react"
+import type { Ref } from "react"
+import { ACCOUNTS, TABS, latest, senders, shortDate } from "./mail"
+import type { Mailbox, Thread } from "./mail"
+import { PillTab, cn } from "./ui"
+
+const TAB_ICONS: Partial<Record<Mailbox, LucideIcon>> = {
+  inbox: InboxIcon,
+  unread: MailIcon,
+  sent: SendIcon,
+  snoozed: ClockIcon,
+}
+
+export function MailboxTabs({
+  mailbox,
+  unread,
+  onPick,
+}: {
+  mailbox: Mailbox
+  unread: number
+  onPick: (mailbox: Mailbox) => void
+}) {
+  return (
+    <div className="flex gap-1">
+      {TABS.map((tab) => (
+        <PillTab
+          key={tab.id}
+          icon={TAB_ICONS[tab.id]!}
+          title={tab.name}
+          count={tab.id === "inbox" || tab.id === "unread" ? unread : 0}
+          chosen={mailbox === tab.id}
+          onClick={() => onPick(tab.id)}
+        />
+      ))}
+    </div>
+  )
+}
+
+export function SearchField({
+  query,
+  inputRef,
+  onChange,
+}: {
+  query: string
+  inputRef: Ref<HTMLInputElement>
+  onChange: (query: string) => void
+}) {
+  return (
+    <label className="flex h-9 w-40 items-center gap-2 rounded-full border border-(--border-input) bg-(--input) px-3 text-[13px] text-(--foreground)">
+      <SearchIcon
+        className="size-3.5 shrink-0 text-(--muted-stronger-foreground)"
+        strokeWidth={1.75}
+      />
+      <input
+        ref={inputRef}
+        value={query}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search"
+        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-(--muted-stronger-foreground)"
+      />
+    </label>
+  )
+}
+
+export type RowAction = "archive" | "trash" | "snooze" | "read" | "star"
+
+/** One thread on one line, as the Mac's table draws it: the account's bar, unread dot, senders,
+ * subject and snippet, date and star; hovered, what can be done to it over the date. */
+export function ThreadRow({
+  thread,
+  current,
+  now,
+  onOpen,
+  onAction,
+}: {
+  thread: Thread
+  current: boolean
+  now: Date | null
+  onOpen: () => void
+  onAction: (action: RowAction) => void
+}) {
+  const message = latest(thread)
+  const strong = thread.unread
+  const actions: [RowAction, LucideIcon, string][] = [
+    ["archive", ArchiveIcon, "Archive"],
+    ["trash", Trash2Icon, "Trash"],
+    ["snooze", ClockIcon, "Snooze"],
+    [
+      "read",
+      thread.unread ? MailOpenIcon : MailIcon,
+      thread.unread ? "Mark read" : "Mark unread",
+    ],
+  ]
+
+  return (
+    <div className="py-px">
+      <div
+        onClick={onOpen}
+        className={cn(
+          "group relative flex h-[46px] cursor-default items-center rounded-sm text-[13px] hover:bg-(--background-accent-larger)",
+          current &&
+            "outline-1 -outline-offset-1 outline-(--background-accent-stronger) outline-dashed"
+        )}
+      >
+        <span
+          className="absolute top-[5px] bottom-[5px] left-[3px] w-0.5 rounded-full"
+          style={{ background: `var(--${ACCOUNTS[thread.account].color})` }}
+        />
+        {thread.unread && (
+          <span className="absolute left-[18px] size-[7px] rounded-full bg-(--primary)" />
+        )}
+        <span
+          className={cn(
+            "ml-9 w-[190px] shrink-0 truncate",
+            strong
+              ? "font-bold text-(--foreground)"
+              : "text-(--muted-foreground)"
+          )}
+        >
+          {senders(thread)}
+        </span>
+        <span className="ml-3.5 flex w-6 shrink-0">
+          {thread.attachment && (
+            <PaperclipIcon
+              className="size-3.5 text-(--muted-stronger-foreground)"
+              strokeWidth={1.75}
+            />
+          )}
+        </span>
+        <span className="min-w-0 flex-1 truncate pr-4">
+          <span
+            className={cn(
+              strong
+                ? "font-semibold text-(--foreground)"
+                : "text-(--muted-foreground)"
+            )}
+          >
+            {thread.subject}
+          </span>
+          <span className="whitespace-pre text-(--muted-stronger-foreground)">
+            {"  –  "}
+            {message.text}
+          </span>
+        </span>
+        <span
+          className={cn(
+            "mr-[18px] shrink-0 text-[12px] group-hover:invisible",
+            strong
+              ? "font-semibold text-(--foreground)"
+              : "text-(--muted-stronger-foreground)"
+          )}
+        >
+          {now &&
+            shortDate(new Date(now.getTime() - message.ago * 60_000), now)}
+        </span>
+        <div className="absolute right-[49px] hidden items-center gap-0.5 bg-(--background-accent-larger) pl-2 group-hover:flex">
+          <span className="absolute top-0 right-full h-full w-8 bg-linear-to-r from-transparent to-(--background-accent-larger)" />
+          {actions.map(([action, Icon, label]) => (
+            <button
+              key={action}
+              type="button"
+              title={label}
+              aria-label={label}
+              onClick={(event) => {
+                event.stopPropagation()
+                onAction(action)
+              }}
+              className="flex size-7 items-center justify-center rounded-full text-(--muted-foreground) hover:bg-(--background-accent-larger-strongest) hover:text-(--foreground)"
+            >
+              <Icon className="size-4" strokeWidth={1.75} />
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          title={thread.starred ? "Unstar" : "Star"}
+          aria-label={thread.starred ? "Unstar" : "Star"}
+          onClick={(event) => {
+            event.stopPropagation()
+            onAction("star")
+          }}
+          className={cn(
+            "mr-[9px] flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-[color-mix(in_srgb,var(--star)_calc(var(--opacity-color-tint)*100%),transparent)] hover:text-(--star)",
+            thread.starred
+              ? "text-(--star)"
+              : "text-(--muted-strongest-foreground)"
+          )}
+        >
+          <StarIcon
+            className="size-4"
+            strokeWidth={1.75}
+            fill={thread.starred ? "currentColor" : "none"}
+          />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function EmptyList({ message }: { message: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 pb-24 text-[14px] text-(--muted-foreground)">
+      <InboxIcon
+        className="size-7 text-(--muted-stronger-foreground)"
+        strokeWidth={1.5}
+      />
+      {message}
+    </div>
+  )
+}

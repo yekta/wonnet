@@ -13,18 +13,25 @@
     "preview": "astro preview",
     "check": "astro check",
     "icons": "node scripts/icons.mjs",
+    "preview-image": "node scripts/preview.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@astrojs/react": "^7.0.1",
     "@fontsource-variable/dm-sans": "^5.3.0",
-    "@lucide/astro": "^1.52.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "astro": "^7.3.6",
+    "lucide-react": "^1.56.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "playwright": "^1.64.0",
     "prettier": "^3.9.9",
     "prettier-plugin-astro": "^1.1.0",
     "prettier-plugin-tailwindcss": "^0.8.1",

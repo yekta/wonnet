@@ -6,7 +6,7 @@ RUN npm install -g pnpm@12.9.1
 WORKDIR /app/apps/marketing
 COPY apps/marketing/package.json apps/marketing/pnpm-lock.yaml apps/marketing/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY docs/screenshots /app/docs/screenshots
+COPY packages/theme/tokens.css /app/packages/theme/tokens.css
 COPY apps/marketing ./
 RUN pnpm build
 
