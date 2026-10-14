@@ -6,20 +6,25 @@ An email client that feels instant, for the Mac and iOS. Its look is the old New
 
 | | |
 | --- | --- |
-| ![A thread](docs/screenshots/mac-thread.png) | ![The inbox in dark mode](docs/screenshots/mac-dark.png) |
+| ![A thread](docs/screenshots/mac-thread.png) | ![A thread in dark mode](docs/screenshots/mac-dark.png) |
+
+<p>
+  <img src="docs/screenshots/ios-inbox.png" alt="The inbox on iPhone" width="49%">
+  <img src="docs/screenshots/ios-dark.png" alt="The inbox on iPhone in dark mode" width="49%">
+</p>
 
 - **Nothing waits on the network.** The apps keep a local copy of your mail in SQLite. Opening, archiving, starring and searching read and write that copy at once; a server syncs it with your mail provider in the background.
 - **Gmail and JMAP.** Gmail through Google's API, and any JMAP server (Fastmail, Stalwart). Microsoft 365 and IMAP are planned.
-- **Newton's habits.** A unified inbox with an account colour on every thread, snooze and remind me (typed as "tomorrow 9am"), undo send, send later, and single keys on the Mac: `j`/`k` to move, `e` archive, `s` star, `#` trash, `u` unread, `h` snooze, `r` reply, `a` reply all, `f` forward, `c` compose, `/` search, `z` undo, and `⌘K` for everything else (`?` lists them all).
-- **The rest of a full mail client.** Split Inbox (Important, your own splits, Other for newsletters), labels, multi-select, mute, block, one-click unsubscribe, Get Me To Zero, search with Gmail's operators, drafts on every device, signatures, aliases, snippets, attachments in and out, a contact pane, notifications and printing.
-- **Private by default.** Remote images stay blocked until you ask for them, and message bodies are sanitized before they are drawn.
+- **Newton's habits.** A unified inbox with an account colour on every thread, snooze and remind me (typed as "tomorrow 9am"), undo send, send later, and single keys on the Mac, Superhuman's by default: `j`/`k` to move, `e` archive, `s` star, `#` trash, `u` unread, `h` snooze, `r` reply, `a` reply all, `f` forward, `c` compose, `/` search, `z` undo, `g` then `i` for the inbox, and `⌘K` for everything else. `?` lists them all, and any of them can be changed in Settings.
+- **The rest of a full mail client.** Split Inbox (Important, your own splits, Other for newsletters), labels, multi-select, mute, block, one-click unsubscribe, Get Me To Zero, search with Gmail's operators, drafts on every device, signatures, aliases, snippets, attachments in and out, senders' photos (their Gravatar or their company's logo), a contact pane, swipe actions on iPhone, notifications and printing.
+- **Private by default.** Remote images stay blocked until you ask for them, and message bodies are sanitized before they are drawn. The server keeps your mail credentials encrypted, and new mail is pushed to your iPhone encrypted with a key only the phone has, so Apple never sees it.
 
 These are its programs:
 
 | Program | Where it runs | What it does |
 | --- | --- | --- |
 | Wonnet.app (`apps/macos`) | Your Mac | The interface |
-| Mail for iOS (`apps/ios`) | Your iPhone and iPad | The interface |
+| Wonnet for iOS (`apps/ios`) | Your iPhone and iPad | The interface |
 | `mail-server` (`apps/server`) | A server, beside Postgres | Signs you in, syncs your accounts with their providers, sends, snoozes and searches |
 
 Both apps are built on one Rust core (`crates/core`): the local copy, the sync, and everything they draw, so clients for other systems can share it.
@@ -43,8 +48,10 @@ cargo run --release -p mail-server   # on http://localhost:3000
 | `DATABASE_URL` | Postgres. The server runs its migrations when it starts |
 | `SECRET_KEY` | Seals the mail credentials the server keeps. Any long random text (`openssl rand -hex 32`); changing it loses access to every account |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The Google OAuth client, below. Without them Gmail can't be added |
+| `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` | Optional: an APNs auth key (the text of its .p8), its ID and your Apple team ID. Without them nothing is pushed to iPhones |
 | `GMAIL_PUBSUB_TOPIC`, `GMAIL_HOOK_TOKEN` | Optional: Gmail pushes changes to a Pub/Sub topic whose push subscription calls `{PUBLIC_URL}/hooks/gmail?token={GMAIL_HOOK_TOKEN}`. Without them new Gmail mail waits for the next poll |
 | `POLL_SECONDS` | How often an account is synced when the provider pushed nothing. JMAP servers push over their event source. 10 by default |
+| `PORT` | The port the server listens on. 3000 by default |
 | `INITIAL_SYNC_LIMIT` | How many messages an account's first sync fetches before older mail is filled in. 2000 by default |
 | `DEV_LOGIN` | `1` gives sessions without an account, for tests. Never set it in production |
 
@@ -71,7 +78,7 @@ apps/macos/scripts/build-app.sh --open
 
 The apps start on our server, `https://api.wonnet.app`. `MAIL_SERVER_URL=http://localhost:3000 apps/macos/scripts/build-app.sh` builds one that starts on your own, and the server can be changed under **Advanced** on the first screen.
 
-The Mac app from a [release](https://github.com/yekta/wonnet/releases/latest) updates itself: the foot of its sidebar offers each new release, downloads and installs it, then offers the restart into it. A copy you built yourself doesn't, as it isn't signed by the developer.
+The Mac app from a [release](https://github.com/yekta/wonnet/releases/latest) updates itself: a banner at the bottom of the window offers each new release, downloads and installs it, then offers to restart into it. A copy you built yourself doesn't, as it isn't signed by the developer.
 
 ```sh
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
@@ -103,6 +110,7 @@ export DATABASE_URL=postgres://mail:mail@localhost:5441/mail STALWART_URL=http:/
 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 node packages/theme/build.mjs --check
 cargo run -p mail-core --example drive   # drive the core from a terminal
+cd apps/marketing && pnpm install && pnpm dev   # wonnet.app
 ```
 
 ## License
