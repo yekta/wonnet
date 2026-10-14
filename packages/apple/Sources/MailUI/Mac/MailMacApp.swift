@@ -242,6 +242,9 @@ struct MacTopBar: View {
                             IconButton(symbol: .arrowLeft, help: "Back (Esc)") { store.close() }
                         }
                     }
+                    // AppKit resizes the item at once; a fading back button would be centred in
+                    // it meanwhile and push the menu sideways.
+                    .transaction { $0.animation = nil }
                 }
                 .withoutSystemGlass()
             }
