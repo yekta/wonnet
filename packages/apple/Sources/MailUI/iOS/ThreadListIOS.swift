@@ -327,7 +327,7 @@ final class ThreadTable: UITableView, OwnsRightSwipe {
     }
 }
 
-/// One thread on three lines: who wrote and the star, the subject, the snippet and the date. A
+/// One thread on three lines: who wrote and the star if starred, the subject, the snippet and the date. A
 /// swipe slides it aside over its commands.
 final class ThreadCell: UITableViewCell {
     static let identifier = "thread"
@@ -463,9 +463,10 @@ private final class RowCanvas: UIView {
             UIBezierPath(ovalIn: CGRect(x: left, y: 20, width: 8, height: 8)).fill()
             x += 15
         }
-        draw(text.senders, x: x, y: 12, width: star.minX - 10 - x)
-        let starColor = row.starred ? Tokens.star.platform : Tokens.mutedStrongestForeground.platform
-        UIImage.symbol(row.starred ? .starFilled : .star, side: star.width).withTintColor(starColor, renderingMode: .alwaysOriginal).draw(in: star)
+        draw(text.senders, x: x, y: 12, width: (row.starred ? star.minX - 10 : right) - x)
+        if row.starred {
+            UIImage.symbol(.starFilled, side: star.width).withTintColor(Tokens.star.platform, renderingMode: .alwaysOriginal).draw(in: star)
+        }
         var subjectWidth = right - left
         if row.attachment {
             let clip = CGRect(x: right - 15, y: 38, width: 15, height: 15)

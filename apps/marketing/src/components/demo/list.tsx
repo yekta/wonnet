@@ -77,7 +77,7 @@ export function SearchField({
 export type RowAction = "archive" | "trash" | "snooze" | "read" | "star"
 
 /** One thread on one line, as the Mac's table draws it: the account's bar, unread dot, senders,
- * subject and snippet, date and star; hovered, what can be done to it over the date. In the
+ * subject and snippet, the star if starred, date; hovered, what can be done to it over the date. In the
  * gutter before it, the circle that selects it; while threads are selected, a click selects. */
 export function ThreadRow({
   thread,
@@ -109,6 +109,7 @@ export function ThreadRow({
       thread.unread ? MailOpenIcon : MailIcon,
       thread.unread ? "Mark read" : "Mark unread",
     ],
+    ["star", StarIcon, thread.starred ? "Unstar" : "Star"],
   ]
 
   return (
@@ -163,7 +164,12 @@ export function ThreadRow({
               />
             )}
           </span>
-          <span className="min-w-0 flex-1 truncate pr-4">
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate",
+              thread.starred ? "pr-2" : "pr-4"
+            )}
+          >
             <span
               className={cn(
                 strong
@@ -178,9 +184,19 @@ export function ThreadRow({
               {message.text}
             </span>
           </span>
+          {thread.starred && (
+            <StarIcon
+              className={cn(
+                "mr-3 size-3.5 shrink-0 text-(--star)",
+                !selecting && "group-hover:invisible"
+              )}
+              strokeWidth={1.75}
+              fill="currentColor"
+            />
+          )}
           <span
             className={cn(
-              "mr-[18px] shrink-0 text-[12px]",
+              "mr-4 shrink-0 text-[12px]",
               !selecting && "group-hover:invisible",
               strong
                 ? "font-semibold text-(--foreground)"
@@ -192,7 +208,7 @@ export function ThreadRow({
           </span>
           <div
             className={cn(
-              "absolute right-[49px] hidden items-center gap-0.5 bg-(--background-accent-larger) pl-2",
+              "absolute right-2.5 hidden items-center gap-0.5 bg-(--background-accent-larger) pl-2",
               !selecting && "group-hover:flex"
             )}
           >
@@ -207,33 +223,28 @@ export function ThreadRow({
                   event.stopPropagation()
                   onAction(action)
                 }}
-                className="flex size-7 items-center justify-center rounded-full text-(--muted-foreground) hover:bg-(--background-accent-larger-strongest) hover:text-(--foreground)"
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-full",
+                  action === "star"
+                    ? "hover:bg-[color-mix(in_srgb,var(--star)_calc(var(--opacity-color-tint)*100%),transparent)] hover:text-(--star)"
+                    : "hover:bg-(--background-accent-larger-strongest) hover:text-(--foreground)",
+                  action === "star" && thread.starred
+                    ? "text-(--star)"
+                    : "text-(--muted-foreground)"
+                )}
               >
-                <Icon className="size-4" strokeWidth={1.75} />
+                <Icon
+                  className="size-4"
+                  strokeWidth={1.75}
+                  fill={
+                    action === "star" && thread.starred
+                      ? "currentColor"
+                      : "none"
+                  }
+                />
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            title={thread.starred ? "Unstar" : "Star"}
-            aria-label={thread.starred ? "Unstar" : "Star"}
-            onClick={(event) => {
-              event.stopPropagation()
-              onAction("star")
-            }}
-            className={cn(
-              "mr-[9px] flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-[color-mix(in_srgb,var(--star)_calc(var(--opacity-color-tint)*100%),transparent)] hover:text-(--star)",
-              thread.starred
-                ? "text-(--star)"
-                : "text-(--muted-strongest-foreground)"
-            )}
-          >
-            <StarIcon
-              className="size-4"
-              strokeWidth={1.75}
-              fill={thread.starred ? "currentColor" : "none"}
-            />
-          </button>
         </div>
       </div>
       <div className="pointer-events-none w-9 shrink-0" />
