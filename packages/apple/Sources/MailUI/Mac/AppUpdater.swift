@@ -69,7 +69,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
 
     private func found(_ version: String?, asked: Bool) {
         guard let version else {
-            if asked { state = .failed("GitHub couldn’t be reached to look for a new version.") }
+            if asked { state = .failed("GitHub couldn’t be reached.") }
             return
         }
         guard Version.isOlder(current, than: version) else {
@@ -86,10 +86,10 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
     /// Why this copy can't replace itself, if it can't.
     var obstacle: String? {
         if Bundle.main.bundlePath.contains("/AppTranslocation/") {
-            return "Move Wonnet to the Applications folder and open it from there to update it."
+            return "Move the app to Applications and open it from there to update."
         }
         if Self.team(of: Self.runningCode()) == nil {
-            return "This copy of Wonnet wasn’t signed by its developer, so it can’t update itself."
+            return "This copy isn’t signed, so it can’t update itself."
         }
         return nil
     }
@@ -164,13 +164,13 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         unpack.waitUntilExit()
         let newApp = folder.appendingPathComponent("Wonnet.app")
         guard unpack.terminationStatus == 0, FileManager.default.fileExists(atPath: newApp.path) else {
-            throw Failure(message: "The download isn’t a copy of Wonnet.")
+            throw Failure(message: "The download isn’t a copy of the app.")
         }
         try verify(newApp)
         do {
             _ = try FileManager.default.replaceItemAt(Bundle.main.bundleURL, withItemAt: newApp)
         } catch {
-            throw Failure(message: "Wonnet couldn’t be replaced where it is: \(error.localizedDescription)")
+            throw Failure(message: "The app couldn’t be replaced: \(error.localizedDescription)")
         }
     }
 
@@ -195,7 +195,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
     /// The new app has to be intact and meet this app's own requirement: the same identifier,
     /// signed by the same developer.
     private static func verify(_ app: URL) throws {
-        let notOurs = Failure(message: "The download isn’t signed by Wonnet’s developer, so it wasn’t installed.")
+        let notOurs = Failure(message: "The download isn’t signed by the app’s developer.")
         guard let running = runningCode() else { throw notOurs }
         var requirement: SecRequirement?
         guard SecCodeCopyDesignatedRequirement(running, [], &requirement) == errSecSuccess, let requirement else { throw notOurs }
@@ -217,6 +217,11 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
 }
 
 enum Version {
+    /// How a version is shown: `v0.1.188`.
+    static func label(_ version: String) -> String {
+        "v\(version)"
+    }
+
     /// Whether `version` comes before `other`, comparing their numbers from the left.
     static func isOlder(_ version: String, than other: String?) -> Bool {
         guard let other, !version.isEmpty, !other.isEmpty else { return false }

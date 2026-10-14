@@ -125,7 +125,7 @@ private struct OnPopoverKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// Whether the view is on a `PopupCard`, whose rows hover and highlight in its own fills.
+    /// Whether the view is on a `PopupCard` or a `Banner`, whose rows and buttons hover in their fills.
     var onPopover: Bool {
         get { self[OnPopoverKey.self] }
         set { self[OnPopoverKey.self] = newValue }

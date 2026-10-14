@@ -95,7 +95,7 @@ added to the component, not to the view.
 
 | Component | What it is |
 | --- | --- |
-| `ActionButton`, `ActionMenu` | Words, an optional icon, four variants (`primary`, `outline`, `ghost`, `destructive`), three sizes, `pending`, `wide`, `iconOnly`; the menu opens one |
+| `ActionButton`, `ActionMenu` | Words, an optional icon, five variants (`primary`, `success` for what finishes a thing done, `outline`, `ghost`, `destructive`), three sizes, `pending`, `wide`, `iconOnly`; the menu opens one |
 | `IconButton`, `IconMenu`, `IconCircle` | An icon in a thin circle; `active`, `quiet`, `strong` (the foreground's colour, on a bar), `circled`, `pending` |
 | `FloatingButton` | An icon on a bordered circle of the page's colour, with a little shadow, over a page: Compose over the list on iOS; `small`, the way back to the top of a list scrolled past its first page |
 | `GlassBar`, `GlassCircle` | A bar floating over a page on the system's glass (the page's colour on a bordered capsule before iOS 26): icon buttons spread evenly across a capsule, and one action on a circle beside it; the commands under an open thread and a selection on iOS |
@@ -112,7 +112,7 @@ added to the component, not to the view.
 | `ToggleRow` | A switch with its words |
 | `Disclosure` | A line that opens more |
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |
-| `Spinner` | The small spinner in the muted text colour, for what is still coming: a mailbox syncing after its title, the next page of a list, an update; `size` fixes its box |
+| `Spinner` | Lucide's loader turning, in the muted text colour or a `tint`, for what is still coming: a mailbox syncing after its title, the next page of a list, a pending button, an update. Never the system's `ProgressView`, which the Mac won't colour |
 | `ItemRow` | A thing in a list with its controls at the end |
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |
 | `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, with a check when it is the one in force; and the list that scrolls to the highlighted one |
@@ -126,7 +126,7 @@ added to the component, not to the view.
 | `Notice` | A line about something, muted or in error tone, with an optional action |
 | `EmptyState` | An icon and a calm line for an empty list |
 | `BodyPlaceholder` | A bar for every line of a message's text, as long as the line, where its page will be until the page is drawn |
-| `Banner`, `ToastView` | A card floating at the bottom that stays, with its icon, a line, a progress bar, an action and a close (the Mac's update); and the note at the bottom that goes |
+| `Banner`, `ToastView` | A card floating at the bottom that stays, with its icon, a line (or a progress bar beside it), an action and a close (the Mac's update), always the same height; its tint is its state: `process` under way, `primary` waiting on the user, `success` done (its button too: Restart is `success`), `destructive` failed. And the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
 | `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right; a control at either end of a row is as far from the card's side as from the row's top and bottom |

@@ -103,21 +103,22 @@ struct ButtonIcon: View {
 
     var body: some View {
         if pending {
-            ProgressView().controlSize(.small).tint(tint).frame(width: size, height: size)
+            Spinner(size: size, tint: tint)
         } else if let symbol {
             Image(symbol, size: size).foregroundStyle(tint)
         }
     }
 }
 
-/// A button with words. `primary` is filled, `outline` is Newton's pill (Compose), `ghost` is
+/// A button with words. `primary` is filled, `success` filled in green for what finishes a
+/// thing done (Restart after an update), `outline` is Newton's pill (Compose), `ghost` is
 /// words alone, `destructive` a pill in red. `pending` shows the spinner where the icon goes
 /// and ignores clicks until it is over. `iconOnly` is the same button shrunk to its icon in a
 /// circle, with the title as its tooltip. Half of `Theme.buttonGap` on each side keeps it off
 /// its neighbours while the hit areas touch.
 struct ActionButton: View {
     enum Variant {
-        case primary, outline, ghost, destructive
+        case primary, success, outline, ghost, destructive
     }
 
     let title: String
@@ -187,6 +188,7 @@ struct ActionButton: View {
         private var foreground: Color {
             switch variant {
             case .primary: Tokens.primaryForeground.color
+            case .success: Tokens.successForeground.color
             case .outline: Tokens.primary.color
             case .ghost: hovered ? Tokens.foreground.color : Tokens.mutedForeground.color
             case .destructive: Tokens.destructive.color
@@ -196,13 +198,14 @@ struct ActionButton: View {
         private var background: Color {
             switch variant {
             case .primary: hovered ? Tokens.primary.opacity(Opacity.lit).color : Tokens.primary.color
+            case .success: hovered ? Tokens.success.opacity(Opacity.lit).color : Tokens.success.color
             case .outline, .ghost, .destructive: hovered ? Tokens.backgroundAccent.color : .clear
             }
         }
 
         private var border: Color {
             switch variant {
-            case .primary, .ghost: .clear
+            case .primary, .success, .ghost: .clear
             case .outline: Tokens.primary.opacity(Opacity.colorBorder).color
             case .destructive: Tokens.destructive.opacity(Opacity.colorBorder).color
             }
@@ -319,11 +322,12 @@ struct IconCircle: View {
     var pending = false
     @Environment(\.hovered) private var hovered
     @Environment(\.onCard) private var onCard
+    @Environment(\.onPopover) private var onPopover
 
     var body: some View {
         ButtonIcon(symbol: symbol, pending: pending, size: size.icon, tint: tint)
             .frame(width: size.height * Platform.scale, height: size.height * Platform.scale)
-            .background(Circle().fill(hovered ? Tokens.backgroundAccent.color : .clear))
+            .background(Circle().fill(hovered ? (onPopover ? Tokens.popoverAccentStronger : Tokens.backgroundAccent).color : .clear))
             .overlay(Circle().strokeBorder(circled ? (onCard ? Theme.cardRule : Tokens.border).color : .clear, lineWidth: Theme.hairline))
             .padding(.horizontal, Theme.buttonGap / 2)
             .contentShape(Rectangle())

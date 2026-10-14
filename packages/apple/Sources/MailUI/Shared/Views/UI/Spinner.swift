@@ -1,11 +1,17 @@
 import SwiftUI
 
-/// The small spinner that shows something is still coming, in the muted text colour: a mailbox
-/// syncing, a page loading, an update being fetched. `size` fixes the box it sits in.
+/// The spinner that shows something is still coming: Lucide's loader turning once a second, in
+/// the muted text colour unless given a `tint`. A mailbox syncing, a page loading, a button
+/// pending. `size` is the icon's, as `Image`'s.
 struct Spinner: View {
-    var size: CGFloat?
+    var size: CGFloat = 13
+    var tint = Tokens.mutedForeground.color
 
     var body: some View {
-        ProgressView().controlSize(.mini).tint(Tokens.mutedForeground.color).frame(width: size, height: size)
+        TimelineView(.animation) { context in
+            Image(.loader, size: size)
+                .foregroundStyle(tint)
+                .rotationEffect(.degrees(context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360))
+        }
     }
 }

@@ -6,7 +6,8 @@ import SwiftUI
 struct MailboxTitle: View {
     @Environment(MailStore.self) private var store
 
-    private static let slot: CGFloat = 14 * Platform.scale
+    private static let side: CGFloat = 14
+    private static let slot = side * Platform.scale
 
     var body: some View {
         HStack(spacing: Space.xs) {
@@ -15,7 +16,7 @@ struct MailboxTitle: View {
             #endif
             text.textStyle(.subheading).lineLimit(1)
             if store.mailboxSyncing {
-                Spinner(size: Self.slot)
+                Spinner(size: Self.side)
             } else {
                 Color.clear.frame(width: Self.slot, height: Self.slot)
             }

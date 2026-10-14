@@ -37,6 +37,7 @@ enum Symbol: String {
     case inbox = "\u{e0f7}"
     case keyboard = "\u{e284}"
     case listFilter = "\u{e460}"
+    case loader = "\u{e109}"
     case logOut = "\u{e10e}"
     case mail = "\u{e10f}"
     case mailMinus = "\u{e362}"
