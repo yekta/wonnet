@@ -329,13 +329,10 @@ struct CommandBar: View {
 }
 
 /// A thread, with what can be done to it along the bottom. A swipe across it turns to the
-/// thread beside it in the list, which is drawn there ahead of it. The pages shrink a little
-/// halfway across, as apps do when the bottom edge is swiped between them.
+/// thread beside it in the list, which is drawn there ahead of it.
 struct ThreadScreenIOS: View {
     private static let settle = Animation.easeOut(duration: 0.25)
-    private static let gap = Space.xl
-    /// How much smaller the pages are halfway across.
-    private static let shrink: CGFloat = 0.06
+    private static let gap = Space.l
 
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -359,7 +356,6 @@ struct ThreadScreenIOS: View {
                         Spinner().frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .scaleEffect(scale)
                 .offset(x: CGFloat(page.side) * stride + slide)
                 // The pages beside stay out of sight until a swipe, as the screen is pushed too.
                 .opacity(page.side == 0 || slide != 0 ? 1 : 0)
@@ -384,13 +380,6 @@ struct ThreadScreenIOS: View {
 
     /// How far apart the pages are.
     private var stride: CGFloat { width + Self.gap }
-
-    /// Full size at rest, smallest halfway across.
-    private var scale: CGFloat {
-        guard stride > 0 else { return 1 }
-        let progress = min(abs(slide) / stride, 1)
-        return 1 - Self.shrink * sin(.pi * progress)
-    }
 
     /// The thread on screen, and the ones over and under it in the list.
     private var pages: [(thread: String, side: Int)] {
