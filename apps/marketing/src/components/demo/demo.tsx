@@ -399,6 +399,7 @@ export function Demo() {
                     now={now}
                     onStar={() => act("star", open.id)}
                     onReply={(kind) => reply(kind, open.id)}
+                    onClose={() => setOpenId(null)}
                   />
                 ) : (
                   <div className="absolute inset-0 flex flex-col">
