@@ -62,18 +62,18 @@ struct SettingsEntry: Identifiable, Hashable {
         SettingsEntry(id: "keybindings", title: "Keybindings", section: .keybindings, keywords: "keyboard shortcuts keys hotkeys superhuman"),
     ]
 
-    /// The groups only a touch screen has.
-    static var touch: [SettingsEntry] {
+    /// The groups only one of the systems has: a touch screen's swipes, a pointer's hover.
+    static var ownSystem: [SettingsEntry] {
         #if os(iOS)
         [SettingsEntry(id: "swipe", title: "Swipe Left", section: .inbox, keywords: "swipe actions gestures archive snooze read unread")]
         #else
-        []
+        [SettingsEntry(id: "selecting", title: "Selecting", section: .inbox, keywords: "select circles hover bulk batch checkbox")]
         #endif
     }
 
     /// The groups this app has.
     static var shown: [SettingsEntry] {
-        (all + touch).filter { SettingsSection.shown.contains($0.section) }
+        (all + ownSystem).filter { SettingsSection.shown.contains($0.section) }
     }
 
     /// The groups every word of the query is found in, and the commands of the keys it names.

@@ -4,10 +4,12 @@ import {
   ClockIcon,
   EllipsisIcon,
   MailIcon,
+  MailOpenIcon,
   MenuIcon,
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Compose, type Draft } from "./compose"
@@ -24,7 +26,14 @@ import {
 import type { Box, Mailbox, Thread } from "./mail"
 import { Sidebar, SnoozeSheet } from "./sidebar"
 import { ThreadView, type Reply } from "./thread"
-import { ActionButton, IconButton, Toast, TrafficLights, shadow } from "./ui"
+import {
+  ActionButton,
+  IconButton,
+  SelectCircle,
+  Toast,
+  TrafficLights,
+  shadow,
+} from "./ui"
 
 interface View {
   mailbox: Mailbox
@@ -52,7 +61,10 @@ export function Demo() {
   const [cursor, setCursor] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
-  const [snoozing, setSnoozing] = useState<string | null>(null)
+  const [snoozing, setSnoozing] = useState<string[] | null>(null)
+  const [selection, setSelection] = useState<string[]>([])
+  /** Where a Shift-click's range starts. */
+  const [anchor, setAnchor] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [notice, setNotice] = useState<Notice | null>(null)
   const now = useNow()
@@ -97,6 +109,13 @@ export function Demo() {
   const open = threads.find((thread) => thread.id === openId) ?? null
   const current = Math.min(cursor, Math.max(rows.length - 1, 0))
   const target = open?.id ?? rows[current]?.id
+  const chosen = open
+    ? []
+    : rows
+        .filter((thread) => selection.includes(thread.id))
+        .map((one) => one.id)
+  /** The threads an action is for: the selection over the list, else the current thread. */
+  const targets = chosen.length > 0 ? chosen : target ? [target] : []
 
   const change = (ids: string[], edit: (thread: Thread) => Partial<Thread>) =>
     setThreads((all) =>
@@ -105,30 +124,57 @@ export function Demo() {
       )
     )
 
-  /** Moves the thread out of where it is, with Undo, and back to the list if it was open. */
-  const move = (id: string, box: Box, message: string, until?: number) => {
+  /** Moves the threads out of where they are, with Undo, and back to the list if one was open. */
+  const move = (ids: string[], box: Box, message: string, until?: number) => {
     setNotice({ message, undo: threads })
-    change([id], () => ({ box, snoozedUntil: until, unread: false }))
-    if (openId === id) setOpenId(null)
+    change(ids, () => ({ box, snoozedUntil: until, unread: false }))
+    setSelection((all) => all.filter((id) => !ids.includes(id)))
+    if (openId && ids.includes(openId)) setOpenId(null)
   }
 
-  const act = (action: RowAction, id: string | undefined = target) => {
-    if (!id) return
-    const thread = threads.find((one) => one.id === id)!
+  const of = (ids: string[]) => threads.filter((one) => ids.includes(one.id))
+
+  const act = (action: RowAction, ids: string[] = targets) => {
+    if (ids.length === 0) return
     switch (action) {
       case "archive":
-        return move(id, "archive", "Archived")
+        return move(ids, "archive", "Archived")
       case "trash":
-        return move(id, "trash", "Moved to Trash")
+        return move(ids, "trash", "Moved to Trash")
       case "snooze":
-        return setSnoozing(id)
-      case "star":
-        return change([id], () => ({ starred: !thread.starred }))
-      case "read":
-        if (openId === id) setOpenId(null)
-        return change([id], () => ({ unread: !thread.unread }))
+        return setSnoozing(ids)
+      case "star": {
+        const starred = of(ids).every((one) => one.starred)
+        return change(ids, () => ({ starred: !starred }))
+      }
+      case "read": {
+        const unread = of(ids).some((one) => one.unread)
+        if (openId && ids.includes(openId)) setOpenId(null)
+        return change(ids, () => ({ unread: !unread }))
+      }
     }
   }
+
+  /** Selects the thread or leaves it out; with Shift, selects the rows from the last one picked. */
+  const select = (id: string, range = false) => {
+    const index = rows.findIndex((thread) => thread.id === id)
+    setCursor(index)
+    const from = rows.findIndex((thread) => thread.id === anchor)
+    if (range && from >= 0) {
+      const span = rows
+        .slice(Math.min(from, index), Math.max(from, index) + 1)
+        .map((thread) => thread.id)
+      return setSelection((all) => [...new Set([...all, ...span])])
+    }
+    setAnchor(id)
+    setSelection((all) =>
+      all.includes(id) ? all.filter((one) => one !== id) : [...all, id]
+    )
+  }
+
+  const allChosen = rows.length > 0 && chosen.length === rows.length
+  const clearSelection = () => setSelection([])
+  const selectAll = () => setSelection(rows.map((thread) => thread.id))
 
   const openThread = (id: string) => {
     setOpenId(id)
@@ -147,6 +193,7 @@ export function Demo() {
     setOpenId(null)
     setQuery("")
     setCursor(0)
+    setSelection([])
     setSidebarOpen(false)
   }
 
@@ -217,7 +264,8 @@ export function Demo() {
     else if (document.activeElement === search.current) {
       setQuery("")
       search.current?.blur()
-    } else setOpenId(null)
+    } else if (!open && chosen.length > 0) clearSelection()
+    else setOpenId(null)
   }
 
   const keys: Record<string, () => void> = {
@@ -237,17 +285,22 @@ export function Demo() {
     r: () => reply("reply"),
     a: () => reply("replyAll"),
     f: () => reply("forward"),
+    x: () => !open && rows[current] && select(rows[current].id),
     z: undo,
     "/": () => search.current?.focus(),
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
+    const typing = (event.target as HTMLElement).closest("input, textarea")
+    if (event.metaKey && event.key === "a" && !typing && !open && !draft) {
+      event.preventDefault()
+      return selectAll()
+    }
     if (event.metaKey || event.ctrlKey || event.altKey) return
     if (event.key === "Escape") {
       event.preventDefault()
       return escape()
     }
-    const typing = (event.target as HTMLElement).closest("input, textarea")
     if (typing || draft || snoozing) return
     const run = keys[event.key]
     if (!run) return
@@ -322,74 +375,135 @@ export function Demo() {
             />
           ) : (
             <>
-              <div className="relative flex h-[52px] shrink-0 items-center border-b border-(--border) pr-5 pl-[141px]">
-                {!open && (
-                  <span className="text-[14px] font-semibold text-(--foreground)">
-                    {title}
-                  </span>
-                )}
-                <div className="absolute left-1/2 -translate-x-1/2">
-                  {open ? (
-                    <div className="flex gap-1.5">
-                      <IconButton
-                        icon={ArchiveIcon}
-                        label="Archive (E)"
-                        onClick={() => act("archive")}
-                      />
-                      <IconButton
-                        icon={Trash2Icon}
-                        label="Trash (#)"
-                        onClick={() => act("trash")}
-                      />
-                      <IconButton
-                        icon={ClockIcon}
-                        label="Snooze (H)"
-                        onClick={() => act("snooze")}
-                      />
-                      <IconButton
-                        icon={TagIcon}
-                        label="Label (L)"
-                        onClick={notInDemo}
-                      />
-                      <IconButton
-                        icon={MailIcon}
-                        label="Mark unread (U)"
-                        onClick={() => act("read")}
-                      />
-                      <IconButton
-                        icon={EllipsisIcon}
-                        label="More"
-                        onClick={notInDemo}
-                      />
-                    </div>
-                  ) : (
-                    <MailboxTabs
-                      mailbox={view.mailbox}
-                      unread={unreadIn("inbox", view.account)}
-                      onPick={(mailbox) => pick(mailbox)}
-                    />
-                  )}
-                </div>
-                <div className="ml-auto flex items-center gap-1.5">
-                  {!open && (
-                    <SearchField
-                      query={query}
-                      inputRef={search}
-                      onChange={(text) => {
-                        setQuery(text)
-                        setCursor(0)
-                      }}
-                    />
-                  )}
-                  <ActionButton
-                    icon={SquarePenIcon}
-                    title="Compose"
-                    onClick={() =>
-                      setDraft({ account: 0, to: "", subject: "", text: "" })
-                    }
+              {!open && chosen.length > 0 ? (
+                <div className="flex h-[52px] shrink-0 items-center border-b border-(--border) pr-5 pl-[134px]">
+                  <SelectCircle
+                    checked={allChosen}
+                    label={allChosen ? "Select none" : "Select all (⌘A)"}
+                    onClick={allChosen ? clearSelection : selectAll}
                   />
+                  <span className="text-[13px] font-semibold text-(--foreground)">
+                    {chosen.length} selected
+                  </span>
+                  <div className="ml-auto flex items-center gap-0.5">
+                    <ActionButton
+                      variant="ghost"
+                      icon={ArchiveIcon}
+                      title="Archive"
+                      onClick={() => act("archive")}
+                    />
+                    <ActionButton
+                      variant="ghost"
+                      icon={Trash2Icon}
+                      title="Trash"
+                      onClick={() => act("trash")}
+                    />
+                    <ActionButton
+                      variant="ghost"
+                      icon={ClockIcon}
+                      title="Snooze"
+                      onClick={() => act("snooze")}
+                    />
+                    <ActionButton
+                      variant="ghost"
+                      icon={TagIcon}
+                      title="Label"
+                      onClick={notInDemo}
+                    />
+                    <ActionButton
+                      variant="ghost"
+                      icon={MailOpenIcon}
+                      title={
+                        of(chosen).some((one) => one.unread)
+                          ? "Mark read"
+                          : "Mark unread"
+                      }
+                      onClick={() => act("read")}
+                    />
+                    <IconButton
+                      icon={EllipsisIcon}
+                      label="More"
+                      circled={false}
+                      onClick={notInDemo}
+                    />
+                    <IconButton
+                      icon={XIcon}
+                      label="Clear the selection (Esc)"
+                      circled={false}
+                      onClick={clearSelection}
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="relative flex h-[52px] shrink-0 items-center border-b border-(--border) pr-5 pl-[141px]">
+                  {!open && (
+                    <span className="text-[14px] font-semibold text-(--foreground)">
+                      {title}
+                    </span>
+                  )}
+                  <div className="absolute left-1/2 -translate-x-1/2">
+                    {open ? (
+                      <div className="flex gap-1.5">
+                        <IconButton
+                          icon={ArchiveIcon}
+                          label="Archive (E)"
+                          onClick={() => act("archive")}
+                        />
+                        <IconButton
+                          icon={Trash2Icon}
+                          label="Trash (#)"
+                          onClick={() => act("trash")}
+                        />
+                        <IconButton
+                          icon={ClockIcon}
+                          label="Snooze (H)"
+                          onClick={() => act("snooze")}
+                        />
+                        <IconButton
+                          icon={TagIcon}
+                          label="Label (L)"
+                          onClick={notInDemo}
+                        />
+                        <IconButton
+                          icon={MailIcon}
+                          label="Mark unread (U)"
+                          onClick={() => act("read")}
+                        />
+                        <IconButton
+                          icon={EllipsisIcon}
+                          label="More"
+                          onClick={notInDemo}
+                        />
+                      </div>
+                    ) : (
+                      <MailboxTabs
+                        mailbox={view.mailbox}
+                        unread={unreadIn("inbox", view.account)}
+                        onPick={(mailbox) => pick(mailbox)}
+                      />
+                    )}
+                  </div>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    {!open && (
+                      <SearchField
+                        query={query}
+                        inputRef={search}
+                        onChange={(text) => {
+                          setQuery(text)
+                          setCursor(0)
+                        }}
+                      />
+                    )}
+                    <ActionButton
+                      icon={SquarePenIcon}
+                      title="Compose"
+                      onClick={() =>
+                        setDraft({ account: 0, to: "", subject: "", text: "" })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="relative min-h-0 flex-1">
                 {open ? (
@@ -397,7 +511,7 @@ export function Demo() {
                     key={open.id}
                     thread={open}
                     now={now}
-                    onStar={() => act("star", open.id)}
+                    onStar={() => act("star", [open.id])}
                     onReply={(kind) => reply(kind, open.id)}
                     onClose={() => setOpenId(null)}
                   />
@@ -406,17 +520,25 @@ export function Demo() {
                     {rows.length === 0 ? (
                       <EmptyList message={empty} />
                     ) : (
-                      <div className="mx-auto w-[1000px] shrink-0">
+                      <div className="mx-auto w-[1072px] shrink-0">
                         {rows.map((thread, index) => (
                           <ThreadRow
                             key={thread.id}
                             thread={thread}
                             now={now}
                             current={index === current}
+                            checked={chosen.includes(thread.id)}
+                            selecting={chosen.length > 0}
                             onOpen={() => openThread(thread.id)}
+                            onSelect={(range) => select(thread.id, range)}
                             onAction={(action) => {
                               setCursor(index)
-                              act(action, thread.id)
+                              act(
+                                action,
+                                chosen.includes(thread.id)
+                                  ? chosen
+                                  : [thread.id]
+                              )
                             }}
                           />
                         ))}

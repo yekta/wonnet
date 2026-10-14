@@ -739,6 +739,9 @@ public final class MailStore {
     /// Whether designed mail is turned dark in dark mode.
     var darkMail: Bool { preferences["dark_mail"]?.bool ?? true }
 
+    /// Whether hovering a row on the Mac shows the circle that selects it.
+    var selectCircles: Bool { preferences["select_circles"]?.bool ?? true }
+
     func toggleOriginal(_ message: String) {
         if originalMessages.contains(message) { originalMessages.remove(message) } else { originalMessages.insert(message) }
     }

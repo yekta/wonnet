@@ -96,6 +96,8 @@ struct GalleryView: View {
                         HStack(spacing: 0) {
                             StarButton(starred: true) {}
                             StarButton(starred: false) {}
+                            SelectCircle(checked: true, help: "Selected") {}
+                            SelectCircle(checked: false, help: "Select") {}
                             PlainButton(action: {}) { Text("Undo").textStyle(.labelStrong, color: Tokens.primary.color) }
                         }
                         HStack(spacing: Space.s) {

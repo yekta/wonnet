@@ -4,13 +4,15 @@ import UIKit
 
 /// The thread list on iOS: a table that only makes the rows on screen. A swipe to the left does
 /// what the settings pick (`RowSwiper`); one to the right opens the drawer, unless a row's
-/// commands are out, when it puts them away. A pull from the top refreshes. In edit mode, rows
-/// are picked.
+/// commands are out, when it puts them away. A pull from the top refreshes. Holding a row, or
+/// swiping down the list with two fingers, selects rows; while any is selected, a tap picks.
 struct ThreadListIOS<Header: View>: UIViewRepresentable {
     let store: MailStore
     let rows: [ThreadRow]
     let editing: Bool
     let checked: Set<String>
+    /// Whether holding a row selects it.
+    var selectable = false
     /// False while the rows are the mailbox before; when they are the new one's, the list goes to the top.
     let ready: Bool
     /// Whether the list comes back to where it was left; the search's results don't.
@@ -30,7 +32,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     let open: (String) -> Void
     @ViewBuilder let header: () -> Header
 
-    func makeCoordinator() -> Coordinator { Coordinator(store: store, open: open, toTop: toTop) }
+    func makeCoordinator() -> Coordinator { Coordinator(store: store, selectable: selectable, open: open, toTop: toTop) }
 
     func makeUIView(context: Context) -> UITableView {
         let table = ThreadTable(frame: .zero, style: .plain)
@@ -42,6 +44,10 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         table.contentInset.bottom = bottomInset
         table.verticalScrollIndicatorInsets.bottom = bottomInset
         table.allowsMultipleSelectionDuringEditing = true
+        table.tintColor = Tokens.primary.platform
+        if selectable {
+            table.addGestureRecognizer(UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.held(_:))))
+        }
         table.dataSource = context.coordinator
         table.delegate = context.coordinator
         if refresh != nil {
@@ -77,6 +83,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
         let store: MailStore
+        let selectable: Bool
         var open: (String) -> Void
         var refresh: (() async -> Void)?
         var farDown: (Bool) -> Void = { _ in }
@@ -96,8 +103,9 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         /// Keeps the list where it was left, across the app being made anew.
         var keeper: ScrollKeeper?
 
-        init(store: MailStore, open: @escaping (String) -> Void, toTop: Int) {
+        init(store: MailStore, selectable: Bool, open: @escaping (String) -> Void, toTop: Int) {
             self.store = store
+            self.selectable = selectable
             self.open = open
             self.toTop = toTop
             super.init()
@@ -226,6 +234,25 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             return nil
         }
 
+        /// A row held starts the selection with it.
+        @objc func held(_ press: UILongPressGestureRecognizer) {
+            guard press.state == .began, let table, !table.isEditing,
+                  let path = table.indexPathForRow(at: press.location(in: table)), rows.indices.contains(path.row)
+            else { return }
+            swiper?.close()
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            store.selection = [rows[path.row].id]
+        }
+
+        func tableView(_ tableView: UITableView, shouldBeginMultipleSelectionInteractionAt indexPath: IndexPath) -> Bool {
+            selectable
+        }
+
+        func tableView(_ tableView: UITableView, didBeginMultipleSelectionInteractionAt indexPath: IndexPath) {
+            swiper?.close()
+            tableView.setEditing(true, animated: true)
+        }
+
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             swiper?.close()
         }
@@ -332,6 +359,24 @@ final class ThreadCell: UITableViewCell {
         let pressed = UIView()
         pressed.backgroundColor = Tokens.backgroundAccentLargerStronger.platform
         selectedBackgroundView = pressed
+        let picked = UIView()
+        picked.backgroundColor = Tokens.primary.opacity(Opacity.colorTint).platform
+        multipleSelectionBackgroundView = picked
+    }
+
+    /// The system puts its circle against the row; it is centred in the room made for it, so
+    /// it stands apart from the account's bar.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard isEditing, let circle = subviews.first(where: { String(describing: type(of: $0)).contains("EditControl") }) else { return }
+        circle.center.x = contentView.frame.minX / 2
+    }
+
+    override func setEditing(_ editing: Bool, animated: Bool) {
+        super.setEditing(editing, animated: animated)
+        guard canvas.selecting != editing else { return }
+        canvas.selecting = editing
+        canvas.setNeedsDisplay()
     }
 
     required init?(coder: NSCoder) { nil }
@@ -341,6 +386,7 @@ final class ThreadCell: UITableViewCell {
         self.swiper = swiper
         canvas.row = row
         canvas.text = text
+        canvas.selecting = isEditing
         canvas.setNeedsDisplay()
         if !tray.isHidden { tray.show(swipe.commands, for: row) }
         accessibilityLabel = "\(row.unread ? "Unread, " : "")\(row.senders), \(row.subject), \(row.date)"
@@ -394,11 +440,20 @@ final class ThreadCell: UITableViewCell {
 private final class RowCanvas: UIView {
     var row: ThreadRow?
     var text: RowText?
+    /// The list is selecting: the row stands beside its circle, and its account's bar is a
+    /// row's own, apart from the bars above and below.
+    var selecting = false
 
     override func draw(_ rect: CGRect) {
         guard let row, let text else { return }
         Theme.accountColor(row.color).platform.setFill()
-        UIRectFill(CGRect(x: 0, y: 0, width: Theme.iosAccountBarWidth, height: bounds.height))
+        let width = Theme.iosAccountBarWidth
+        if selecting {
+            let bar = CGRect(x: 0, y: Theme.rowGap, width: width, height: bounds.height - 2 * Theme.rowGap)
+            UIBezierPath(roundedRect: bar, cornerRadius: width / 2).fill()
+        } else {
+            UIRectFill(CGRect(x: 0, y: 0, width: width, height: bounds.height))
+        }
         let left: CGFloat = 16
         let right = bounds.width - 16
         let star = CGRect(x: right - 18, y: 14, width: 18, height: 18)

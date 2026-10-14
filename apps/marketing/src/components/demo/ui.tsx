@@ -1,4 +1,4 @@
-import { XIcon, type LucideIcon } from "lucide-react"
+import { CheckIcon, XIcon, type LucideIcon } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 
 /** The apps' components (packages/apple/Sources/MailUI/Shared/Views/UI), drawn with tokens.css. */
@@ -49,7 +49,7 @@ export function ActionButton({
 }: {
   icon?: LucideIcon
   title: string
-  variant?: "outline" | "primary"
+  variant?: "outline" | "primary" | "ghost"
 } & ComponentProps<"button">) {
   return (
     <button
@@ -58,13 +58,57 @@ export function ActionButton({
         "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-4 text-[13px] font-medium",
         variant === "outline"
           ? "border-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-color-border)*100%),transparent)] text-(--primary) hover:bg-(--background-accent)"
-          : "border-transparent bg-(--primary) text-(--primary-foreground) hover:opacity-(--opacity-lit) disabled:opacity-(--opacity-disabled)",
+          : variant === "ghost"
+            ? "border-transparent text-(--muted-foreground) hover:bg-(--background-accent) hover:text-(--foreground)"
+            : "border-transparent bg-(--primary) text-(--primary-foreground) hover:opacity-(--opacity-lit) disabled:opacity-(--opacity-disabled)",
         className
       )}
       {...props}
     >
       {Icon && <Icon className="size-3.5" strokeWidth={2} />}
       {title}
+    </button>
+  )
+}
+
+/** The circle that selects threads: empty, or filled in the primary colour with a check. */
+export function SelectCircle({
+  checked,
+  label,
+  className,
+  ...props
+}: {
+  checked: boolean
+  label: string
+} & ComponentProps<"button">) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={cn(
+        "group/circle flex size-9 shrink-0 items-center justify-center",
+        className
+      )}
+      {...props}
+    >
+      <span
+        className={cn(
+          "flex size-7 items-center justify-center rounded-full",
+          !checked && "group-hover/circle:bg-(--background-accent)"
+        )}
+      >
+        <span
+          className={cn(
+            "flex size-[18px] items-center justify-center rounded-full",
+            checked
+              ? "bg-(--primary) text-(--primary-foreground)"
+              : "border-[1.5px] border-(--border) group-hover/circle:border-(--foreground)"
+          )}
+        >
+          {checked && <CheckIcon className="size-3" strokeWidth={2.5} />}
+        </span>
+      </span>
     </button>
   )
 }
