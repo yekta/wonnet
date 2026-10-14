@@ -228,13 +228,16 @@ fn resolve(mailbox: &str, split: bool) -> Option<(String, Option<String>)> {
     Some((label, account))
 }
 
-/// Unread is the inbox, narrowed to its unread threads and those of `kept`: the label to read,
-/// and `kept` as JSON when it is Unread.
-fn unread_of(label: String, kept: &[String]) -> (String, Option<String>) {
-    if label != UNREAD {
-        return (label, None);
+/// Unread is the inbox narrowed to its unread threads and those of `kept`, and so is any mailbox
+/// with the Unread filter: the label to read, the filter left, and `kept` as JSON when unread.
+fn unread_of(label: String, filter: Option<Filter>, kept: &[String]) -> (String, Option<Filter>, Option<String>) {
+    let kept = Some(serde_json::json!(kept).to_string());
+    match (label == UNREAD, filter == Some(Filter::Unread)) {
+        (true, true) => (role::INBOX.to_string(), None, kept),
+        (true, false) => (role::INBOX.to_string(), filter, kept),
+        (false, true) => (label, None, kept),
+        (false, false) => (label, filter, None),
     }
-    (role::INBOX.to_string(), Some(serde_json::json!(kept).to_string()))
 }
 
 fn filter_sql(filter: Option<Filter>) -> &'static str {
@@ -824,7 +827,8 @@ impl Store {
     }
 
     /// A page of a mailbox (see `api.rs` for the ids), with its total and, over a split inbox,
-    /// the splits. Unread keeps the threads of `kept` that are still in the inbox, read or not.
+    /// the splits. Unread, and the Unread filter, keep the threads of `kept` that are still in the
+    /// mailbox, read or not.
     pub fn thread_page<Tz: TimeZone>(
         &self,
         mailbox: &str,
@@ -841,11 +845,12 @@ impl Store {
         let Some((label, account)) = resolve(mailbox, splits.is_some()) else {
             return Ok(ThreadPage { rows: Vec::new(), total: 0, splits: Vec::new() });
         };
-        let (label, unread) = unread_of(label, kept);
         let drafts = match label == role::DRAFTS && filter.is_none() {
             true => self.draft_rows(account.as_deref(), now)?,
             false => Vec::new(),
         };
+        let in_unread = label == UNREAD;
+        let (label, filter, unread) = unread_of(label, filter, kept);
         let (from, count) = match drafts.is_empty() {
             true => (offset, limit),
             false => (0, offset + limit),
@@ -858,7 +863,7 @@ impl Store {
             rows = rows.into_iter().skip(offset).take(limit).collect();
         }
         let tabs = match &splits {
-            Some(splits) if unread.is_none() && (label == role::INBOX || label.starts_with("inbox:")) => {
+            Some(splits) if !in_unread && (label == role::INBOX || label.starts_with("inbox:")) => {
                 let mut tabs = vec![("important".to_string(), "Important".to_string())];
                 tabs.extend(splits.iter().map(|split| (split.id.clone(), split.name.clone())));
                 tabs.push(("other".into(), "Other".into()));
@@ -877,7 +882,7 @@ impl Store {
         Ok(ThreadPage { rows, total, splits: tabs })
     }
 
-    /// `unread`: in Unread, the threads kept in it as JSON (see `unread_of`).
+    /// `unread`: in Unread or with its filter, the threads kept in it as JSON (see `unread_of`).
     #[allow(clippy::too_many_arguments)]
     fn list<Tz: TimeZone>(
         &self,
@@ -1076,7 +1081,8 @@ impl Store {
     }
 
     /// The ids of the inbox messages in the threads a mailbox shows (only its unread or starred
-    /// ones with a filter, and Unread's `kept`), older than `before` when given, newest first.
+    /// ones with a filter, and the `kept` of Unread or its filter), older than `before` when
+    /// given, newest first.
     pub fn inbox_messages(
         &self,
         mailbox: &str,
@@ -1085,7 +1091,7 @@ impl Store {
         kept: &[String],
     ) -> Result<Vec<String>> {
         let Some((label, account)) = resolve(mailbox, splits_in(&self.db)?.is_some()) else { return Ok(Vec::new()) };
-        let (label, unread) = unread_of(label, kept);
+        let (label, filter, unread) = unread_of(label, filter, kept);
         let by_account = if account.is_some() { "AND l.account_id = ?2" } else { "AND ?2 IS NULL" };
         let by_filter = filter_sql(filter);
         let by_unread = if unread.is_some() { unread_sql(4) } else { "AND ?4 IS NULL".into() };

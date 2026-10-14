@@ -263,6 +263,25 @@ fn unread_keeps_the_threads_read_while_it_is_on_screen_until_they_leave_the_inbo
 }
 
 #[test]
+fn the_unread_filter_keeps_the_threads_read_while_it_is_on_screen() {
+    let mut store = store();
+    apply(&mut store, &[account()], &[message("m1", "t1", "Ann", 1_000), message("m2", "t2", "Bob", 2_000)], 1);
+    let unread = |store: &Store, mailbox: &str, kept: &[&str]| {
+        let kept: Vec<String> = kept.iter().map(|id| id.to_string()).collect();
+        store.thread_page(mailbox, 0, 50, Some(Filter::Unread), &kept, &Utc::now()).unwrap()
+    };
+    store.apply_local("1", &Op::SetUnread { ids: vec!["m2".into()], unread: false }).unwrap();
+    assert_eq!(ids(&unread(&store, "a/inbox", &[])), ["a:t1"]);
+    let kept = unread(&store, "a/inbox", &["a:t2", "a:t1"]);
+    assert_eq!((ids(&kept), kept.total), (vec!["a:t2", "a:t1"], 2));
+    assert_eq!(ids(&unread(&store, "a/unread", &["a:t2", "a:t1"])), ["a:t2", "a:t1"]);
+    assert_eq!(store.inbox_messages("a/inbox", None, Some(Filter::Unread), &["a:t2".into()]).unwrap(), ["m2", "m1"]);
+
+    store.apply_local("2", &Op::Archive { ids: vec!["m2".into()] }).unwrap();
+    assert_eq!(ids(&unread(&store, "a/inbox", &["a:t2", "a:t1"])), ["a:t1"]);
+}
+
+#[test]
 fn the_inbox_splits_into_important_custom_splits_and_other() {
     let mut store = store();
     let mut newsletter = message("m1", "t1", "News", 1_000);

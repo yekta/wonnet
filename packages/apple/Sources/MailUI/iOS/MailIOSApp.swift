@@ -310,11 +310,23 @@ struct CommandBar: View {
     }
 }
 
-/// A thread, with what can be done to it along the bottom.
+/// A thread, with what can be done to it along the bottom. A swipe across it turns to the
+/// thread beside it in the list.
 struct ThreadScreenIOS: View {
+    private static let goingOut = Animation.easeIn(duration: 0.15)
+    private static let comingIn = Animation.easeOut(duration: 0.2)
+
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    let thread: String
+    /// The thread opened, then the ones turned to.
+    @State private var thread: String
+    /// How far a swipe has the page aside.
+    @State private var slide: CGFloat = 0
+    @State private var width: CGFloat = 0
+
+    init(thread: String) {
+        _thread = State(initialValue: thread)
+    }
 
     var body: some View {
         Group {
@@ -324,13 +336,43 @@ struct ThreadScreenIOS: View {
                 Spinner().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .offset(x: slide)
+        .background(Tokens.background.color)
+        .gesture(ThreadSwipe(canTurn: { store.sibling($0) != nil }, moved: follow, released: release))
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true) }
         .onChange(of: store.conversation?.id) { _, open in
-            if open == nil { dismiss() }
+            guard let open else { return dismiss() }
+            thread = open
         }
         .onDisappear {
             if store.conversation?.id == thread { store.close() }
+        }
+    }
+
+    /// The page follows the finger, and gives only a little toward a side with no thread.
+    private func follow(_ distance: CGFloat) {
+        slide = store.sibling(distance < 0 ? 1 : -1) == nil ? distance * 0.15 : distance
+    }
+
+    /// Turns once the swipe went far or fast enough that way, else the page goes back.
+    private func release(_ distance: CGFloat, _ speed: CGFloat) {
+        let step = distance < 0 ? 1 : -1
+        let far = abs(distance) > width * 0.3 || (abs(speed) > 400 && (speed < 0) == (distance < 0))
+        guard distance != 0, far, store.sibling(step) != nil else {
+            withAnimation(Self.comingIn) { slide = 0 }
+            return
+        }
+        withAnimation(Self.goingOut) {
+            slide = -CGFloat(step) * width
+        } completion: {
+            thread = store.turn(step) ?? thread
+            slide = CGFloat(step) * width
+            // The next page starts from the other side once it is there.
+            DispatchQueue.main.async {
+                withAnimation(Self.comingIn) { slide = 0 }
+            }
         }
     }
 }
