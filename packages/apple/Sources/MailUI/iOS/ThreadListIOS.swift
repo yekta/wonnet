@@ -85,8 +85,8 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         weak var table: UITableView?
         var swiper: RowSwiper?
         var head: UIHostingController<Header>?
-        /// Under the last row: a rule, and while the next page is being read, `LoadingMore`.
-        let foot = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
+        /// Under the last row while the next page is being read: `LoadingMore`.
+        let foot = UIView(frame: .zero)
         private let loadingFoot = UIHostingController(rootView: LoadingMore())
         private var loadingMore = false
         private var rows: [ThreadRow] = []
@@ -101,13 +101,9 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             self.open = open
             self.toTop = toTop
             super.init()
-            let rule = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: Theme.hairline))
-            rule.backgroundColor = Tokens.border.platform
-            rule.autoresizingMask = [.flexibleWidth]
-            foot.addSubview(rule)
             loadingFoot.view.backgroundColor = .clear
             loadingFoot.safeAreaRegions = []
-            loadingFoot.view.frame = CGRect(x: 0, y: Theme.hairline, width: 0, height: LoadingMore.height)
+            loadingFoot.view.frame = CGRect(x: 0, y: 0, width: 0, height: LoadingMore.height)
             loadingFoot.view.autoresizingMask = [.flexibleWidth]
             loadingFoot.view.isHidden = true
             foot.addSubview(loadingFoot.view)
@@ -118,7 +114,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             if loadingMore != self.loadingMore {
                 self.loadingMore = loadingMore
                 loadingFoot.view.isHidden = !loadingMore
-                foot.frame.size.height = Theme.hairline + (loadingMore ? LoadingMore.height : 0)
+                foot.frame.size.height = loadingMore ? LoadingMore.height : 0
                 table.tableFooterView = foot
             }
             if let head, table.tableHeaderView?.frame.height != headerHeight {
@@ -208,7 +204,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
             let cell = tableView.dequeueReusableCell(withIdentifier: ThreadCell.identifier, for: indexPath)
             let row = rows[indexPath.row]
-            (cell as? ThreadCell)?.configure(row: row, text: text(for: row), first: indexPath.row == 0, swiper: swiper)
+            (cell as? ThreadCell)?.configure(row: row, text: text(for: row), swiper: swiper)
             return cell
         }
 
@@ -309,7 +305,6 @@ final class ThreadCell: UITableViewCell {
     private let canvas = RowCanvas()
     private let tray = SwipeTray()
     private weak var swiper: RowSwiper?
-    private var first = false
     private(set) var row: ThreadRow?
     var swipe = SwipeLayout()
 
@@ -338,15 +333,13 @@ final class ThreadCell: UITableViewCell {
 
     required init?(coder: NSCoder) { nil }
 
-    func configure(row: ThreadRow, text: RowText, first: Bool, swiper: RowSwiper?) {
+    func configure(row: ThreadRow, text: RowText, swiper: RowSwiper?) {
         self.row = row
-        self.first = first
         self.swiper = swiper
         canvas.row = row
         canvas.text = text
-        canvas.first = first
         canvas.setNeedsDisplay()
-        if !tray.isHidden { tray.show(swipe.commands, for: row, first: first) }
+        if !tray.isHidden { tray.show(swipe.commands, for: row) }
         accessibilityLabel = "\(row.unread ? "Unread, " : "")\(row.senders), \(row.subject), \(row.date)"
     }
 
@@ -369,7 +362,7 @@ final class ThreadCell: UITableViewCell {
         }
         Self.stopAnimations(in: contentView)
         swipe.commands = commands
-        tray.show(commands, for: row, first: first)
+        tray.show(commands, for: row)
         tray.isHidden = false
         slider.backgroundColor = Tokens.background.platform
         UIView.performWithoutAnimation { layoutSwipe() }
@@ -398,17 +391,11 @@ final class ThreadCell: UITableViewCell {
 private final class RowCanvas: UIView {
     var row: ThreadRow?
     var text: RowText?
-    var first = false
 
     override func draw(_ rect: CGRect) {
         guard let row, let text else { return }
-        if !first {
-            Tokens.border.platform.setFill()
-            UIRectFill(CGRect(x: 0, y: 0, width: bounds.width, height: Theme.hairline))
-        }
         Theme.accountColor(row.color).platform.setFill()
-        let top = first ? 0 : Theme.hairline
-        UIRectFill(CGRect(x: 0, y: top, width: Theme.iosAccountBarWidth, height: bounds.height - top))
+        UIRectFill(CGRect(x: 0, y: 0, width: Theme.iosAccountBarWidth, height: bounds.height))
         let left: CGFloat = 16
         let right = bounds.width - 16
         let star = CGRect(x: right - 18, y: 14, width: 18, height: 18)
