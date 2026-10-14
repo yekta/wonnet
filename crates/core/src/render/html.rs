@@ -1,7 +1,8 @@
 //! A message's body as the page a thread's card shows: sanitized, remote images blocked unless
 //! asked for, inside the theme's CSS. Mail that brings its own design (tables, colours) is drawn
-//! on a "paper" card; in the dark scheme its colours are turned (`dark.rs`) unless the page is
-//! asked for the original, when the card is light as its sender made it.
+//! on a "paper" card, the colour of the thread's card; in the dark scheme its colours are turned
+//! (`dark.rs`) unless the page is asked for the original, when the card is light as its sender
+//! made it and padded from the thread's.
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -26,9 +27,10 @@ blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(-
 details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 0 8px; margin: 6px 0;
   border-radius: 9px; background: var(--background-secondary); color: var(--muted-foreground); font-size: 12px; line-height: 18px; letter-spacing: 1px; }
 details.quote > summary::-webkit-details-marker { display: none; }
-body.paper { background: var(--card-larger); color: var(--emphasized-foreground); color-scheme: light; border-radius: var(--radius-sm); padding: 12px; }
+body.paper { background: var(--card-larger); color: var(--emphasized-foreground); color-scheme: light; border-radius: var(--radius-sm); }
 @media (prefers-color-scheme: dark) {
   body.paper.dark { color: var(--foreground); color-scheme: dark; }
+  body.paper.light { padding: 12px; }
 }
 table { max-width: 100%; }
 "#;

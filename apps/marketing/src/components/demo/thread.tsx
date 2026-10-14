@@ -41,7 +41,7 @@ export function ThreadView({
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <article className="mx-auto mt-4 mb-6 w-[1000px] rounded-sm border border-(--border-card) bg-(--card-larger) px-20 py-7">
+      <article className="mx-auto mt-4 mb-6 w-[1000px] rounded-sm border border-(--border) bg-(--card-larger) px-20 py-7">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[24px] leading-tight font-semibold text-(--foreground)">

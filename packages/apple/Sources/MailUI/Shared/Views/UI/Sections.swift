@@ -45,6 +45,7 @@ extension View {
     /// The card that fills the page (`Theme.cardFill`), with what is on it told so.
     func pageCard() -> some View {
         background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.cardFill.color).shadow(.lg))
+            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
             .environment(\.onCard, true)
     }
 }
