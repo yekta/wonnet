@@ -395,8 +395,8 @@ final class HoverTableView: NSTableView {
     }
 }
 
-/// One thread on one line: the account's bar, unread dot, senders, subject and snippet, date, star;
-/// before it, in the gutter, the circle that selects it.
+/// One thread on one line: the account's bar, unread dot, senders, subject and snippet, the star
+/// if starred, date; before it, in the gutter, the circle that selects it.
 final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     enum Hit {
         case select, star, archive, trash, snooze, read, none
@@ -418,12 +418,13 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             needsDisplay = true
         }
     }
-    /// The action or the star the pointer is over, lit as a button would be.
+    /// The action the pointer is over, lit as a button would be.
     var hoveredHit = Hit.none { didSet { if hoveredHit != oldValue { needsDisplay = true } } }
 
     private static let sendersX: CGFloat = 36
     private static let sendersWidth: CGFloat = 190
     private static let iconSide: CGFloat = 16
+    private static let starSide: CGFloat = 14
 
     func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, selecting: Bool, hoverCircle: Bool, hovering: Bool, selectHelp: String) {
         self.row = row
@@ -473,26 +474,25 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
         column.insetBy(dx: 0, dy: Theme.rowGap / 2)
     }
 
-    /// The star, as far from the face's right edge as from its top and bottom.
-    private var starRect: NSRect {
-        let margin = (face.height - Self.iconSide) / 2
-        return NSRect(x: face.maxX - margin - Self.iconSide, y: face.minY + margin, width: Self.iconSide, height: Self.iconSide)
+    /// Where the date and the hovered actions end.
+    private var trailing: CGFloat {
+        face.maxX - Space.l
     }
 
+    /// The hovered actions, from the right.
     private var actions: [(Hit, Symbol, NSRect)] {
         guard let row else { return [] }
         let kinds: [(Hit, Symbol)] = row.draftId != nil
             ? [(.trash, .trash)]
-            : [(.read, row.unread ? .mailOpen : .mail), (.snooze, .clock), (.trash, .trash), (.archive, .archive)]
+            : [(.star, row.starred ? .starFilled : .star), (.read, row.unread ? .mailOpen : .mail), (.snooze, .clock), (.trash, .trash), (.archive, .archive)]
         return kinds.enumerated().map { index, kind in
-            let x = starRect.minX - 34 - CGFloat(index) * 30
+            let x = trailing - Self.iconSide - CGFloat(index) * 30
             return (kind.0, kind.1, NSRect(x: x, y: (bounds.height - Self.iconSide) / 2, width: Self.iconSide, height: Self.iconSide))
         }
     }
 
     func hit(_ point: NSPoint) -> Hit {
         if circleShown, gutter.contains(point) { return .select }
-        if row?.draftId == nil, starRect.insetBy(dx: -8, dy: -12).contains(point) { return .star }
         guard hovering, !isSelecting else { return .none }
         return actions.first(where: { $0.2.insetBy(dx: -7, dy: -12).contains(point) })?.0 ?? .none
     }
@@ -540,25 +540,25 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             Self.drawSymbol(.paperclip, in: NSRect(x: x, y: middle - 7, width: 14, height: 14), color: Tokens.mutedStrongerForeground.platform)
         }
         x += 24
-        let dateWidth = ceil(text.date.size().width)
-        let lineWidth = max(starRect.minX - 34 - dateWidth - x, 0)
-        if hovering, !isSelecting {
-            let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.l
-            Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
-            for (kind, symbol, rect) in actions {
-                let lit = hoveredHit == kind
-                if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccentLargerStrongest.platform) }
-                Self.drawSymbol(symbol, in: rect, color: lit ? Tokens.foreground.platform : Tokens.mutedForeground.platform)
-            }
-        } else {
-            Self.drawLine(text.date, x: starRect.minX - 18 - dateWidth, width: dateWidth + 2, middle: middle)
+        let dateX = trailing - ceil(text.date.size().width)
+        let starred = row.starred && row.draftId == nil
+        let star = NSRect(x: dateX - Space.m - Self.starSide, y: middle - Self.starSide / 2, width: Self.starSide, height: Self.starSide)
+        let lineWidth = max((starred ? star.minX - Space.s : dateX - Space.l) - x, 0)
+        guard hovering, !isSelecting else {
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle)
+            if starred { Self.drawSymbol(.starFilled, in: star, color: Tokens.star.platform) }
+            Self.drawLine(text.date, x: dateX, width: trailing - dateX + 2, middle: middle)
+            return
         }
-        guard row.draftId == nil else { return }
-        let starLit = hoveredHit == .star
-        if starLit { Self.drawHover(around: starRect, color: Tokens.star.opacity(Opacity.colorTint).platform) }
-        let starColor = row.starred || starLit ? Tokens.star.platform : Tokens.mutedStrongestForeground.platform
-        Self.drawSymbol(row.starred ? .starFilled : .star, in: starRect, color: starColor)
+        let actionsStart = (actions.last?.2.minX ?? trailing) - Space.l
+        Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
+        for (kind, symbol, rect) in actions {
+            let lit = hoveredHit == kind
+            let isStar = kind == .star
+            if lit { Self.drawHover(around: rect, color: isStar ? Tokens.star.opacity(Opacity.colorTint).platform : Tokens.backgroundAccentLargerStrongest.platform) }
+            let color = isStar && (lit || row.starred) ? Tokens.star.platform : lit ? Tokens.foreground.platform : Tokens.mutedForeground.platform
+            Self.drawSymbol(symbol, in: rect, color: color)
+        }
     }
 
     /// The circle in the gutter: filled with a check when the row is selected, empty while it is
