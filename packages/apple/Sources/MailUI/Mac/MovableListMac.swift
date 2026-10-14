@@ -257,8 +257,20 @@ final class MovableStack: NSView {
         hover(slot(at: convert(event.locationInWindow, from: nil)) ?? -1)
     }
 
+    /// The title bar's drag is the window server's, decided before a press reaches the stack, so
+    /// the window is held still while the pointer is over the rows.
+    override func mouseEntered(with event: NSEvent) {
+        window?.isMovable = false
+    }
+
     override func mouseExited(with event: NSEvent) {
         hover(-1)
+        window?.isMovable = true
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        window?.isMovable = true
     }
 
     private func hover(_ index: Int) {
