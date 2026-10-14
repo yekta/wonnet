@@ -43,7 +43,10 @@ jobs:
           rustup update stable --no-self-update
           rustup default stable
 
+      # Shared with the macOS workflow's pull requests.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos
 
       - name: Import the signing certificate
         env:
@@ -113,7 +116,10 @@ jobs:
           rustup target add aarch64-apple-ios
           brew install xcodegen
 
+      # Shared with the iOS workflow's pull requests.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ios
 
       - name: Import the signing certificate
         env:

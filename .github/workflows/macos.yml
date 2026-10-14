@@ -31,7 +31,11 @@ jobs:
           rustup update stable --no-self-update
           rustup default stable
 
+      # The release's cache: the core is built the same way there, and only main saves caches.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos
+          save-if: false
 
       - name: Build the app
         run: apps/macos/scripts/build-app.sh

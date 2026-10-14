@@ -1,6 +1,6 @@
 name: iOS
 
-# Builds the iOS app for the simulator, on pull requests that change what the app is made of.
+# Builds the iOS app for devices, unsigned, on pull requests that change what the app is made of.
 # Main is built and sent to TestFlight by release.yml.
 on:
   pull_request:
@@ -30,19 +30,23 @@ jobs:
           xcodebuild -version
           rustup update stable --no-self-update
           rustup default stable
-          rustup target add aarch64-apple-ios-sim
+          rustup target add aarch64-apple-ios
           brew install xcodegen
 
+      # The release's cache: the core is built for devices there too, and only main saves caches.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ios
+          save-if: false
 
       - name: Generate the project
         working-directory: apps/ios
         run: xcodegen generate
 
-      - name: Build for the simulator
+      - name: Build for devices
         working-directory: apps/ios
         run: |
           xcodebuild -project Mail.xcodeproj -scheme Mail \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData \
+            -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO build | tail -40
           test "${PIPESTATUS[0]}" -eq 0
