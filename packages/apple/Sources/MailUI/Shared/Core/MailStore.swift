@@ -904,11 +904,14 @@ public final class MailStore {
         }
     }
 
-    func reply(_ kind: ReplyKind, to thread: String? = nil) {
+    /// Answers `message`, else the thread's last message from someone else.
+    func reply(_ kind: ReplyKind, to thread: String? = nil, message: String? = nil) {
         guard let thread = thread ?? current else { return }
+        var command = ["thread": thread, "kind": kind.rawValue]
+        command["message"] = message
         Task {
             do {
-                let reply = try await bridge.call("reply_draft", ["thread": thread, "kind": kind.rawValue], as: DraftReply.self)
+                let reply = try await bridge.call("reply_draft", command, as: DraftReply.self)
                 compose = Compose(draft: reply.draft, from: reply.from, showCc: !reply.draft.cc.isEmpty, thread: thread)
             } catch {
                 show(error.localizedDescription)

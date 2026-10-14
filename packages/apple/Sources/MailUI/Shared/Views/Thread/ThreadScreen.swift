@@ -105,6 +105,7 @@ struct ThreadScreen: View {
                 MessageCard(
                     message: message, folded: folded,
                     showPerson: { sheetEmail = message.fromEmail },
+                    reply: { kind in store.reply(kind, to: conversation.id, message: message.id) },
                     open: { index in open(message, index) },
                     save: { index in save(message, index) }
                 )
@@ -231,6 +232,7 @@ struct MessageCard: View {
     let message: MessageItem
     let folded: Bool
     let showPerson: () -> Void
+    let reply: (ReplyKind) -> Void
     let open: (Int) -> Void
     let save: (Int) -> Void
 
@@ -242,6 +244,7 @@ struct MessageCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.fromName)
                         .textStyle(folded ? .body : .subheading, color: folded ? Tokens.mutedStrongerForeground.color : Tokens.foreground.color)
+                        .lineLimit(1)
                         .onTapGesture(perform: tapSender)
                         .help(folded ? "" : message.fromEmail)
                     Text(folded ? message.snippet : message.to).textStyle(.caption).lineLimit(1)
@@ -251,10 +254,8 @@ struct MessageCard: View {
                     Image(.paperclip, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color)
                 }
                 Text(message.date).textStyle(.caption)
-                if canShowOriginal {
-                    IconButton(symbol: original ? .moon : .sun, help: original ? "Show in dark colours" : "Show the original", circled: false, quiet: true) {
-                        store.toggleOriginal(message.id)
-                    }
+                if !folded {
+                    actions
                 }
             }
             if !folded {
@@ -275,6 +276,24 @@ struct MessageCard: View {
             }
         }
         .padding(.vertical, Space.l)
+    }
+
+    /// Answering this message, not only the thread's last: a long thread needn't be scrolled to its end.
+    private var actions: some View {
+        HStack(spacing: 0) {
+            if canShowOriginal {
+                IconButton(symbol: original ? .moon : .sun, help: original ? "Show in dark colours" : "Show the original", size: .small, circled: false, quiet: true) {
+                    store.toggleOriginal(message.id)
+                }
+            }
+            IconButton(symbol: .reply, help: "Reply", size: .small, circled: false) { reply(.reply) }
+            IconMenu(symbol: .ellipsis, help: "More", size: .small, circled: false) {
+                Button { reply(.replyAll) } label: { Label { Text("Reply all") } icon: { Image(.replyAll, size: 15) } }
+                Button { reply(.forward) } label: { Label { Text("Forward") } icon: { Image(.forward, size: 15) } }
+            }
+        }
+        // The last icon lines up with the card's edge; its hit area reaches past it.
+        .padding(.trailing, -Theme.buttonGap / 2)
     }
 
     /// On the Mac the body lines up with the name beside the avatar; a phone has no width to spare.
