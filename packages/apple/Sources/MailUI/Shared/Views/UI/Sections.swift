@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// A section's name in small capitals, and maybe a line about it.
+/// A section's name, and maybe a muted line about it.
 struct SectionHeading: View {
     let title: String
     var detail: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            Text(title.uppercased()).textStyle(.overline)
+            Text(title).textStyle(.subheading)
             if let detail {
-                Text(detail).textStyle(.caption).fixedSize(horizontal: false, vertical: true)
+                Text(detail).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
             }
         }
     }

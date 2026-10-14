@@ -75,7 +75,7 @@ export function Sidebar({
               onClick={() => onPick(one.id, null)}
             />
           ))}
-          <p className="px-[18px] pt-[22px] pb-1.5 text-[11px] font-semibold tracking-wider text-(--muted-stronger-foreground) uppercase">
+          <p className="px-[18px] pt-[22px] pb-1.5 text-[14px] font-semibold text-(--foreground)">
             Accounts
           </p>
           {ACCOUNTS.map((one, index) => {
