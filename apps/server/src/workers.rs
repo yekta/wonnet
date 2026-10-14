@@ -326,6 +326,15 @@ pub async fn fetch_body(
     let Some(parsed) = mime::parse(&raw) else {
         anyhow::bail!("the message can't be read");
     };
-    db::save_body(&state.db, message, account.user_id, &parsed.body, &parsed.attachments, &parsed.plain).await?;
+    db::save_body(
+        &state.db,
+        message,
+        account.user_id,
+        &parsed.body,
+        &parsed.attachments,
+        &parsed.plain,
+        &parsed.snippet,
+    )
+    .await?;
     Ok(parsed.body)
 }

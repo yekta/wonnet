@@ -77,13 +77,19 @@ async fn search_reads_the_operators(db: PgPool) {
     assert_eq!(found("after:2000/01/01 before:2000/02/01").await, Vec::<String>::new());
     assert_eq!(found("").await, Vec::<String>::new());
 
-    // The words of a fetched body are searchable too, and stay so when the provider says more.
-    let plan = db::message(&db, user, ids.iter().find(|(_, name)| name == "plan").unwrap().0).await.unwrap().unwrap();
-    db::save_body(&db, &plan, user, &Default::default(), &plan.attachments.0, "quarterly forecast").await.unwrap();
+    // The words of a fetched body are searchable too, and stay so when the provider says more,
+    // as does the snippet made from the body.
+    let plan_id = ids.iter().find(|(_, name)| name == "plan").unwrap().0;
+    let plan = db::message(&db, user, plan_id).await.unwrap().unwrap();
+    db::save_body(&db, &plan, user, &Default::default(), &plan.attachments.0, "quarterly forecast", "The forecast")
+        .await
+        .unwrap();
     let mut read = messages[0].clone();
     read.unread = false;
     db::upsert_messages(&db, &account, &[read]).await.unwrap();
     assert_eq!(found("forecast").await, ["plan"]);
+    let plan = db::message(&db, user, plan_id).await.unwrap().unwrap();
+    assert_eq!((plan.snippet.as_str(), plan.unread), ("The forecast", false));
 }
 
 #[sqlx::test]

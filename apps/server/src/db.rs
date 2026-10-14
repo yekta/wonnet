@@ -628,7 +628,9 @@ const UPSERT_MESSAGES: &str = "INSERT INTO messages (id, user_id, account_id, pr
          attachments JSONB, message_id TEXT, in_reply_to TEXT, \"references\" JSONB, bulk BOOLEAN, unsubscribe JSONB)
      ON CONFLICT (account_id, provider_id) DO UPDATE SET
          thread_id = excluded.thread_id, from_name = excluded.from_name, from_email = excluded.from_email,
-         recipients = excluded.recipients, subject = excluded.subject, snippet = excluded.snippet,
+         recipients = excluded.recipients, subject = excluded.subject,
+         snippet = CASE WHEN EXISTS (SELECT 1 FROM bodies WHERE bodies.message_id = messages.id)
+             THEN messages.snippet ELSE excluded.snippet END,
          date = excluded.date, unread = excluded.unread, starred = excluded.starred, labels = excluded.labels,
          attachments = CASE WHEN excluded.attachments = '[]'::jsonb THEN messages.attachments ELSE excluded.attachments END,
          message_id = excluded.message_id, in_reply_to = excluded.in_reply_to,
@@ -639,7 +641,9 @@ const UPSERT_MESSAGES: &str = "INSERT INTO messages (id, user_id, account_id, pr
      WHERE NOT EXISTS (SELECT 1 FROM provider_ops WHERE provider_ops.message_id = messages.id)
          AND (messages.deleted OR messages.unread <> excluded.unread OR messages.starred <> excluded.starred
              OR messages.labels <> excluded.labels OR messages.subject <> excluded.subject
-             OR messages.snippet <> excluded.snippet OR messages.thread_id <> excluded.thread_id
+             OR (messages.snippet <> excluded.snippet
+                 AND NOT EXISTS (SELECT 1 FROM bodies WHERE bodies.message_id = messages.id))
+             OR messages.thread_id <> excluded.thread_id
              OR messages.date <> excluded.date OR messages.bulk <> excluded.bulk
              OR messages.unsubscribe IS DISTINCT FROM excluded.unsubscribe)
      RETURNING id, thread_id, from_email, labels, unread, starred, (xmax = 0) AS inserted";
@@ -818,7 +822,8 @@ pub async fn body(db: &PgPool, message_id: Uuid) -> sqlx::Result<Option<mail_pro
     Ok(row.map(|(html, text)| mail_protocol::Body { html, text }))
 }
 
-/// Keeps a fetched body, makes its text searchable and records the attachments it has.
+/// Keeps a fetched body, its snippet over the provider's, makes its text searchable and records
+/// the attachments it has.
 pub async fn save_body(
     db: &PgPool,
     message: &MessageRow,
@@ -826,6 +831,7 @@ pub async fn save_body(
     body: &mail_protocol::Body,
     attachments: &[Attachment],
     plain: &str,
+    snippet: &str,
 ) -> sqlx::Result<()> {
     let mut tx = UserTx::begin(db, user_id).await?;
     sqlx::query(
@@ -837,6 +843,13 @@ pub async fn save_body(
     .bind(&body.text)
     .execute(&mut *tx.tx)
     .await?;
+    if !snippet.is_empty() {
+        sqlx::query("UPDATE messages SET snippet = $2, rev = nextval('revs') WHERE id = $1 AND snippet <> $2")
+            .bind(message.id)
+            .bind(snippet)
+            .execute(&mut *tx.tx)
+            .await?;
+    }
     let words: String = plain.chars().take(20_000).collect();
     sqlx::query(
         "UPDATE messages SET search = message_search(from_name, from_email, recipients, subject, snippet || ' ' || $2)

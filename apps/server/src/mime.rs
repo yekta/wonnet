@@ -5,17 +5,24 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address as BuilderAddress;
+use mail_parser::decoders::html::html_to_text;
 use mail_parser::{Message, MessageParser, MessagePart, MimeHeaders, PartType};
 use mail_protocol::{Address, Attachment, Body, Draft, Recipients, Unsubscribe};
 
+use crate::providers::one_line;
+
 /// Inline images larger than this together stay out of the body.
 const INLINE_LIMIT: usize = 2_000_000;
+/// As long as Gmail's snippets.
+const SNIPPET_LEN: usize = 200;
 
 pub struct Parsed {
     pub body: Body,
     pub attachments: Vec<Attachment>,
     /// The body as plain words, for search.
     pub plain: String,
+    /// The start of what the body says, without the alt text of its images that Gmail's has.
+    pub snippet: String,
 }
 
 /// An attachment with its contents.
@@ -32,6 +39,12 @@ pub fn parse(raw: &[u8]) -> Option<Parsed> {
         PartType::Text(text) => Some(text.to_string()),
         _ => None,
     });
+    let words = match (&html, &text) {
+        (Some(page), _) => html_to_text(page),
+        (None, Some(text)) => text.clone(),
+        (None, None) => String::new(),
+    };
+    let snippet = one_line(&words).chars().take(SNIPPET_LEN).collect();
 
     let (inline, listed) = split_attachments(&message, html.as_deref());
     let mut inline_budget = INLINE_LIMIT;
@@ -45,7 +58,7 @@ pub fn parse(raw: &[u8]) -> Option<Parsed> {
     let attachments = listed.iter().map(|part| describe(part)).collect();
 
     let plain = message.body_text(0).map(|text| text.to_string()).unwrap_or_default();
-    Some(Parsed { body: Body { html, text }, attachments, plain })
+    Some(Parsed { body: Body { html, text }, attachments, plain, snippet })
 }
 
 /// The message's attachments with their contents, in the order `parse` lists them.
@@ -292,6 +305,16 @@ mod tests {
         assert_eq!(parsed.attachments.len(), 1);
         assert_eq!(parsed.attachments[0].name, "plan.pdf");
         assert!(parsed.plain.contains("Hello"));
+    }
+
+    #[test]
+    fn snippets_leave_out_the_alt_text_of_images() {
+        let raw = "Subject: Order\r\nContent-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
+            --b\r\nContent-Type: text/plain\r\n\r\n[trendyol logo] New order\r\n\
+            --b\r\nContent-Type: text/html\r\n\r\n<head><title>Order</title><style>p{}</style></head>\
+            <img alt=\"trendyol logo\" src=\"https://x/logo.png\"><p>New   order</p><p>Dear &amp; valued</p>\r\n\
+            --b--\r\n";
+        assert_eq!(parse(raw.as_bytes()).unwrap().snippet, "New order Dear & valued");
     }
 
     #[test]
