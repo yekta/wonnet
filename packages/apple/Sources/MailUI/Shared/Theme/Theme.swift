@@ -127,18 +127,20 @@ enum Theme {
     /// the page, `cardLarger` outlined in `border`, with `borderCard` hairlines inside; on iOS
     /// a message being written is a sheet of `cardLarger`. What rests on it (a chip) fills with
     /// `cardLargerAccent` and hovers in `cardLargerAccentStronger`.
-    static let cardRadius: CGFloat = Radius.sm
     static let cardFill = Tokens.cardLarger
     static let cardRule = Tokens.borderCard
     static let cardAccent = Tokens.cardLargerAccent
     static let cardAccentStronger = Tokens.cardLargerAccentStronger
     #if os(macOS)
     static let cardInset: CGFloat = 80
+    static let cardRadius: CGFloat = Radius.sm
     /// Between the card and the window's edges.
     static let cardMargin = EdgeInsets(top: Space.l, leading: Space.xl + 4, bottom: Space.l, trailing: Space.xl + 4)
     #else
     static let cardInset: CGFloat = Space.l
-    static let cardMargin = EdgeInsets(top: Space.s, leading: Space.s, bottom: Space.s, trailing: Space.s)
+    static let cardRadius: CGFloat = Radius.xl
+    /// A phone spares no width: the card meets the screen's sides.
+    static let cardMargin = EdgeInsets(top: Space.s, leading: 0, bottom: Space.s, trailing: 0)
     #endif
     static let sidebarWidth: CGFloat = 300
     /// The Mac sidebar sliding in and out: a critically damped spring, as the iOS drawer's.
