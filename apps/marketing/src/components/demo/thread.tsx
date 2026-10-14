@@ -20,11 +20,13 @@ export function ThreadView({
   now,
   onStar,
   onReply,
+  onClose,
 }: {
   thread: Thread
   now: Date | null
   onStar: () => void
   onReply: (kind: Reply) => void
+  onClose: () => void
 }) {
   const me = ACCOUNTS[thread.account].email
   const [opened, setOpened] = useState(
@@ -32,7 +34,13 @@ export function ThreadView({
   )
 
   return (
-    <div className="absolute inset-0 overflow-y-auto">
+    <div
+      className="absolute inset-0 overflow-y-auto"
+      onClick={(event) => {
+        // The page around the card: a click there closes the thread, as in the Mac app.
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
       <article className="mx-auto mt-4 mb-6 w-[1000px] rounded-sm border border-(--border-card) bg-(--card-larger) px-20 py-7">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
