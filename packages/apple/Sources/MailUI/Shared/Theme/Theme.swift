@@ -121,6 +121,12 @@ enum Theme {
     /// The bar of the account's colour at the start of a thread row.
     static let macAccountBarWidth: CGFloat = 2
     static let iosAccountBarWidth: CGFloat = 3
+    /// Either side of the Mac's thread rows: the circle that selects a row stands in the one
+    /// before them, and as much room is left after, so the rows stay in the middle.
+    static let macSelectGutter: CGFloat = 36
+    /// The circle that selects a thread, and the line it is drawn with while empty.
+    static let selectCircle: CGFloat = 18
+    static let selectCircleLine: CGFloat = 1.5
     /// The widest the list and the thread's card grow on the Mac.
     static let cardWidth: CGFloat = 1000
     /// A card that fills the page: the thread's messages, a message being written. It floats on

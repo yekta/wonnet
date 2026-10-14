@@ -4,13 +4,17 @@ import SwiftUI
 
 /// The thread list on the Mac: a table that only makes the rows on screen, each drawn in one
 /// pass. It spans the window, so the whole page scrolls, and draws its rows on the page in the
-/// centred column. Hovering a row shows what can be done to it, as Newton did. ⌘-click picks rows,
-/// Shift-click picks the rows up to one.
+/// centred column. Hovering a row shows what can be done to it, as Newton did, and the circle in
+/// the gutter before it that selects it. While rows are selected, every row shows its circle and
+/// a click selects instead of opening. ⌘-click picks rows, Shift-click picks the rows up to one.
+/// A right-click offers what can be done to the row, or to the selection it is in.
 struct ThreadListMac: NSViewRepresentable {
     let store: MailStore
     let rows: [ThreadRow]
     let selected: String?
     let checked: Set<String>
+    /// Whether hovering a row shows its circle; while rows are selected, every row shows it anyway.
+    let hoverCircles: Bool
     let topInset: CGFloat
     /// False under an open thread: the list keeps its place, and gives up the keyboard.
     let shown: Bool
@@ -39,6 +43,7 @@ struct ThreadListMac: NSViewRepresentable {
         table.target = context.coordinator
         table.action = #selector(Coordinator.clicked)
         table.focusRingType = .none
+        table.menuForRow = { [weak coordinator = context.coordinator] index in coordinator?.menu(for: index) }
 
         let scroll = NSScrollView()
         scroll.documentView = table
@@ -61,7 +66,7 @@ struct ThreadListMac: NSViewRepresentable {
         if scroll.contentInsets.top != topInset { pad(scroll) }
         if scroll.isHidden == shown { scroll.isHidden = !shown }
         context.coordinator.farDown = farDown
-        context.coordinator.update(rows: rows, selected: selected, checked: checked, ready: ready, loadingMore: loadingMore)
+        context.coordinator.update(rows: rows, selected: selected, checked: checked, hoverCircles: hoverCircles, ready: ready, loadingMore: loadingMore)
         context.coordinator.goToTop(toTop)
     }
 
@@ -89,6 +94,7 @@ struct ThreadListMac: NSViewRepresentable {
         private var texts: [String: (ThreadRow, RowText)] = [:]
         private var selected: String?
         private var checked: Set<String> = []
+        private var hoverCircles = true
         private var ready = true
         private var loadingMore = false
         private var prefetch: DispatchWorkItem?
@@ -105,10 +111,11 @@ struct ThreadListMac: NSViewRepresentable {
             selected = store.selected
         }
 
-        func update(rows: [ThreadRow], selected: String?, checked: Set<String>, ready: Bool, loadingMore: Bool) {
+        func update(rows: [ThreadRow], selected: String?, checked: Set<String>, hoverCircles: Bool, ready: Bool, loadingMore: Bool) {
             guard let table else { return }
             let moved = selected != self.selected
-            let picked = checked != self.checked
+            let picked = checked != self.checked || hoverCircles != self.hoverCircles
+            self.hoverCircles = hoverCircles
             let switched = ready && !self.ready
             let changed = Self.changes(from: self.rows, to: rows)
             self.rows = rows
@@ -136,6 +143,8 @@ struct ThreadListMac: NSViewRepresentable {
                     guard let view = view as? ThreadRowView, let id = view.row?.id else { return }
                     view.isCurrent = id == selected
                     view.isChecked = checked.contains(id)
+                    view.isSelecting = !checked.isEmpty
+                    view.hoverCircle = hoverCircles
                 }
             }
             if moved, let selected, selected != clickedRow, store.conversation == nil,
@@ -170,7 +179,8 @@ struct ThreadListMac: NSViewRepresentable {
             let row = rows[index]
             view.configure(
                 row: row, text: text(for: row), current: row.id == selected, checked: checked.contains(row.id),
-                hovering: table?.hovered == index
+                selecting: !checked.isEmpty, hoverCircle: hoverCircles, hovering: table?.hovered == index,
+                selectHelp: store.keyHelp("Select", "select")
             )
         }
 
@@ -229,6 +239,43 @@ struct ThreadListMac: NSViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
 
+        /// What a right-click on the row offers: for the selection when the row is in it.
+        func menu(for index: Int) -> NSMenu? {
+            guard rows.indices.contains(index) else { return nil }
+            let row = rows[index]
+            let threads = store.targets(for: row.id)
+            let many = threads.count > 1
+            let groups: [[ThreadCommand]] = [
+                many ? [] : [.reply, .forward],
+                [.archive, .trash, .snooze, .read, .star],
+                [.label, .move],
+            ]
+            let menu = NSMenu()
+            if !many, row.draftId == nil {
+                menu.addItem(ActionMenuItem(title: "Open") { [store] in store.open(row.id) })
+                menu.addItem(.separator())
+            }
+            for group in groups {
+                let commands = store.applicable(group, to: threads)
+                guard !commands.isEmpty else { continue }
+                for command in commands {
+                    menu.addItem(ActionMenuItem(title: command.title(store, threads), symbol: command.symbol) { [store] in
+                        store.run(command, on: threads)
+                    })
+                }
+                menu.addItem(.separator())
+            }
+            if many {
+                menu.addItem(ActionMenuItem(title: "Clear the selection", symbol: .x) { [store] in store.clearSelection() })
+            } else {
+                let picked = checked.contains(row.id)
+                menu.addItem(ActionMenuItem(title: picked ? "Deselect" : "Select", symbol: .circleCheck) { [store] in
+                    store.toggleSelection(row.id)
+                })
+            }
+            return menu
+        }
+
         @objc func clicked() {
             guard let table, table.clickedRow >= 0, table.clickedRow < rows.count else { return }
             let row = rows[table.clickedRow]
@@ -236,23 +283,24 @@ struct ThreadListMac: NSViewRepresentable {
                   let event = NSApp.currentEvent
             else { return }
             let point = view.convert(event.locationInWindow, from: nil)
-            guard view.column.contains(point) else { return }
-            if event.modifierFlags.contains(.command) {
-                store.toggleSelection(row.id)
-                return
-            }
+            guard view.reach.contains(point) else { return }
+            let hit = view.hit(point)
             if event.modifierFlags.contains(.shift) {
                 store.extendSelection(to: row.id)
                 return
             }
+            if hit == .select || event.modifierFlags.contains(.command) || (!checked.isEmpty && hit != .star) {
+                store.toggleSelection(row.id)
+                return
+            }
             let threads = store.targets(for: row.id)
-            switch view.hit(point) {
+            switch hit {
             case .star: store.run(.star, on: threads)
             case .archive: store.run(.archive, on: threads)
             case .trash: store.run(.trash, on: threads)
             case .snooze: store.run(.snooze, on: threads)
             case .read: store.run(.read, on: threads)
-            case .none:
+            case .select, .none:
                 clickedRow = row.id
                 store.clearSelection()
                 store.open(row.id)
@@ -279,8 +327,41 @@ final class LoadingMoreRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {}
 }
 
-/// Tells its rows when the pointer is over them.
+/// A menu item that does what it is given.
+final class ActionMenuItem: NSMenuItem {
+    private let perform: () -> Void
+
+    init(title: String, symbol: Symbol? = nil, perform: @escaping () -> Void) {
+        self.perform = perform
+        super.init(title: title, action: #selector(run), keyEquivalent: "")
+        target = self
+        guard let symbol, let icon = NSImage.symbol(symbol, side: 15).copy() as? NSImage else { return }
+        icon.isTemplate = true
+        image = icon
+    }
+
+    required init(coder: NSCoder) {
+        fatalError("Not made from a coder")
+    }
+
+    @objc private func run() {
+        perform()
+    }
+}
+
+/// Tells its rows when the pointer is over them, and asks for a row's menu on a right-click.
 final class HoverTableView: NSTableView {
+    var menuForRow: (Int) -> NSMenu? = { _ in nil }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let point = convert(event.locationInWindow, from: nil)
+        let index = row(at: point)
+        guard index >= 0, let view = rowView(atRow: index, makeIfNecessary: false) as? ThreadRowView,
+              view.reach.contains(convert(point, to: view))
+        else { return nil }
+        return menuForRow(index)
+    }
+
     var hovered = -1 {
         didSet {
             guard hovered != oldValue else { return }
@@ -300,7 +381,7 @@ final class HoverTableView: NSTableView {
         let point = convert(event.locationInWindow, from: nil)
         let index = row(at: point)
         guard index >= 0, let view = rowView(atRow: index, makeIfNecessary: false) as? ThreadRowView,
-              view.column.contains(convert(point, to: view))
+              view.reach.contains(convert(point, to: view))
         else {
             hovered = -1
             return
@@ -314,16 +395,22 @@ final class HoverTableView: NSTableView {
     }
 }
 
-/// One thread on one line: the account's bar, unread dot, senders, subject and snippet, date, star.
-final class ThreadRowView: NSTableRowView {
+/// One thread on one line: the account's bar, unread dot, senders, subject and snippet, date, star;
+/// before it, in the gutter, the circle that selects it.
+final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     enum Hit {
-        case star, archive, trash, snooze, read, none
+        case select, star, archive, trash, snooze, read, none
     }
 
     private(set) var row: ThreadRow?
     private var text: RowText?
     var isCurrent = false { didSet { if isCurrent != oldValue { needsDisplay = true } } }
     var isChecked = false { didSet { if isChecked != oldValue { needsDisplay = true } } }
+    /// Rows are selected: every row shows its circle, and hovering one doesn't offer its actions.
+    var isSelecting = false { didSet { if isSelecting != oldValue { needsDisplay = true } } }
+    /// Hovering the row shows its circle. Without it, the gutter is left alone until rows are selected.
+    var hoverCircle = true { didSet { if hoverCircle != oldValue { needsDisplay = true } } }
+    private var selectHelp = "Select"
     var hovering = false {
         didSet {
             guard hovering != oldValue else { return }
@@ -338,21 +425,47 @@ final class ThreadRowView: NSTableRowView {
     private static let sendersWidth: CGFloat = 190
     private static let iconSide: CGFloat = 16
 
-    func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, hovering: Bool) {
+    func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, selecting: Bool, hoverCircle: Bool, hovering: Bool, selectHelp: String) {
         self.row = row
         self.text = text
         self.isCurrent = current
         self.isChecked = checked
+        self.isSelecting = selecting
+        self.hoverCircle = hoverCircle
         self.hovering = hovering
+        self.selectHelp = selectHelp
         needsDisplay = true
     }
 
     override var isFlipped: Bool { true }
 
-    /// Where the row is drawn: the column's width, centred, with the page's margin either side.
+    /// Where the row is drawn: the column's width, centred, with the page's margin and a gutter
+    /// either side.
     var column: NSRect {
-        let width = max(min(bounds.width - 48, Theme.cardWidth), 0)
+        let width = max(min(bounds.width - 48 - 2 * Theme.macSelectGutter, Theme.cardWidth), 0)
         return NSRect(x: ((bounds.width - width) / 2).rounded(), y: 0, width: width, height: bounds.height)
+    }
+
+    /// The gutter before the column, where the circle that selects the row is.
+    private var gutter: NSRect {
+        NSRect(x: column.minX - Theme.macSelectGutter, y: 0, width: Theme.macSelectGutter, height: bounds.height)
+    }
+
+    /// Whether the circle in the gutter can be clicked: it is shown on hover, or rows are selected.
+    private var circleShown: Bool { hoverCircle || isSelecting }
+
+    /// Where the row answers the pointer: the column, and the gutter before it while its circle is there.
+    var reach: NSRect { circleShown ? column.union(gutter) : column }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        removeAllToolTips()
+        addToolTip(gutter, owner: self, userData: nil)
+    }
+
+    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
+        guard circleShown else { return "" }
+        return isChecked ? "Deselect" : selectHelp
     }
 
     /// The row's face: the column, with half the gap between rows above and below.
@@ -378,8 +491,9 @@ final class ThreadRowView: NSTableRowView {
     }
 
     func hit(_ point: NSPoint) -> Hit {
+        if circleShown, gutter.contains(point) { return .select }
         if row?.draftId == nil, starRect.insetBy(dx: -8, dy: -12).contains(point) { return .star }
-        guard hovering else { return .none }
+        guard hovering, !isSelecting else { return .none }
         return actions.first(where: { $0.2.insetBy(dx: -7, dy: -12).contains(point) })?.0 ?? .none
     }
 
@@ -415,9 +529,8 @@ final class ThreadRowView: NSTableRowView {
         guard let row, let text else { return }
         let left = column.minX
         let middle = bounds.height / 2
-        if isChecked {
-            Self.drawSymbol(.squareCheck, in: NSRect(x: left + 13, y: middle - 8, width: 16, height: 16), color: Tokens.primary.platform)
-        } else if row.unread {
+        drawSelectCircle(middle: middle)
+        if row.unread {
             Tokens.primary.platform.setFill()
             NSBezierPath(ovalIn: NSRect(x: left + 18, y: middle - 3.5, width: 7, height: 7)).fill()
         }
@@ -429,7 +542,7 @@ final class ThreadRowView: NSTableRowView {
         x += 24
         let dateWidth = ceil(text.date.size().width)
         let lineWidth = max(starRect.minX - 34 - dateWidth - x, 0)
-        if hovering {
+        if hovering, !isSelecting {
             let actionsStart = (actions.last?.2.minX ?? starRect.minX) - Space.l
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
             for (kind, symbol, rect) in actions {
@@ -446,6 +559,27 @@ final class ThreadRowView: NSTableRowView {
         if starLit { Self.drawHover(around: starRect, color: Tokens.star.opacity(Opacity.colorTint).platform) }
         let starColor = row.starred || starLit ? Tokens.star.platform : Tokens.mutedStrongestForeground.platform
         Self.drawSymbol(row.starred ? .starFilled : .star, in: starRect, color: starColor)
+    }
+
+    /// The circle in the gutter: filled with a check when the row is selected, empty while it is
+    /// hovered or other rows are selected, else not there.
+    private func drawSelectCircle(middle: CGFloat) {
+        let side = Theme.selectCircle
+        let rect = NSRect(x: gutter.midX - side / 2, y: middle - side / 2, width: side, height: side)
+        if isChecked {
+            Tokens.primary.platform.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            Self.drawSymbol(.check, in: rect.insetBy(dx: 3, dy: 3), color: Tokens.primaryForeground.platform)
+            return
+        }
+        guard (hovering && hoverCircle) || isSelecting else { return }
+        let lit = hoveredHit == .select
+        if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccent.platform) }
+        let inset = Theme.selectCircleLine / 2
+        let ring = NSBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset))
+        ring.lineWidth = Theme.selectCircleLine
+        (lit ? Tokens.foreground : Tokens.border).platform.setStroke()
+        ring.stroke()
     }
 
     /// The circle a hovered icon sits on, as tall as the smallest control.

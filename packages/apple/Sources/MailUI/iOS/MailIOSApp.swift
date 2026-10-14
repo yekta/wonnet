@@ -80,7 +80,6 @@ enum Route: Hashable {
 struct IOSShell: View {
     @Environment(MailStore.self) private var store
     @State private var path: [Route]
-    @State private var editing = false
     @State private var drawerOpen = false
 
     init(start: [Route]) {
@@ -88,12 +87,12 @@ struct IOSShell: View {
     }
 
     var body: some View {
-        DrawerView(isOpen: $drawerOpen, enabled: path.isEmpty && !editing) {
+        DrawerView(isOpen: $drawerOpen, enabled: path.isEmpty && store.selection.isEmpty) {
             SidebarView(showSettings: showSettings, picked: { _ in close() })
                 .environment(store)
         } content: {
             NavigationStack(path: $path) {
-                MailboxScreen(path: $path, editing: $editing, openDrawer: { drawerOpen = true })
+                MailboxScreen(path: $path, openDrawer: { drawerOpen = true })
                     .navigationDestination(for: Route.self) { route in
                         switch route {
                         case .search: SearchScreen(path: $path)
@@ -110,10 +109,7 @@ struct IOSShell: View {
             drawerOpen = false
             path = [.thread(thread)]
         }
-        .onChange(of: store.baseMailbox) {
-            path = []
-            editing = false
-        }
+        .onChange(of: store.baseMailbox) { path = [] }
         .onChange(of: path) { _, path in
             // Leaving the search page ends the search.
             guard !path.contains(.search), !store.searchQuery.isEmpty else { return }
@@ -132,21 +128,23 @@ struct IOSShell: View {
     }
 }
 
-/// A mailbox's threads under our own bar, with Compose floating over them; in edit mode,
-/// threads to act on together. Search is a page of its own.
+/// A mailbox's threads under our own bar, with Compose floating over them. Holding a row selects
+/// it, and the list picks threads to act on together until none is left selected. Search is a
+/// page of its own.
 struct MailboxScreen: View {
     @Environment(MailStore.self) private var store
     @Binding var path: [Route]
-    @Binding var editing: Bool
     let openDrawer: () -> Void
     @State private var farDown = false
     @State private var toTop = 0
+
+    private var editing: Bool { !store.selection.isEmpty }
 
     var body: some View {
         // The table stays through a change of mailbox, with the empty state over it when there
         // is nothing to show, so it isn't made anew and the page never goes blank between.
         ThreadListIOS(
-            store: store, rows: store.rows, editing: editing, checked: store.selection, ready: store.listReady,
+            store: store, rows: store.rows, editing: editing, checked: store.selection, selectable: true, ready: store.listReady,
             loadingMore: store.loadingMore, headerHeight: ListHeader.shows(store) ? ListHeader.height : 0,
             bottomInset: FloatingButton.side + Space.l * 2,
             refresh: store.checkMail, farDown: { farDown = $0 }, toTop: toTop,
@@ -165,7 +163,7 @@ struct MailboxScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) { top }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if editing {
-                CommandBar(threads: Array(store.selection)).disabled(store.selection.isEmpty)
+                CommandBar(threads: Array(store.selection))
             } else {
                 MailboxTabBar()
             }
@@ -174,7 +172,6 @@ struct MailboxScreen: View {
         .navigationTitle(store.baseMailboxName)
         // A large title would take the list's refresh control into the hidden bar.
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: editing) { _, on in if !on { store.clearSelection() } }
     }
 
     @ViewBuilder private var top: some View {
@@ -199,7 +196,7 @@ struct MailboxScreen: View {
         } center: {
             Text("\(store.selection.count) Selected").textStyle(.subheading).lineLimit(1)
         } trailing: {
-            ActionButton(title: "Done", variant: .ghost) { editing = false }
+            ActionButton(title: "Done", variant: .ghost, action: store.clearSelection)
         }
         .topBar()
     }
@@ -272,8 +269,9 @@ struct MailboxTabBar: View {
     }
 }
 
-/// What can be done to threads along the bottom: the usual few spread across a bar of glass,
-/// with menus for the rest, and Reply on a circle of its own beside it.
+/// What can be done to threads along the bottom, spread across a bar of glass. Under a thread,
+/// the usual few with menus for the rest, and Reply on a circle of its own beside it; over a
+/// selection, the few that make sense for many, with no menu to open.
 struct CommandBar: View {
     @Environment(MailStore.self) private var store
     let threads: [String]
@@ -297,6 +295,16 @@ struct CommandBar: View {
     }
 
     @ViewBuilder private var commands: some View {
+        if reply {
+            threadCommands
+        } else {
+            ForEach([ThreadCommand.archive, .trash, .snooze, .label, .read, .star]) { command in
+                IconButton(symbol: symbol(command), help: command.title(store, threads), circled: false, strong: true) { store.run(command, on: threads) }
+            }
+        }
+    }
+
+    @ViewBuilder private var threadCommands: some View {
         ForEach([ThreadCommand.archive, .trash, .snooze]) { command in
             IconButton(symbol: command.symbol, help: command.title(store, threads), circled: false, strong: true) { store.run(command, on: threads) }
         }
@@ -304,11 +312,18 @@ struct CommandBar: View {
             ThreadCommandButtons(commands: [.label, .move], threads: threads)
         }
         IconMenu(symbol: .ellipsis, help: "More", circled: false, strong: true) {
-            ThreadCommandButtons(commands: [.read] + ThreadCommand.more.filter { threads.count == 1 || $0 != .print }, threads: threads)
-            if reply {
-                Divider()
-                ThreadCommandButtons(commands: [.replyAll, .forward], threads: threads)
-            }
+            ThreadCommandButtons(commands: [.read] + ThreadCommand.more, threads: threads)
+            Divider()
+            ThreadCommandButtons(commands: [.replyAll, .forward], threads: threads)
+        }
+    }
+
+    /// Its icon for these threads: what it would make of them.
+    private func symbol(_ command: ThreadCommand) -> Symbol {
+        switch command {
+        case .read: store.anyUnread(threads) ? .mailOpen : .mail
+        case .star: store.allStarred(threads) ? .starFilled : .star
+        default: command.symbol
         }
     }
 }

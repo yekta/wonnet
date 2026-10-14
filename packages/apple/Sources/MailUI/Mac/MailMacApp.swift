@@ -171,10 +171,11 @@ private struct MacPages: View {
                     ListHeader()
                         .frame(maxWidth: Theme.cardWidth)
                         .padding(.top, Space.l)
-                        .padding(.horizontal, Space.xl + 4)
+                        .padding(.horizontal, Space.xl + 4 + Theme.macSelectGutter)
                 }
                 ThreadListMac(
                     store: store, rows: store.visibleRows, selected: store.selected, checked: store.selection,
+                    hoverCircles: store.selectCircles,
                     topInset: header ? 0 : Space.l, shown: store.conversation == nil, ready: store.listReady,
                     loadingMore: store.loadingMore && store.searchRows == nil,
                     farDown: { farDown = $0 }, toTop: toTop
@@ -208,9 +209,9 @@ struct MacTopBar: View {
         Group {
             if store.conversation == nil, !store.selection.isEmpty {
                 HeaderBar(leadingInset: leadingInset) {
-                    SelectionBar()
+                    SelectionCount()
                 } trailing: {
-                    compose
+                    SelectionActions()
                 }
             } else {
                 HeaderBar(leadingInset: leadingInset) {

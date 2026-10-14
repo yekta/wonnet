@@ -59,22 +59,50 @@ struct EmptyList: View {
     }
 }
 
-/// The threads picked on the Mac, with what can be done to them all.
-struct SelectionBar: View {
+/// How many threads are selected, after the circle that selects all of them or none.
+struct SelectionCount: View {
     @Environment(MailStore.self) private var store
 
     var body: some View {
-        let threads = Array(store.selection)
+        let all = store.selection.count == store.visibleRows.count
         HStack(spacing: 0) {
-            Text("\(store.selection.count) selected").padding(.trailing, Space.s).textStyle(.labelStrong)
-            ActionButton(title: "Clear", variant: .ghost, action: store.clearSelection)
-            Spacer()
+            SelectCircle(checked: all, help: all ? "Select none" : store.keyHelp("Select all", "selectAll")) {
+                all ? store.clearSelection() : store.selectAll()
+            }
+            Text("\(store.selection.count) selected").textStyle(.labelStrong).lineLimit(1).fixedSize()
+        }
+    }
+}
+
+/// What can be done to all the selected threads, named while there is room, and the way out.
+struct SelectionActions: View {
+    @Environment(MailStore.self) private var store
+
+    var body: some View {
+        let threads = store.targets
+        HStack(spacing: 0) {
+            ViewThatFits(in: .horizontal) {
+                commands(threads, named: true)
+                commands(threads, named: false)
+            }
+            IconButton(symbol: .x, help: "Clear the selection (Esc)", circled: false, action: store.clearSelection)
+        }
+    }
+
+    private func commands(_ threads: [String], named: Bool) -> some View {
+        HStack(spacing: 0) {
             ForEach(store.applicable([.archive, .trash, .snooze, .label, .read], to: threads)) { command in
-                IconButton(symbol: command.symbol, help: command.title(store, threads)) { store.run(command, on: threads) }
+                let title = command.title(store, threads)
+                let help = store.keyHelp(title, command.rawValue)
+                if named {
+                    ActionButton(title: title, symbol: command.symbol, variant: .ghost) { store.run(command, on: threads) }.help(help)
+                } else {
+                    IconButton(symbol: command.symbol, help: help, circled: false) { store.run(command, on: threads) }
+                }
             }
             let more = store.applicable(ThreadCommand.more.filter { $0 != .print }, to: threads)
             if !more.isEmpty {
-                IconMenu(symbol: .ellipsis, help: "More") {
+                IconMenu(symbol: .ellipsis, help: "More", circled: false) {
                     ThreadCommandButtons(commands: more, threads: threads)
                 }
             }

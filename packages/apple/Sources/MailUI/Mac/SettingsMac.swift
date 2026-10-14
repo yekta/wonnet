@@ -445,6 +445,16 @@ private struct InboxSettings: View {
         SettingsGroup(id: "tabs", title: "Tabs", detail: "The mailboxes kept over the list. Drag a tab to move it; right-click it to remove it.") {
             TabRows()
         }
+        SettingsGroup(id: "selecting", title: "Selecting") {
+            SettingsRow {
+                SettingsLabel(
+                    title: "Circles on hover",
+                    detail: "A circle beside the row under the pointer selects it. Without them, ⌘-click and Shift-click still do."
+                )
+            } trailing: {
+                Switch(title: "Circles on hover", isOn: store.flag("select_circles", default: true))
+            }
+        }
     }
 }
 
