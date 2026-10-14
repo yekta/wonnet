@@ -206,7 +206,8 @@ pub enum Command {
     /// `{unified: [Mailbox], accounts: [AccountView]}`.
     Mailboxes,
     /// A `ThreadPage`. `unread` is the inbox's unread threads, and those of `keep` still in the
-    /// inbox: the threads on screen, so one read there stays until the mailbox is left.
+    /// inbox: the threads on screen, so one read there stays until the mailbox is left. The
+    /// Unread filter keeps them too.
     Threads {
         mailbox: String,
         #[serde(default)]

@@ -567,9 +567,10 @@ public final class MailStore {
         return try? await bridge.call("threads", fields, as: ThreadPage.self)
     }
 
-    /// In Unread, the threads on screen, which stay there while they are in the inbox.
+    /// In Unread or with its filter, the threads on screen, which stay there while they are in
+    /// the mailbox.
     var keptRows: [String]? {
-        guard inUnread, listReady else { return nil }
+        guard inUnread || filter == .unread, listReady else { return nil }
         return rows.map(\.id)
     }
 
@@ -867,8 +868,31 @@ public final class MailStore {
         } else {
             selected = next
         }
-        prefetch(list[max(nextIndex - 2, 0)...min(nextIndex + 4, list.count - 1)].map(\.id))
-        if index + step >= list.count - 20 { loadMore() }
+        readyAround(nextIndex, in: list)
+    }
+
+    /// The thread beside the open one in the list, under it with a `step` of 1, over it with -1.
+    /// Drafts, which open in compose, are passed over.
+    func sibling(_ step: Int) -> String? {
+        let list = visibleRows
+        guard let open = conversation?.id, let index = list.firstIndex(where: { $0.id == open }) else { return nil }
+        let past = step > 0 ? Array(list[(index + 1)...]) : list[..<index].reversed()
+        return past.first(where: { $0.draftId == nil })?.id
+    }
+
+    /// Opens the thread beside the open one, as a swipe across it does.
+    func turn(_ step: Int) -> String? {
+        guard let next = sibling(step) else { return nil }
+        open(next)
+        let list = visibleRows
+        if let index = list.firstIndex(where: { $0.id == next }) { readyAround(index, in: list) }
+        return next
+    }
+
+    /// Fetches the bodies of the rows around one about to be opened, and the next page near the end.
+    private func readyAround(_ index: Int, in list: [ThreadRow]) {
+        prefetch(list[max(index - 2, 0)...min(index + 4, list.count - 1)].map(\.id))
+        if index >= list.count - 20 { loadMore() }
     }
 
     /// Asks the core for the bodies of threads about to be opened.
