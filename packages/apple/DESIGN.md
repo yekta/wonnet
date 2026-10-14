@@ -125,6 +125,7 @@ added to the component, not to the view.
 | `Card`, `FormButtons` | A rounded card, and Save and Cancel under a form |
 | `Notice` | A line about something, muted or in error tone, with an optional action |
 | `EmptyState` | An icon and a calm line for an empty list |
+| `BodyPlaceholder` | A bar for every line of a message's text, as long as the line, where its page will be until the page is drawn |
 | `Banner`, `ToastView` | A line across the window that stays, and the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |

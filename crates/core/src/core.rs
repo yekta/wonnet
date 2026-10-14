@@ -839,6 +839,7 @@ impl Core {
             recipients.extend(message.recipients.cc.iter().cloned());
             let body = self.store.body(&message.id);
             let designed = body.as_ref().and_then(|body| body.html.as_deref()).is_some_and(html::is_designed);
+            let shape = html::shape(body.as_ref(), &message.snippet);
             let page = body.map(|body| html::page(&body, images, dark));
             let failed = page.is_none() && self.body_failed_lately(&message.id);
             if page.is_none() && !failed {
@@ -862,6 +863,7 @@ impl Core {
                 blocked_images: page.as_ref().is_some_and(|page| page.blocked_images),
                 designed,
                 html: page.map(|page| page.html),
+                shape,
                 failed,
                 attachments: message
                     .attachments

@@ -216,6 +216,7 @@ struct GalleryView: View {
                         Notice(text: "Images from the sender were left out.", action: "Load images")
                         Banner(symbol: .circleCheck, text: "Wonnet 2.0 is installed. Restart to use it.", action: "Restart") {}
                         Card { EmptyState(symbol: .inbox, message: "All done. Enjoy the quiet.").frame(height: 120) }
+                        BodyPlaceholder(shape: [.text(180), .text(0), .image(width: 600, height: 140), .text(0), .text(160), .text(12)]).frame(maxWidth: 480)
                         HStack(spacing: Space.m) {
                             Avatar(initials: "AL", email: "ada@example.com", size: 52)
                             Avatar(initials: "GH", email: "grace@example.com", size: 34)

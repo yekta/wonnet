@@ -87,11 +87,43 @@ struct MessageItem: Codable, Identifiable, Hashable {
     let unread: Bool
     let folded: Bool
     let html: String?
+    /// The lines of the page's text and its images, that its placeholder is drawn from.
+    let shape: [ShapeLine]
     let failed: Bool
     let blockedImages: Bool
     /// The mail brings its own design; in dark mode its colours are turned unless the original is asked for.
     let designed: Bool
     let attachments: [Attachment]
+}
+
+/// A line of a page's placeholder: text of so many characters, none a blank line, or an image.
+enum ShapeLine: Codable, Hashable {
+    case text(Int)
+    case image(width: Int, height: Int)
+
+    private enum Key: String, CodingKey { case text, image }
+    private struct Size: Codable {
+        let width: Int
+        let height: Int
+    }
+
+    /// `{"text": 40}` or `{"image": {"width": 600, "height": 300}}`.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: Key.self)
+        guard let size = try container.decodeIfPresent(Size.self, forKey: .image) else {
+            self = .text(try container.decode(Int.self, forKey: .text))
+            return
+        }
+        self = .image(width: size.width, height: size.height)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: Key.self)
+        switch self {
+        case .text(let length): try container.encode(length, forKey: .text)
+        case .image(let width, let height): try container.encode(Size(width: width, height: height), forKey: .image)
+        }
+    }
 }
 
 struct Conversation: Codable, Identifiable, Hashable {

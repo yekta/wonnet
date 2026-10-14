@@ -142,41 +142,49 @@ final class MessageWKWebView: WKWebView, WKNavigationDelegate {
 }
 
 /// A message body, as tall as its page. It opens at the height the store kept for it, when
-/// it was last measured at this width, so the thread is laid out before the page is.
+/// it was last measured at this width, so the thread is laid out before the page is; else its
+/// placeholder stands in, about as tall, until the page says how tall it is.
 /// `original` shows a designed mail as its sender made it.
 struct MessageWebView: View {
     @Environment(MailStore.self) private var store
     let message: String
     let html: String
+    let shape: [ShapeLine]
     var original = false
-    @State private var height: CGFloat
+    @State private var height: CGFloat?
     @State private var measured = false
 
-    init(message: String, html: String, original: Bool = false, kept: CGFloat? = nil) {
+    init(message: String, html: String, shape: [ShapeLine], original: Bool = false, kept: CGFloat? = nil) {
         self.message = message
         self.html = html
+        self.shape = shape
         self.original = original
-        _height = State(initialValue: kept ?? 40)
+        _height = State(initialValue: kept)
     }
 
     var body: some View {
-        WebRepresentable(html: html, original: original, height: $height) { width, reported in
-            measured = true
-            store.noteBodyHeight(message, width: width, height: reported)
-        }
-        .frame(height: height)
-        .background {
-            GeometryReader { geometry in
-                Color.clear.onAppear { restore(width: geometry.size.width) }
+        BodyPlaceholder(shape: shape)
+            .opacity(height == nil ? 1 : 0)
+            .frame(height: height, alignment: .top)
+            .overlay(alignment: .top) {
+                WebRepresentable(html: html, original: original, height: $height) { width, reported in
+                    measured = true
+                    store.noteBodyHeight(message, width: width, height: reported)
+                }
+                .opacity(height == nil ? 0 : 1)
             }
-        }
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.onAppear { restore(width: geometry.size.width) }
+                }
+            }
     }
 
-    /// The kept height was measured at one width; at another it is no guide, and the card
-    /// starts small until its page reports.
+    /// The kept height was measured at one width; at another it is no guide, and the
+    /// placeholder stands in until the page reports.
     private func restore(width: CGFloat) {
         guard !measured else { return }
-        height = store.bodyHeight(message, width: width) ?? 40
+        height = store.bodyHeight(message, width: width)
     }
 }
 
@@ -184,7 +192,7 @@ struct MessageWebView: View {
 private struct WebRepresentable: NSViewRepresentable {
     let html: String
     let original: Bool
-    @Binding var height: CGFloat
+    @Binding var height: CGFloat?
     let reported: (CGFloat, CGFloat) -> Void
 
     func makeNSView(context: Context) -> MessageWKWebView {
@@ -192,7 +200,8 @@ private struct WebRepresentable: NSViewRepresentable {
         view.onHeight = { [weak view] measured in
             DispatchQueue.main.async {
                 reported(view?.bounds.width ?? 0, measured)
-                if abs(height - measured) > 0.5 { height = max(measured, 20) }
+                guard height.map({ abs($0 - measured) > 0.5 }) ?? true else { return }
+                height = max(measured, 20)
             }
         }
         view.original = original
@@ -213,7 +222,7 @@ private struct WebRepresentable: NSViewRepresentable {
 private struct WebRepresentable: UIViewRepresentable {
     let html: String
     let original: Bool
-    @Binding var height: CGFloat
+    @Binding var height: CGFloat?
     let reported: (CGFloat, CGFloat) -> Void
 
     func makeUIView(context: Context) -> MessageWKWebView {
@@ -221,7 +230,8 @@ private struct WebRepresentable: UIViewRepresentable {
         view.onHeight = { [weak view] measured in
             DispatchQueue.main.async {
                 reported(view?.bounds.width ?? 0, measured)
-                if abs(height - measured) > 0.5 { height = max(measured, 20) }
+                guard height.map({ abs($0 - measured) > 0.5 }) ?? true else { return }
+                height = max(measured, 20)
             }
         }
         view.original = original
