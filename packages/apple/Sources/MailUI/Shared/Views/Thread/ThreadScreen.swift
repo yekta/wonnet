@@ -3,7 +3,8 @@ import SwiftUI
 
 /// A thread: its subject, its labels, who is in it, and its messages stacked as cards; the
 /// earlier ones folded to a line, as Newton showed them. It opens on the first unread message.
-/// On a wide Mac window a sender clicked is shown beside it.
+/// On a wide Mac window a sender clicked is shown beside it. On iOS the threads beside the open
+/// one are drawn too, ahead of a swipe to them; they leave the open one's place in the store alone.
 struct ThreadScreen: View {
     @Environment(MailStore.self) private var store
     let conversation: Conversation
@@ -64,9 +65,16 @@ struct ThreadScreen: View {
         #endif
     }
 
+    /// Whether this is the open thread, not one drawn beside it.
+    private var live: Bool { store.conversation?.id == conversation.id }
+
+    /// The message it opens on: the first unread one.
+    private var firstUnread: String? { conversation.messages.first(where: \.unread)?.id }
+
     private func thread(height: CGFloat) -> some View {
         // Read as the view is made: its scroll view may report its first layout before it appears.
-        let offset = store.threadOffset
+        let offset = live ? store.threadOffset : nil
+        let id = conversation.id
         return ScrollViewReader { proxy in
             ScrollView {
                 page
@@ -79,19 +87,26 @@ struct ThreadScreen: View {
                     // The page around the card: a click there closes the thread, as Newton's did.
                     .background { Tokens.background.color.onTapGesture(perform: store.close) }
                     #endif
-                    .background(ScrollKept(restore: offset ?? 0, report: store.noteThreadScroll))
+                    .background(ScrollKept(restore: offset ?? 0) { [store] scrolled in
+                        guard store.conversation?.id == id else { return }
+                        store.noteThreadScroll(scrolled)
+                    })
             }
             .onAppear {
                 // The message it was left on, else the first unread one; where it was scrolled to,
                 // the top too, wins over both.
-                let kept = store.focusedMessage.flatMap { id in conversation.messages.contains { $0.id == id } ? id : nil }
-                let target = kept ?? conversation.messages.first(where: \.unread)?.id
-                store.focusedMessage = target
+                let kept = live ? store.focusedMessage.flatMap { id in conversation.messages.contains { $0.id == id } ? id : nil } : nil
+                let target = kept ?? firstUnread
+                if live { store.focusedMessage = target }
                 guard let target, offset == nil else { return }
                 DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
             }
+            .onChange(of: live) { _, live in
+                guard live else { return }
+                store.focusedMessage = firstUnread
+            }
             .onChange(of: store.focusedMessage) { _, id in
-                guard let id else { return }
+                guard live, let id else { return }
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .top) }
             }
         }

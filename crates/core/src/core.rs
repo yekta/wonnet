@@ -496,7 +496,7 @@ impl Core {
                 self.threads(&mailbox, offset, limit, filter, &keep)
             }
             Command::Prefetch { threads } => self.prefetch(&threads),
-            Command::OpenThread { thread, images } => self.open_thread(&thread, images),
+            Command::OpenThread { thread, images, peek } => self.open_thread(&thread, images, peek),
             Command::Act { action, threads, until, label } => to_value(self.act(action, &threads, until, label)),
             Command::Undo => self.take_back(),
             Command::ArchiveAll { mailbox, before, filter, keep } => {
@@ -669,7 +669,7 @@ impl Core {
         let mailboxes = self.mailboxes()?;
         let limit = ui.rows.clamp(100, 1000);
         let page = self.store.thread_page(&ui.mailbox, 0, limit, ui.filter, &[], &Local::now())?;
-        let thread = ui.thread.as_deref().and_then(|thread| self.open_thread(thread, ui.images).ok());
+        let thread = ui.thread.as_deref().and_then(|thread| self.open_thread(thread, ui.images, false).ok());
         let search = match ui.search.trim() {
             "" => None,
             query => {
@@ -822,7 +822,7 @@ impl Core {
         Ok(json!({}))
     }
 
-    fn open_thread(&mut self, thread: &str, images: bool) -> Result<Value> {
+    fn open_thread(&mut self, thread: &str, images: bool, peek: bool) -> Result<Value> {
         let messages = self.store.thread_messages(thread)?;
         let Some(last) = messages.last() else { bail!("This conversation is gone.") };
         let images = images || self.store.preference("remote_images") != Some(json!(false));
@@ -922,7 +922,7 @@ impl Core {
         };
         let unread: Vec<String> =
             messages.iter().filter(|message| message.unread).map(|message| message.id.clone()).collect();
-        if !unread.is_empty() {
+        if !peek && !unread.is_empty() {
             self.mutate(Op::SetUnread { ids: unread, unread: false })?;
         }
         Ok(serde_json::to_value(view)?)
@@ -2075,6 +2075,20 @@ mod tests {
         assert_eq!(reply, json!({ "message": "Unsubscribed.", "undo": false, "url": null }));
         let mum = demo.thread("Call me").await;
         assert!(demo.call(json!({ "type": "act", "action": "unsubscribe", "threads": [mum] })).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_peek_at_a_thread_leaves_it_unread() {
+        let mut demo = Demo::start();
+        let thread = demo.thread("is:unread").await;
+        let unread = async |demo: &mut Demo, peek: bool| {
+            let view = demo.call(json!({ "type": "open_thread", "thread": thread, "peek": peek })).await.unwrap();
+            view["unread"] == true
+        };
+        assert!(unread(&mut demo, true).await);
+        assert!(unread(&mut demo, true).await);
+        assert!(unread(&mut demo, false).await);
+        assert!(!unread(&mut demo, true).await);
     }
 
     #[tokio::test]

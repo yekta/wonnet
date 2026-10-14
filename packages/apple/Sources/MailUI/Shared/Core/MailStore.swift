@@ -79,6 +79,8 @@ public final class MailStore {
     private(set) var loadingMore = false
     /// The thread on screen, when one is open.
     var conversation: Conversation?
+    /// The threads beside the open one, drawn beside it on iOS so that a swipe brings one in.
+    private(set) var peeks: [String: Conversation] = [:]
     /// The row the keyboard is on (Mac).
     var selected: String?
     var searchQuery = ""
@@ -518,6 +520,7 @@ public final class MailStore {
                 if mailboxes { await reloadMailboxes() }
                 await reloadThreads()
                 if let open = conversation?.id, threads.contains(open) { await reopen() }
+                if !peeks.isEmpty { await peekAround(changed: threads) }
                 if let arriving = arrivingThread, threads.contains(arriving), selected == arriving { open(arriving) }
             }
         case .connection(let state, _):
@@ -742,6 +745,7 @@ public final class MailStore {
 
     func close() {
         conversation = nil
+        peeks = [:]
     }
 
     /// The thread an action from the keyboard or the toolbar is for: the open one, else the selected one.
@@ -871,22 +875,43 @@ public final class MailStore {
         readyAround(nextIndex, in: list)
     }
 
-    /// The thread beside the open one in the list, under it with a `step` of 1, over it with -1.
+    /// The thread beside `thread` in the list, under it with a `step` of 1, over it with -1.
     /// Drafts, which open in compose, are passed over.
-    func sibling(_ step: Int) -> String? {
+    func sibling(_ step: Int, of thread: String) -> String? {
         let list = visibleRows
-        guard let open = conversation?.id, let index = list.firstIndex(where: { $0.id == open }) else { return nil }
+        guard let index = list.firstIndex(where: { $0.id == thread }) else { return nil }
         let past = step > 0 ? Array(list[(index + 1)...]) : list[..<index].reversed()
         return past.first(where: { $0.draftId == nil })?.id
     }
 
-    /// Opens the thread beside the open one, as a swipe across it does.
-    func turn(_ step: Int) -> String? {
-        guard let next = sibling(step) else { return nil }
-        open(next)
+    /// The threads over and under the open one.
+    var sides: [String] {
+        guard let open = conversation?.id else { return [] }
+        return [-1, 1].compactMap { sibling($0, of: open) }
+    }
+
+    /// Opens a thread beside the open one, as a swipe across it does.
+    func turn(to thread: String) {
+        open(thread)
         let list = visibleRows
-        if let index = list.firstIndex(where: { $0.id == next }) { readyAround(index, in: list) }
-        return next
+        guard let index = list.firstIndex(where: { $0.id == thread }) else { return }
+        readyAround(index, in: list)
+    }
+
+    /// Reads the threads beside the open one without marking them read. Those read before and
+    /// not among the `changed` are kept.
+    func peekAround(changed: [String] = []) async {
+        var next: [String: Conversation] = [:]
+        for thread in sides {
+            if let kept = peeks[thread], !changed.contains(thread) {
+                next[thread] = kept
+                continue
+            }
+            let fields: [String: Any] = ["thread": thread, "images": imagesShown.contains(thread), "peek": true]
+            next[thread] = try? await bridge.call("open_thread", fields, as: Conversation.self)
+        }
+        guard !Task.isCancelled, conversation != nil else { return }
+        peeks = next
     }
 
     /// Fetches the bodies of the rows around one about to be opened, and the next page near the end.

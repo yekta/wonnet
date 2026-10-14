@@ -224,12 +224,15 @@ pub enum Command {
     Prefetch {
         threads: Vec<String>,
     },
-    /// A `ThreadView`. Marks the thread read. `images` shows the remote images of this thread
-    /// even with `remote_images` off.
+    /// A `ThreadView`. Marks the thread read, unless it is only a `peek`: the thread beside the
+    /// open one, drawn while a swipe turns to it. `images` shows the remote images of this
+    /// thread even with `remote_images` off.
     OpenThread {
         thread: String,
         #[serde(default)]
         images: bool,
+        #[serde(default)]
+        peek: bool,
     },
     /// An `ActReply`.
     Act {
