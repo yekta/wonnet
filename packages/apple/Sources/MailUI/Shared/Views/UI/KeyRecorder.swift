@@ -21,6 +21,7 @@ struct KeyRecorder: View {
             Face(key: key, strokes: strokes)
         }
         .buttonStyle(.press)
+        .controlFace(ControlSize.small.height)
         .help(strokes == nil ? help : "Press the keys, or Esc to stop")
         .onDisappear(perform: stop)
     }

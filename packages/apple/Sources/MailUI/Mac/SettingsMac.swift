@@ -269,6 +269,7 @@ private struct AccountSettings: View {
         }
         let add = ActionButton(title: "Add account", symbol: .plus, variant: .outline) { adding = true }
             .padding(.top, Space.s + 2)
+            .padding(.leading, -Theme.buttonGap / 2)
         let signOut = SettingsGroup(id: "sign-out", title: "Wonnet") {
             SettingsRow {
                 SettingsLabel(title: "Sign out", detail: "Every account leaves this Mac. Signing in again brings them back.")
@@ -381,6 +382,7 @@ private struct SignatureRow: View {
                     draft = nil
                 }
             }
+            .padding(.trailing, -Theme.buttonGap / 2)
         }
         .padding([.horizontal, .bottom], Space.l)
     }

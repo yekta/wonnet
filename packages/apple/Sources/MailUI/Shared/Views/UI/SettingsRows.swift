@@ -31,20 +31,33 @@ struct SettingsCard<Content: View>: View {
 }
 
 /// One row of a `SettingsGroup`: what it is about on the left, its controls on the right. Every
-/// row is at least as tall as the tallest control with the same room above and below.
+/// row is at least as tall as the tallest control with the same room above and below. A control
+/// at either end has as much room beside it as above and below it.
 struct SettingsRow<Leading: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading
     @ViewBuilder var trailing: Trailing
+    @State private var leadingFace: ControlFace?
+    @State private var trailingFace: ControlFace?
 
     var body: some View {
         HStack(spacing: Space.m) {
-            leading
+            HStack(spacing: Space.m) { leading }
+                .onPreferenceChange(ControlFaceKey.self) { leadingFace = $0 }
+                .padding(.leading, Self.inset(leadingFace))
             Spacer(minLength: Space.m)
             HStack(spacing: 0) { trailing }
+                .onPreferenceChange(ControlFaceKey.self) { trailingFace = $0 }
+                .padding(.trailing, Self.inset(trailingFace))
         }
-        .padding(.horizontal, Space.l)
         .padding(.vertical, Space.s)
         .frame(minHeight: Theme.settingsRowHeight * Platform.scale)
+    }
+
+    /// From the card's side to the end's hit area: a control's face as far in as it is from a
+    /// row's top, words `Space.l`.
+    private static func inset(_ face: ControlFace?) -> CGFloat {
+        guard let face else { return Space.l }
+        return min((Theme.settingsRowHeight * Platform.scale - face.height) / 2, Space.l) - face.inset
     }
 }
 

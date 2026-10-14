@@ -29,6 +29,29 @@ enum ControlSize {
     }
 }
 
+/// A control's face, handed up for a settings row to line it up: how tall it is, and how far
+/// inside the control's hit area it is drawn (half of `Theme.buttonGap` for a button).
+struct ControlFace: Equatable {
+    let height: CGFloat
+    let inset: CGFloat
+}
+
+/// The face of the last control in a view.
+struct ControlFaceKey: PreferenceKey {
+    static let defaultValue: ControlFace? = nil
+
+    static func reduce(value: inout ControlFace?, nextValue: () -> ControlFace?) {
+        value = nextValue() ?? value
+    }
+}
+
+extension View {
+    /// Tells a settings row the control's face is `height` tall and `inset` inside its hit area.
+    func controlFace(_ height: CGFloat, inset: CGFloat = Theme.buttonGap / 2) -> some View {
+        preference(key: ControlFaceKey.self, value: ControlFace(height: height * Platform.scale, inset: inset))
+    }
+}
+
 private struct HoveredKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -111,6 +134,7 @@ struct ActionButton: View {
             Face(title: title, symbol: symbol, variant: variant, size: size, pending: pending, wide: wide, iconOnly: iconOnly)
         }
         .buttonStyle(.press)
+        .controlFace(size.height)
         if iconOnly {
             button.help(title).accessibilityLabel(title)
         } else {
@@ -204,6 +228,7 @@ struct ActionMenu<Content: View>: View {
         .buttonStyle(.press)
         .menuIndicator(.hidden)
         .fixedSize()
+        .controlFace(size.height)
     }
 }
 
@@ -229,6 +254,7 @@ struct ChoiceMenu<Option: Hashable>: View {
         .buttonStyle(.press)
         .menuIndicator(.hidden)
         .fixedSize()
+        .controlFace(size.height)
     }
 }
 
@@ -251,6 +277,7 @@ struct IconButton: View {
             IconCircle(symbol: symbol, size: size, active: active, circled: circled, quiet: quiet, strong: strong, pending: pending)
         }
         .buttonStyle(.press)
+        .controlFace(size.height)
         .help(help)
         .accessibilityLabel(help)
     }
@@ -275,6 +302,7 @@ struct IconMenu<Content: View>: View {
         .buttonStyle(.press)
         .menuIndicator(.hidden)
         .fixedSize()
+        .controlFace(size.height)
         .help(help)
         .accessibilityLabel(help)
     }
