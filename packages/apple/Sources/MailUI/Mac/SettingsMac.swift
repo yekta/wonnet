@@ -213,11 +213,11 @@ private struct VersionRow: View {
     var body: some View {
         let updater = store.updater
         SettingsRow {
-            SettingsLabel(title: "Wonnet \(updater.current)", detail: status)
+            SettingsLabel(title: Version.label(updater.current), detail: status)
         } trailing: {
             switch updater.state {
             case .available: ActionButton(title: "Update", variant: .primary) { updater.install() }
-            case .ready: ActionButton(title: "Restart", variant: .primary) { updater.relaunch() }
+            case .ready: ActionButton(title: "Restart", variant: .success) { updater.relaunch() }
             case .failed: ActionButton(title: "Try again", symbol: .refreshCw) { updater.retry() }
             default:
                 ActionButton(title: "Check for updates", symbol: .refreshCw, pending: updater.state == .checking) { updater.check(asked: true) }
@@ -229,10 +229,10 @@ private struct VersionRow: View {
         switch store.updater.state {
         case .idle, .checking: nil
         case .upToDate: "Up to date."
-        case .available(let version): "Wonnet \(version) is available."
-        case .downloading(let version, let fraction): "Downloading \(version), \(Int(fraction * 100))%"
-        case .installing(let version): "Installing \(version)"
-        case .ready(let version): "Wonnet \(version) is installed. Restart to use it."
+        case .available(let version): "\(Version.label(version)) is available."
+        case .downloading(let version, let fraction): "Downloading \(Version.label(version)), \(Int(fraction * 100))%"
+        case .installing(let version): "Installing \(Version.label(version))"
+        case .ready(let version): "\(Version.label(version)) is installed. Restart to use it."
         case .failed(let message): message
         }
     }

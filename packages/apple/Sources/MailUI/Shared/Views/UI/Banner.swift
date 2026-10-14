@@ -1,13 +1,14 @@
 import SwiftUI
 
 /// A card floating at the bottom of the window that stays until what it says is done: its icon
-/// in a wash of `tint`, a title over a line, the bar of what is under way, the one thing to do
-/// about it, and `close` to put it away.
+/// in a wash of `tint`, a title over one line, the one thing to do about it, and `close` to put
+/// it away. With `progress`, the line is a bar in `tint` beside `detail`. Every banner is the
+/// same height, so one following another doesn't jump.
 struct Banner: View {
     let symbol: Symbol
     var tint: ThemeColor = Tokens.mutedForeground
     let title: String
-    var detail: String?
+    let detail: String
     var progress: Double?
     var pending = false
     var action: ActionButton?
@@ -20,12 +21,7 @@ struct Banner: View {
             badge
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).textStyle(.labelStrong, color: Tokens.foreground.color).lineLimit(1)
-                if let detail {
-                    Text(detail).textStyle(.caption).fixedSize(horizontal: false, vertical: true)
-                }
-                if let progress {
-                    bar(progress).padding(.top, Space.xs + 2)
-                }
+                line
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 0) {
@@ -41,13 +37,31 @@ struct Banner: View {
         .frame(width: Banner.width * Platform.scale)
         .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Tokens.popover.color).shadow(.lg))
         .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Tokens.borderPopover.color, lineWidth: Theme.hairline))
+        .environment(\.onPopover, true)
+    }
+
+    @ViewBuilder private var line: some View {
+        let text = Text(detail).textStyle(.caption).lineLimit(1)
+        if let progress {
+            HStack(spacing: Space.s) {
+                bar(progress)
+                // As wide as the widest it gets, so the bar doesn't move as it fills.
+                ZStack(alignment: .trailing) {
+                    Text("100%").textStyle(.caption).hidden()
+                    text
+                }
+                .monospacedDigit()
+            }
+        } else {
+            text.help(detail)
+        }
     }
 
     private var badge: some View {
         ZStack {
             Circle().fill(tint.opacity(Opacity.colorTint).color)
             if pending {
-                Spinner()
+                Spinner(size: 16, tint: tint.color)
             } else {
                 Image(symbol, size: 16).foregroundStyle(tint.color)
             }

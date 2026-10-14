@@ -214,12 +214,18 @@ struct GalleryView: View {
                         Notice(text: "A line about something.")
                         Notice(text: "Something went wrong: the server said no.", tone: .error)
                         Notice(text: "Images from the sender were left out.", action: "Load images")
+                        Banner(symbol: .refreshCw, tint: Tokens.process, title: "Checking for updates", detail: "You have v1.9.", pending: true)
+                        Banner(symbol: .circleCheck, tint: Tokens.success, title: "Up to date", detail: "v1.9 is the newest version.", close: {})
                         Banner(
-                            symbol: .circleArrowDown, tint: Tokens.success, title: "Wonnet 2.0 is out", detail: "You have 1.9.",
+                            symbol: .circleArrowDown, tint: Tokens.primary, title: "v2.0 is out", detail: "You have v1.9.",
                             action: ActionButton(title: "Update", variant: .primary, size: .small) {}, close: {}
                         )
-                        Banner(symbol: .circleArrowDown, tint: Tokens.success, title: "Downloading Wonnet 2.0", detail: "40% done", progress: 0.4)
-                        Banner(symbol: .refreshCw, title: "Checking for updates", pending: true)
+                        Banner(symbol: .circleArrowDown, tint: Tokens.process, title: "Downloading v2.0", detail: "40%", progress: 0.4)
+                        Banner(symbol: .circleArrowDown, tint: Tokens.process, title: "Installing v2.0", detail: "Replacing v1.9.", pending: true)
+                        Banner(
+                            symbol: .circleCheck, tint: Tokens.success, title: "v2.0 is installed", detail: "Restart to start using it.",
+                            action: ActionButton(title: "Restart", variant: .success, size: .small) {}, close: {}
+                        )
                         Banner(
                             symbol: .circleAlert, tint: Tokens.destructive, title: "Update failed", detail: "GitHub couldn’t be reached.",
                             action: ActionButton(title: "Try again", size: .small) {}, close: {}
