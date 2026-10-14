@@ -104,6 +104,7 @@ added to the component, not to the view.
 | `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `InputField` | A text field with its label above, or a text box of `lines` |
+| `FieldArea` | Behind a field's box, makes all of it the field: a click anywhere on it puts the caret in the field, and the pointer is the I-beam over it. Every field has one |
 | `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.popup` the same, smaller, at the top of a popup; `.bar` as the top bar's capsule |
 | `Dropdown` | A choice from a short list, with a label |
 | `Combobox` | A choice from a list that can grow, found by typing: its face shows the one in force, a `.field` with a label or `.inline` words; opens a popup with a `SearchField` over a `ChoiceList` on the Mac, drawn by the window's or the sheet's `comboboxHost` so nothing is over it, a sheet on iOS |
