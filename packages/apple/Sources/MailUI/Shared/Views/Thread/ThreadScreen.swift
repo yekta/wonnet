@@ -260,12 +260,12 @@ struct MessageCard: View {
             if !folded {
                 Group {
                     if let html = message.html {
-                        MessageWebView(message: message.id, html: html, original: original, kept: store.bodyHeights[message.id])
+                        MessageWebView(message: message.id, html: html, shape: message.shape, original: original, kept: store.bodyHeights[message.id])
                     } else if message.failed {
                         Text("This message couldn't be loaded. Open the conversation again to retry.")
                             .textStyle(.body, color: Tokens.mutedStrongerForeground.color)
                     } else {
-                        Text(message.snippet).textStyle(.body, color: Tokens.mutedStrongerForeground.color).redacted(reason: .placeholder)
+                        BodyPlaceholder(shape: message.shape)
                     }
                 }
                 .padding(.leading, bodyIndent)

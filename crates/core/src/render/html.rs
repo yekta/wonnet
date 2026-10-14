@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mail_protocol::Body;
+use serde::Serialize;
 
 use super::dark::Palette;
 use super::text;
@@ -62,6 +63,127 @@ pub fn page(body: &Body, show_images: bool, dark: bool) -> Page {
          <style>{TOKENS}{STYLE}{palette}</style></head><body class=\"{class}\">{content}</body></html>"
     );
     Page { html, blocked_images: blocked.load(Ordering::Relaxed) }
+}
+
+/// The most lines a shape has: past them the placeholder is off the screen.
+const SHAPE_LINES: usize = 80;
+/// A snippet shorter than this is likely the whole mail.
+const WHOLE_SNIPPET: u32 = 120;
+/// What most mail goes on with after its snippet.
+const USUAL_REST: [u32; 6] = [0, 220, 160, 0, 90, 12];
+/// Designed mail spends most of its height on padding and large type: it is never shorter.
+const DESIGNED_LINES: usize = 16;
+/// The tags that start a line of their own.
+const BLOCKS: [&str; 15] =
+    ["p", "div", "tr", "td", "li", "ul", "ol", "table", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"];
+
+/// A line of a page's placeholder.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Line {
+    /// Text of this many characters; none is a blank line.
+    Text(u32),
+    /// An image, as large as its attributes say.
+    Image { width: u32, height: u32 },
+}
+
+/// The lines of the page's text and its images: the apps draw a placeholder about as tall as
+/// the page from them while the page is drawn. A body not here yet is its snippet and, when the
+/// snippet was cut, what most mail goes on with.
+pub fn shape(body: Option<&Body>, snippet: &str) -> Vec<Line> {
+    let mut lines = match body {
+        Some(Body { html: Some(html), .. }) => {
+            let mut lines = html_shape(html);
+            if is_designed(html) && lines.len() < DESIGNED_LINES {
+                lines.resize(DESIGNED_LINES, Line::Text(0));
+            }
+            lines
+        }
+        Some(Body { text, .. }) => {
+            text::line_lengths(text.as_deref().unwrap_or_default()).into_iter().map(Line::Text).collect()
+        }
+        None => match snippet.chars().count() as u32 {
+            length @ 1..WHOLE_SNIPPET => vec![Line::Text(length)],
+            length => [length.max(WHOLE_SNIPPET)].into_iter().chain(USUAL_REST).map(Line::Text).collect(),
+        },
+    };
+    lines.truncate(SHAPE_LINES);
+    lines
+}
+
+fn html_shape(html: &str) -> Vec<Line> {
+    let mut lines = Vec::new();
+    let mut length = 0;
+    let mut tag = String::new();
+    let (mut in_tag, mut skipping, mut spaced) = (false, false, true);
+    for character in html.chars() {
+        match (in_tag, character) {
+            (false, '<') => {
+                in_tag = true;
+                tag.clear();
+            }
+            (true, '>') => {
+                in_tag = false;
+                let closing = tag.starts_with('/');
+                let name =
+                    tag.trim_start_matches('/').split(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or_default();
+                let name = name.to_ascii_lowercase();
+                if ["style", "script", "head", "title"].contains(&name.as_str()) {
+                    skipping = !closing;
+                }
+                let image = (name == "img").then(|| (attribute(&tag, "width"), attribute(&tag, "height")));
+                let image = image.and_then(|(width, height)| Some(Line::Image { width: width?, height: height? }));
+                let ends_line = name == "br" || image.is_some() || (BLOCKS.contains(&name.as_str()) && length > 0);
+                if ends_line && (length > 0 || name == "br") {
+                    lines.push(Line::Text(length));
+                }
+                if ends_line {
+                    length = 0;
+                    spaced = true;
+                }
+                if let Some(Line::Image { height: 8.., .. }) = image {
+                    lines.extend(image);
+                }
+                if name == "p" && closing {
+                    lines.push(Line::Text(0));
+                }
+            }
+            (true, _) => tag.push(character),
+            (false, _) if skipping => {}
+            (false, space) if space.is_whitespace() => {
+                if !spaced {
+                    length += 1;
+                }
+                spaced = true;
+            }
+            (false, _) => {
+                length += 1;
+                spaced = false;
+            }
+        }
+    }
+    if length > 0 {
+        lines.push(Line::Text(length));
+    }
+    while lines.last() == Some(&Line::Text(0)) {
+        lines.pop();
+    }
+    lines
+}
+
+/// A number an HTML attribute gives, `height="300"`.
+fn attribute(tag: &str, name: &str) -> Option<u32> {
+    let tag = tag.to_ascii_lowercase();
+    let mut rest = tag.as_str();
+    while let Some(at) = rest.find(name) {
+        let starts_word = rest[..at].ends_with(char::is_whitespace);
+        rest = &rest[at + name.len()..];
+        let Some(value) = rest.trim_start().strip_prefix('=').filter(|_| starts_word) else { continue };
+        let digits: String =
+            value.trim_start().trim_start_matches(['"', '\'']).chars().take_while(char::is_ascii_digit).collect();
+        return digits.parse().ok();
+    }
+    None
 }
 
 /// Whether the mail sets its own look: then the theme's colours would fight it.
@@ -291,6 +413,34 @@ mod tests {
         assert!(page.contains("<p style=\"color:var(--c0)\">Yes") && page.contains("--c0:#333;"));
         assert!(!page.contains("t.example") && !page.contains("x()"));
         assert!(page.contains("On its way"));
+    }
+
+    #[test]
+    fn shapes_the_text_the_page_shows() {
+        let texts = |lengths: &[u32]| lengths.iter().copied().map(Line::Text).collect::<Vec<_>>();
+        let text = Body { html: None, text: Some("Sure.\n\nOn Mar 2, Bob wrote:\n> Lunch?\n> Friday\n\nSam".into()) };
+        assert_eq!(shape(Some(&text), ""), texts(&[5, 0, 3, 3]));
+        assert_eq!(
+            shape(Some(&html("<head><title>Hi</title></head><p>Hi  Ann,</p><p>See you<br>soon</p>")), ""),
+            texts(&[7, 0, 7, 4])
+        );
+        assert_eq!(shape(Some(&html("<div>Hi</div><div><br></div><div>Bye</div>")), ""), texts(&[2, 0, 3]));
+        assert_eq!(shape(None, "See you at noon"), texts(&[15]));
+        let cut = "word ".repeat(40);
+        assert_eq!(shape(None, cut.trim()), texts(&[199, 0, 220, 160, 0, 90, 12]));
+        assert_eq!(shape(None, "").len(), 7);
+        let long = Body { html: None, text: Some("line\n".repeat(500)) };
+        assert_eq!(shape(Some(&long), "").len(), SHAPE_LINES);
+    }
+
+    #[test]
+    fn shapes_images_by_their_size() {
+        let mail = html(
+            "<img src=\"https://t.example/p.gif\" width=\"1\" height=\"1\"><table bgcolor=\"#fff\"><tr><td>Sale<img src=\"a.png\" WIDTH=600 height='300' style=\"max-height:9px\"></td></tr></table><img width=\"40\">",
+        );
+        let lines = shape(Some(&mail), "");
+        assert_eq!(lines[..2], [Line::Text(4), Line::Image { width: 600, height: 300 }]);
+        assert_eq!(lines.len(), DESIGNED_LINES, "designed mail is padded to its least height");
     }
 
     #[test]

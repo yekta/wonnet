@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::render::drafts::ReplyKind;
+use crate::render::html::Line;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -563,6 +564,9 @@ pub struct MessageView {
     pub folded: bool,
     /// The page to show, or none while the body is on its way.
     pub html: Option<String>,
+    /// The lines of the page's text and its images, for a placeholder about as tall as the page
+    /// until it is drawn.
+    pub shape: Vec<Line>,
     /// The server couldn't fetch the body; opening the thread again later asks again.
     pub failed: bool,
     /// Remote images were left out; `OpenThread` with `images` shows them.

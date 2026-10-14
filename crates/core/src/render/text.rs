@@ -40,20 +40,29 @@ fn introduces_quote(line: &str) -> bool {
     line.ends_with("wrote:") || line.ends_with("schrieb:") || line.ends_with("a écrit :")
 }
 
+/// Where the quote folded from this line on ends, when one starts here.
+fn quote_end(lines: &[&str], start: usize) -> Option<usize> {
+    let quote_follows =
+        lines[start + 1..].iter().find(|next| !next.trim().is_empty()).is_some_and(|next| is_quote(next));
+    if !is_quote(lines[start]) && !(introduces_quote(lines[start]) && quote_follows) {
+        return None;
+    }
+    let mut end = start + 1;
+    while end < lines.len() && (is_quote(lines[end]) || lines[end].trim().is_empty()) {
+        end += 1;
+    }
+    Some(end)
+}
+
 pub fn to_html(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let mut out = String::from("<div class=\"plain\">");
     let mut index = 0;
     while index < lines.len() {
         let line = lines[index];
-        let quote_follows =
-            lines[index + 1..].iter().find(|next| !next.trim().is_empty()).is_some_and(|next| is_quote(next));
-        if is_quote(line) || (introduces_quote(line) && quote_follows) {
+        if let Some(end) = quote_end(&lines, index) {
             let start = index;
-            index += 1;
-            while index < lines.len() && (is_quote(lines[index]) || lines[index].trim().is_empty()) {
-                index += 1;
-            }
+            index = end;
             let quoted: Vec<String> = lines[start..index]
                 .iter()
                 .map(|line| linked(line.trim_start().trim_start_matches('>').trim_start_matches(' ')))
@@ -69,6 +78,23 @@ pub fn to_html(text: &str) -> String {
     }
     out.push_str("</div>");
     out
+}
+
+/// How many characters each line `to_html` shows has; a folded quote is its short pill.
+pub fn line_lengths(text: &str) -> Vec<u32> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut lengths = Vec::new();
+    let mut index = 0;
+    while index < lines.len() {
+        if let Some(end) = quote_end(&lines, index) {
+            lengths.push(3);
+            index = end;
+            continue;
+        }
+        lengths.push(lines[index].trim_end().chars().count() as u32);
+        index += 1;
+    }
+    lengths
 }
 
 /// HTML as plain text, roughly: for quoting a message in a reply when it has no text part.
