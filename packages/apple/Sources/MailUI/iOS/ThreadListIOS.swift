@@ -122,8 +122,11 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
                 table.tableHeaderView = head.view
             }
             let switched = ready && !self.ready
-            let changed = Self.changes(from: self.rows, to: rows)
-            let removed = switched ? nil : Self.removals(from: self.rows, to: rows)
+            // Asked before the rows change, so a reload still pending reads the rows before. Off
+            // screen, or holding other rows, the table is read again instead of animated.
+            let inStep = table.window != nil && table.numberOfRows(inSection: 0) == self.rows.count
+            let changed = inStep ? Self.changes(from: self.rows, to: rows) : (self.rows == rows ? [] : nil)
+            let removed = switched || !inStep ? nil : Self.removals(from: self.rows, to: rows)
             let old = self.rows
             self.rows = rows
             self.ready = ready
