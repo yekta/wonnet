@@ -311,16 +311,15 @@ struct CommandBar: View {
 }
 
 /// A thread, with what can be done to it along the bottom. A swipe across it turns to the
-/// thread beside it in the list.
+/// thread beside it in the list, which is drawn there ahead of it.
 struct ThreadScreenIOS: View {
-    private static let goingOut = Animation.easeIn(duration: 0.15)
-    private static let comingIn = Animation.easeOut(duration: 0.2)
+    private static let settle = Animation.easeOut(duration: 0.25)
 
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     /// The thread opened, then the ones turned to.
     @State private var thread: String
-    /// How far a swipe has the page aside.
+    /// How far a swipe has the pages aside.
     @State private var slide: CGFloat = 0
     @State private var width: CGFloat = 0
 
@@ -329,19 +328,28 @@ struct ThreadScreenIOS: View {
     }
 
     var body: some View {
-        Group {
-            if let conversation = store.conversation, conversation.id == thread {
-                ThreadScreen(conversation: conversation)
-            } else {
-                Spinner().frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack {
+            ForEach(pages, id: \.thread) { page in
+                Group {
+                    if let conversation = conversation(page.thread) {
+                        ThreadScreen(conversation: conversation)
+                    } else {
+                        Spinner().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .offset(x: CGFloat(page.side) * width + slide)
+                // The pages beside stay out of sight until a swipe, as the screen is pushed too.
+                .opacity(page.side == 0 || slide != 0 ? 1 : 0)
+                .allowsHitTesting(page.side == 0)
+                .accessibilityHidden(page.side != 0)
             }
         }
-        .offset(x: slide)
         .background(Tokens.background.color)
-        .gesture(ThreadSwipe(canTurn: { store.sibling($0) != nil }, moved: follow, released: release))
+        .gesture(ThreadSwipe(canTurn: { store.sibling($0, of: thread) != nil }, moved: follow, released: release))
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true) }
+        .task(id: store.sides) { await store.peekAround() }
         .onChange(of: store.conversation?.id) { _, open in
             guard let open else { return dismiss() }
             thread = open
@@ -351,28 +359,41 @@ struct ThreadScreenIOS: View {
         }
     }
 
-    /// The page follows the finger, and gives only a little toward a side with no thread.
-    private func follow(_ distance: CGFloat) {
-        slide = store.sibling(distance < 0 ? 1 : -1) == nil ? distance * 0.15 : distance
+    /// The thread on screen, and the ones over and under it in the list.
+    private var pages: [(thread: String, side: Int)] {
+        [-1, 0, 1].compactMap { side in
+            guard side != 0 else { return (thread, side) }
+            return store.sibling(side, of: thread).map { ($0, side) }
+        }
     }
 
-    /// Turns once the swipe went far or fast enough that way, else the page goes back.
+    /// The open thread's, else the one read ahead of a swipe to it. One page keeps its view as it
+    /// goes from one to the other, so its bodies aren't drawn again.
+    private func conversation(_ thread: String) -> Conversation? {
+        guard let open = store.conversation, open.id == thread else { return store.peeks[thread] }
+        return open
+    }
+
+    /// The pages follow the finger, and give only a little toward a side with no thread.
+    private func follow(_ distance: CGFloat) {
+        slide = store.sibling(distance < 0 ? 1 : -1, of: thread) == nil ? distance * 0.15 : distance
+    }
+
+    /// Turns once the swipe went far or fast enough that way, else the pages go back.
     private func release(_ distance: CGFloat, _ speed: CGFloat) {
         let step = distance < 0 ? 1 : -1
         let far = abs(distance) > width * 0.3 || (abs(speed) > 400 && (speed < 0) == (distance < 0))
-        guard distance != 0, far, store.sibling(step) != nil else {
-            withAnimation(Self.comingIn) { slide = 0 }
+        guard distance != 0, far, let next = store.sibling(step, of: thread) else {
+            withAnimation(Self.settle) { slide = 0 }
             return
         }
-        withAnimation(Self.goingOut) {
+        withAnimation(Self.settle) {
             slide = -CGFloat(step) * width
         } completion: {
-            thread = store.turn(step) ?? thread
-            slide = CGFloat(step) * width
-            // The next page starts from the other side once it is there.
-            DispatchQueue.main.async {
-                withAnimation(Self.comingIn) { slide = 0 }
-            }
+            // The page beside is now in the middle: it becomes the open one where it is.
+            thread = next
+            slide = 0
+            store.turn(to: next)
         }
     }
 }
