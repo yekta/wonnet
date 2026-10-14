@@ -6,6 +6,8 @@ struct PaletteItem: Identifiable {
     let title: String
     let symbol: Symbol
     var shortcut: String?
+    /// Words it is also found by, beyond its title.
+    var keywords = ""
     /// Opens a sheet or asks a question of its own, so it waits for the palette to be gone.
     var afterClosing = false
     let perform: @MainActor () -> Void
@@ -62,7 +64,7 @@ struct CommandPalette: View {
 
     private var items: [PaletteItem] {
         guard scope == .everything else { return labelItems }
-        return threadItems + generalItems + mailboxItems + labelItems
+        return threadItems + generalItems + mailboxItems + labelItems + settingsItems
     }
 
     private var threadItems: [PaletteItem] {
@@ -119,11 +121,6 @@ struct CommandPalette: View {
             items.append(PaletteItem(id: "split-previous", title: "Previous split", symbol: .chevronLeft, shortcut: store.keyLabel("previousSplit")) { store.moveSplit(-1) })
         }
         items.append(PaletteItem(id: "settings", title: "Settings", symbol: .settings, shortcut: store.keyLabel("settings"), afterClosing: true) { store.openSettings() })
-        #if os(macOS)
-        items.append(PaletteItem(id: "keybindings", title: "Keybindings", symbol: .keyboard, shortcut: store.keyLabel("keybindings"), afterClosing: true) {
-            store.openSettings(.keybindings)
-        })
-        #endif
         items.append(PaletteItem(id: "gallery", title: "Component gallery", symbol: .monitor, afterClosing: true) { store.galleryOpen = true })
         return items
     }
@@ -160,14 +157,38 @@ struct CommandPalette: View {
         }
     }
 
+    /// Every page of the settings, and every group on one, opened where it is.
+    private var settingsItems: [PaletteItem] {
+        let store = store
+        let pages = SettingsSection.shown.filter { $0 != .general }.map { section in
+            PaletteItem(
+                id: "settings/\(section.rawValue)", title: "Settings: \(section.title)", symbol: section.symbol,
+                shortcut: section == .keybindings ? store.keyLabel("keybindings") : nil, afterClosing: true
+            ) { store.openSettings(section) }
+        }
+        let groups = SettingsEntry.shown.filter { $0.id != $0.section.rawValue }.map { entry in
+            PaletteItem(
+                id: "settings/\(entry.section.rawValue)/\(entry.id)", title: "Settings: \(entry.section.title) › \(entry.title)",
+                symbol: entry.section.symbol, keywords: entry.keywords, afterClosing: true
+            ) { store.openSettings(entry.section, target: entry.id) }
+        }
+        return pages + groups
+    }
+
     // MARK: Matching
 
-    /// The items whose titles have the letters typed, in order, best first.
+    /// The items whose titles have the letters typed, in order, best first, then those whose
+    /// keywords have every word typed.
     static func filter(_ items: [PaletteItem], by query: String) -> [PaletteItem] {
         let typed = Array(query.lowercased().filter { !$0.isWhitespace })
         guard !typed.isEmpty else { return items }
+        let words = query.split(whereSeparator: \.isWhitespace)
         return items
-            .compactMap { item in score(typed, Array(item.title.lowercased())).map { (item, $0) } }
+            .compactMap { item in
+                if let score = score(typed, Array(item.title.lowercased())) { return (item, score) }
+                guard !item.keywords.isEmpty, words.allSatisfy({ item.keywords.localizedCaseInsensitiveContains($0) }) else { return nil }
+                return (item, 0)
+            }
             .enumerated()
             .sorted { $0.element.1 != $1.element.1 ? $0.element.1 > $1.element.1 : $0.offset < $1.offset }
             .map(\.element.0)

@@ -71,6 +71,11 @@ struct SettingsEntry: Identifiable, Hashable {
         #endif
     }
 
+    /// The groups this app has.
+    static var shown: [SettingsEntry] {
+        (all + touch).filter { SettingsSection.shown.contains($0.section) }
+    }
+
     /// The groups every word of the query is found in, and the commands of the keys it names.
     static func matching(_ query: String) -> [SettingsEntry] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -78,9 +83,9 @@ struct SettingsEntry: Identifiable, Hashable {
         let keys = SettingsSection.shown.contains(.keybindings)
             ? KeyCommand.all.map { SettingsEntry(id: "key-\($0.id)", title: $0.title, section: .keybindings, keywords: "shortcut keys \($0.group)") }
             : []
-        return (all + touch + keys).filter { entry in
+        return (shown + keys).filter { entry in
             let text = "\(entry.title) \(entry.section.title) \(entry.keywords)"
-            return SettingsSection.shown.contains(entry.section) && words.allSatisfy { text.localizedCaseInsensitiveContains($0) }
+            return words.allSatisfy { text.localizedCaseInsensitiveContains($0) }
         }
     }
 }
