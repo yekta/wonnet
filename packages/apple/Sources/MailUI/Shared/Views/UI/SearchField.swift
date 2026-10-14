@@ -24,7 +24,7 @@ struct SearchField: View {
 
     var body: some View {
         HStack(spacing: Space.s) {
-            Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
+            Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color).allowsHitTesting(false)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.ui(style == .sheet ? 15 : 13))
@@ -43,6 +43,7 @@ struct SearchField: View {
         .padding(.leading, Space.m)
         .padding(.trailing, text.isEmpty ? Space.m : clearInset)
         .frame(height: height)
+        .background { FieldArea { focused = true } }
         .background { if style == .bar { Capsule().strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline) } }
         .overlay(alignment: .bottom) {
             if let rule { Rule(color: rule) }
