@@ -127,3 +127,38 @@ async fn mail_from_before_the_weights_is_searchable_by_part_once_rebuilt(db: PgP
     assert_eq!(search::run(&db, user, "from:ann").await.unwrap().len(), 5);
     assert!(!db::backfill_search(&db, 2).await.unwrap(), "done for good");
 }
+
+#[sqlx::test]
+async fn snippets_made_before_styles_were_left_out_are_made_again(db: PgPool) {
+    let user = db::create_user(&db).await.unwrap();
+    let account = NewAccount {
+        user_id: user,
+        provider: Provider::Jmap,
+        address: "me@example.com",
+        login: "l",
+        credentials: vec![],
+    };
+    let account_id = db::upsert_account(&db, account).await.unwrap();
+    let account = db::account(&db, account_id).await.unwrap().unwrap();
+    let message =
+        RemoteMessage { provider_id: "m".into(), from: Address::new(None, "news@itu.edu.tr"), ..Default::default() };
+    db::upsert_messages(&db, &account, &[message]).await.unwrap();
+    let id: Uuid = sqlx::query_scalar("SELECT id FROM messages").fetch_one(&db).await.unwrap();
+    let stored = db::message(&db, user, id).await.unwrap().unwrap();
+    let body = mail_protocol::Body {
+        html: Some("<style type=\"text/css\">.ReadMsgBody{width:100%}</style><p>Demo Day'e davetlisiniz</p>".into()),
+        text: None,
+    };
+    db::save_body(&db, &stored, user, &body, &[], "", ".ReadMsgBody{width:100%} Demo Day'e davetlisiniz")
+        .await
+        .unwrap();
+    let rev = db::message(&db, user, id).await.unwrap().unwrap().rev;
+
+    while db::backfill_snippets(&db, 10).await.unwrap() {}
+    let fixed = db::message(&db, user, id).await.unwrap().unwrap();
+    assert_eq!(fixed.snippet, "Demo Day'e davetlisiniz");
+    assert!(fixed.rev > rev, "the apps are sent the new snippet");
+    assert_eq!(search::run(&db, user, "davetlisiniz").await.unwrap(), [id]);
+    assert!(search::run(&db, user, "ReadMsgBody").await.unwrap().is_empty());
+    assert!(!db::backfill_snippets(&db, 10).await.unwrap(), "done for good");
+}

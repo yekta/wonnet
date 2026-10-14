@@ -897,6 +897,58 @@ pub async fn backfill_search(db: &PgPool, batch: i64) -> sqlx::Result<bool> {
     Ok(true)
 }
 
+/// Makes the snippets of the next `batch` fetched bodies again, and their search, so that what
+/// an older snippet took for text (a style with attributes) leaves it. False once there are none
+/// left.
+pub async fn backfill_snippets(db: &PgPool, batch: i64) -> sqlx::Result<bool> {
+    let Some(after): Option<Uuid> = sqlx::query_scalar("SELECT after FROM snippet_backfill").fetch_optional(db).await?
+    else {
+        return Ok(false);
+    };
+    #[derive(sqlx::FromRow)]
+    struct Fetched {
+        id: Uuid,
+        user_id: Uuid,
+        snippet: String,
+        html: Option<String>,
+        text: Option<String>,
+    }
+    let rows: Vec<Fetched> = sqlx::query_as(
+        "SELECT m.id, m.user_id, m.snippet, b.html, b.text FROM bodies b JOIN messages m ON m.id = b.message_id
+         WHERE b.message_id > $1 ORDER BY b.message_id LIMIT $2",
+    )
+    .bind(after)
+    .bind(batch)
+    .fetch_all(db)
+    .await?;
+    let Some(last) = rows.last().map(|row| row.id) else {
+        sqlx::query("DELETE FROM snippet_backfill").execute(db).await?;
+        return Ok(false);
+    };
+    for Fetched { id, user_id, snippet: old, html, text } in rows {
+        let body = mail_protocol::Body { html, text };
+        let snippet = crate::mime::snippet(&body);
+        if snippet.is_empty() || snippet == old {
+            continue;
+        }
+        let words: String = crate::mime::plain(&body).chars().take(20_000).collect();
+        let mut tx = UserTx::begin(db, user_id).await?;
+        sqlx::query(
+            "UPDATE messages SET snippet = $2, rev = nextval('revs'),
+                 search = message_search(from_name, from_email, recipients, subject, $2 || ' ' || $3)
+             WHERE id = $1",
+        )
+        .bind(id)
+        .bind(&snippet)
+        .bind(words)
+        .execute(&mut *tx.tx)
+        .await?;
+        tx.commit().await?;
+    }
+    sqlx::query("UPDATE snippet_backfill SET after = $1").bind(last).execute(db).await?;
+    Ok(true)
+}
+
 /// The newest inbox messages of the account that have no body yet.
 pub async fn missing_bodies(db: &PgPool, account_id: Uuid, newest: i64) -> sqlx::Result<Vec<MessageRow>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
