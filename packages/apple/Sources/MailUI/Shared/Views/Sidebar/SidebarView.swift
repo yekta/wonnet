@@ -62,7 +62,7 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             MovableList(
-                items: rows, inset: Space.s, group: \.group, follows: \.follows,
+                items: rows, inset: Space.s, endInset: Theme.sidebarEnd, group: \.group, follows: \.follows,
                 rowInset: EdgeInsets(top: Theme.rowGap / 2, leading: 0, bottom: Theme.rowGap / 2, trailing: 0), indicators: Self.indicators,
                 clicked: clicked, moved: moved, menu: menu
             ) { row in
