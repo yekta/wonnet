@@ -172,6 +172,8 @@ struct MailboxScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationTitle(store.baseMailboxName)
+        // A large title would take the list's refresh control into the hidden bar.
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: editing) { _, on in if !on { store.clearSelection() } }
     }
 
@@ -240,6 +242,7 @@ struct SearchScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationTitle("Search")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear { query = store.searchQuery }
         .onChange(of: query) { _, text in store.search(text) }
     }
