@@ -120,6 +120,8 @@ enum Theme {
     static let macRowHeight: CGFloat = 48
     /// A thread row on iOS: sender, subject, snippet.
     static let iosRowHeight: CGFloat = 88
+    /// How far a pull from the top of the iOS list goes to refresh, and the room held open while it does.
+    static let iosPullHeight: CGFloat = 80
     /// The bar of the account's colour at the start of a thread row.
     static let macAccountBarWidth: CGFloat = 2
     static let iosAccountBarWidth: CGFloat = 3

@@ -23,7 +23,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     let headerHeight: CGFloat
     /// Room under the last row, for what floats over the list.
     var bottomInset: CGFloat = 0
-    /// What a pull from the top does; the control spins until it returns. None hides it.
+    /// What a pull from the top does; the spinner turns until it returns. None hides it.
     var refresh: (() async -> Void)?
     /// Told whether the list is scrolled past its first page.
     var farDown: (Bool) -> Void = { _ in }
@@ -50,12 +50,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         }
         table.dataSource = context.coordinator
         table.delegate = context.coordinator
-        if refresh != nil {
-            let control = UIRefreshControl()
-            control.tintColor = Tokens.mutedForeground.platform
-            control.addTarget(context.coordinator, action: #selector(Coordinator.pulled(_:)), for: .valueChanged)
-            table.refreshControl = control
-        }
+        if refresh != nil { context.coordinator.addPull(to: table) }
         context.coordinator.table = table
         let swiper = RowSwiper(table: table, store: store)
         context.coordinator.swiper = swiper
@@ -96,6 +91,13 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         let foot = UIView(frame: .zero)
         private let loadingFoot = UIHostingController(rootView: LoadingMore())
         private var loadingMore = false
+        /// Above the rows, come into sight by a pull from the top: `PullSpinner`.
+        private let pull = UIHostingController(rootView: PullSpinner(progress: 0, spinning: false))
+        /// A pull refreshes once; the next waits until the list is back at the top.
+        private var armed = true
+        private var refreshing = false
+        /// The list is held open on the spinner until the refresh returns.
+        private var holding = false
         private var rows: [ThreadRow] = []
         private var texts: [String: (ThreadRow, RowText)] = [:]
         private var ready = true
@@ -274,6 +276,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             schedulePrefetch()
+            followPull(scrollView)
             let far = scrollView.contentOffset.y + scrollView.adjustedContentInset.top > scrollView.bounds.height
             guard far != isFarDown else { return }
             isFarDown = far
@@ -288,11 +291,44 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             table.setContentOffset(CGPoint(x: table.contentOffset.x, y: -table.adjustedContentInset.top), animated: true)
         }
 
-        @objc func pulled(_ control: UIRefreshControl) {
+        func addPull(to table: UITableView) {
+            pull.view.backgroundColor = .clear
+            pull.safeAreaRegions = []
+            pull.view.frame = CGRect(x: 0, y: -Theme.iosPullHeight, width: table.bounds.width, height: Theme.iosPullHeight)
+            pull.view.autoresizingMask = [.flexibleWidth]
+            table.addSubview(pull.view)
+        }
+
+        /// The spinner comes in with the pull, and the refresh starts, with a tap, once it is far enough.
+        private func followPull(_ scroll: UIScrollView) {
+            guard refresh != nil, !refreshing else { return }
+            let pulled = -(scroll.contentOffset.y + scroll.adjustedContentInset.top)
+            if pulled <= 0 { armed = true }
+            let progress = min(max(pulled / Theme.iosPullHeight, 0), 1)
+            if pull.rootView.progress != progress { pull.rootView = PullSpinner(progress: progress, spinning: false) }
+            guard progress == 1, armed, scroll.isDragging else { return }
+            armed = false
+            refreshing = true
+            pull.rootView = PullSpinner(progress: 1, spinning: true)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             Task {
                 await refresh?()
-                control.endRefreshing()
+                endRefresh()
             }
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            guard refreshing, !holding, scrollView.contentOffset.y < -scrollView.adjustedContentInset.top else { return }
+            holding = true
+            UIView.animate(withDuration: 0.25) { scrollView.contentInset.top += Theme.iosPullHeight }
+        }
+
+        private func endRefresh() {
+            refreshing = false
+            pull.rootView = PullSpinner(progress: 0, spinning: false)
+            guard holding, let table else { return }
+            holding = false
+            UIView.animate(withDuration: 0.25) { table.contentInset.top -= Theme.iosPullHeight }
         }
 
         /// Asks for the bodies of the rows on screen once the list stops moving.
@@ -437,6 +473,26 @@ final class ThreadCell: UITableViewCell {
         slider.transform = .identity
         slider.backgroundColor = .clear
         tray.isHidden = true
+    }
+}
+
+/// What a pull from the top shows: the loader turning in as it is pulled, then spinning.
+private struct PullSpinner: View {
+    let progress: CGFloat
+    let spinning: Bool
+
+    var body: some View {
+        Group {
+            if spinning {
+                Spinner(size: 16)
+            } else {
+                Image(.loader, size: 16)
+                    .foregroundStyle(Tokens.mutedForeground.color)
+                    .rotationEffect(.degrees(progress * 270))
+                    .opacity(progress)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
