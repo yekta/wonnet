@@ -359,8 +359,11 @@ final class ThreadCell: UITableViewCell {
         let pressed = UIView()
         pressed.backgroundColor = Tokens.backgroundAccentLargerStronger.platform
         selectedBackgroundView = pressed
-        let picked = UIView()
-        picked.backgroundColor = Tokens.primary.opacity(Opacity.colorTint).platform
+        let picked = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        let tint = UIView(frame: picked.bounds.insetBy(dx: 0, dy: Theme.rowGap / 2))
+        tint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        tint.backgroundColor = Tokens.primary.opacity(Opacity.colorTint).platform
+        picked.addSubview(tint)
         multipleSelectionBackgroundView = picked
     }
 
