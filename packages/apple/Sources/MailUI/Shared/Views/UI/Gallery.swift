@@ -214,7 +214,16 @@ struct GalleryView: View {
                         Notice(text: "A line about something.")
                         Notice(text: "Something went wrong: the server said no.", tone: .error)
                         Notice(text: "Images from the sender were left out.", action: "Load images")
-                        Banner(symbol: .circleCheck, text: "Wonnet 2.0 is installed. Restart to use it.", action: "Restart") {}
+                        Banner(
+                            symbol: .circleArrowDown, tint: Tokens.success, title: "Wonnet 2.0 is out", detail: "You have 1.9.",
+                            action: ActionButton(title: "Update", variant: .primary, size: .small) {}, close: {}
+                        )
+                        Banner(symbol: .circleArrowDown, tint: Tokens.success, title: "Downloading Wonnet 2.0", detail: "40% done", progress: 0.4)
+                        Banner(symbol: .refreshCw, title: "Checking for updates", pending: true)
+                        Banner(
+                            symbol: .circleAlert, tint: Tokens.destructive, title: "Update failed", detail: "GitHub couldn’t be reached.",
+                            action: ActionButton(title: "Try again", size: .small) {}, close: {}
+                        )
                         Card { EmptyState(symbol: .inbox, message: "All done. Enjoy the quiet.").frame(height: 120) }
                         BodyPlaceholder(shape: [.text(180), .text(0), .image(width: 600, height: 140), .text(0), .text(160), .text(12)]).frame(maxWidth: 480)
                         HStack(spacing: Space.m) {

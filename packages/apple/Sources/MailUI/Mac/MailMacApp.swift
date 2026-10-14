@@ -96,7 +96,12 @@ private struct MacPages: View {
                 if store.settings == nil { sidebar }
                 if let section = store.settings { SettingsRoute(section: section) }
             }
-            .overlay(alignment: .bottom) { ToastView() }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 0) {
+                    ToastView()
+                    UpdateBanner(updater: store.updater)
+                }
+            }
             .background(KeyHandler(store: store, focusSearch: { focusSearch += 1 }, sidebarOpen: $store.sidebarOpen))
         }
     }

@@ -126,7 +126,7 @@ added to the component, not to the view.
 | `Notice` | A line about something, muted or in error tone, with an optional action |
 | `EmptyState` | An icon and a calm line for an empty list |
 | `BodyPlaceholder` | A bar for every line of a message's text, as long as the line, where its page will be until the page is drawn |
-| `Banner`, `ToastView` | A line across the window that stays, and the note at the bottom that goes |
+| `Banner`, `ToastView` | A card floating at the bottom that stays, with its icon, a line, a progress bar, an action and a close (the Mac's update); and the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
 | `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right; a control at either end of a row is as far from the card's side as from the row's top and bottom |

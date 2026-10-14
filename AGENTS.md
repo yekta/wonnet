@@ -153,8 +153,8 @@ the iOS notification extension uses too. `Sources/MailUI/Shared` is what both us
   `ThreadListMac.swift` (an `NSTableView`), `ScrollStack.swift` (SwiftUI rows that AppKit
   scrolls, each in the window only while in sight: the accounts' cards in the settings),
   `AppUpdater.swift` (finds the latest GitHub release, downloads and installs it when asked) and
-  `UpdateRow.swift` (the update at the foot of the sidebar: the offer, the download, the
-  restart).
+  `UpdateBanner.swift` (the update floating at the bottom of the window: the offer, the
+  download, the restart).
 - `iOS/`: `MailIOSApp.swift` (the navigation stack, with the tabs along the bottom),
   `Drawer.swift` (the sidebar a swipe to the right opens), `ThreadListIOS.swift` (a
   `UITableView`) and `RowSwipe.swift` (a swipe to the left on its rows: the one to three
