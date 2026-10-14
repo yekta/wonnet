@@ -4,8 +4,14 @@
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use mail_builder::MessageBuilder;
+use std::cell::RefCell;
+
+use html5ever::tendril::StrTendril;
+use html5ever::tokenizer::states::RawKind;
+use html5ever::tokenizer::{
+    BufferQueue, CharacterTokens, EndTag, TagToken, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
+};
 use mail_builder::headers::address::Address as BuilderAddress;
-use mail_parser::decoders::html::html_to_text;
 use mail_parser::{Message, MessageParser, MessagePart, MimeHeaders, PartType};
 use mail_protocol::{Address, Attachment, Body, Draft, Recipients, Unsubscribe};
 
@@ -39,13 +45,6 @@ pub fn parse(raw: &[u8]) -> Option<Parsed> {
         PartType::Text(text) => Some(text.to_string()),
         _ => None,
     });
-    let words = match (&html, &text) {
-        (Some(page), _) => html_to_text(page),
-        (None, Some(text)) => text.clone(),
-        (None, None) => String::new(),
-    };
-    let snippet = one_line(&words).chars().take(SNIPPET_LEN).collect();
-
     let (inline, listed) = split_attachments(&message, html.as_deref());
     let mut inline_budget = INLINE_LIMIT;
     for (id, part) in inline {
@@ -57,8 +56,105 @@ pub fn parse(raw: &[u8]) -> Option<Parsed> {
     }
     let attachments = listed.iter().map(|part| describe(part)).collect();
 
-    let plain = message.body_text(0).map(|text| text.to_string()).unwrap_or_default();
-    Some(Parsed { body: Body { html, text }, attachments, plain, snippet })
+    let body = Body { html, text };
+    Some(Parsed { snippet: snippet(&body), plain: plain(&body), body, attachments })
+}
+
+/// The start of what the body says: its HTML's text, or else its plain text, on one line.
+pub fn snippet(body: &Body) -> String {
+    let words = match (&body.html, &body.text) {
+        (Some(page), _) => html_words(page),
+        (None, Some(text)) => text.clone(),
+        (None, None) => String::new(),
+    };
+    one_line(&words).chars().take(SNIPPET_LEN).collect()
+}
+
+/// The body as plain words: its plain text, or else its HTML's.
+pub fn plain(body: &Body) -> String {
+    match (&body.text, &body.html) {
+        (Some(text), _) => text.clone(),
+        (None, Some(page)) => html_words(page),
+        (None, None) => String::new(),
+    }
+}
+
+/// The text a page shows, a line per block, with its entities decoded: none of its styles,
+/// scripts, title, comments or images.
+fn html_words(html: &str) -> String {
+    let input = BufferQueue::default();
+    input.push_back(StrTendril::from_slice(html));
+    let tokenizer = Tokenizer::new(Words::default(), TokenizerOpts::default());
+    let _ = tokenizer.feed(&input);
+    tokenizer.end();
+    tokenizer.sink.text.take()
+}
+
+#[derive(Default)]
+struct Words {
+    text: RefCell<String>,
+    /// The element the tokenizer is inside of whose contents a page doesn't show.
+    hidden: RefCell<Option<String>>,
+}
+
+impl TokenSink for Words {
+    type Handle = ();
+
+    fn process_token(&self, token: Token, _line: u64) -> TokenSinkResult<()> {
+        const BLOCKS: [&str; 17] = [
+            "br",
+            "p",
+            "div",
+            "li",
+            "tr",
+            "td",
+            "th",
+            "table",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "blockquote",
+            "hr",
+            "center",
+        ];
+        let mut hidden = self.hidden.borrow_mut();
+        let tag = match token {
+            CharacterTokens(characters) if hidden.is_none() => {
+                self.text.borrow_mut().push_str(&characters);
+                return TokenSinkResult::Continue;
+            }
+            TagToken(tag) => tag,
+            _ => return TokenSinkResult::Continue,
+        };
+        let name = &*tag.name;
+        if let Some(open) = hidden.as_deref() {
+            if tag.kind == EndTag && name == open {
+                *hidden = None;
+            }
+            return TokenSinkResult::Continue;
+        }
+        if BLOCKS.contains(&name) {
+            self.text.borrow_mut().push('\n');
+        }
+        if tag.kind == EndTag {
+            return TokenSinkResult::Continue;
+        }
+        let raw = match name {
+            "style" | "noscript" | "iframe" => Some(RawKind::Rawtext),
+            "script" => Some(RawKind::ScriptData),
+            "title" => Some(RawKind::Rcdata),
+            "template" => None,
+            _ => return TokenSinkResult::Continue,
+        };
+        *hidden = Some(name.to_string());
+        match raw {
+            Some(kind) => TokenSinkResult::RawData(kind),
+            None => TokenSinkResult::Continue,
+        }
+    }
 }
 
 /// The message's attachments with their contents, in the order `parse` lists them.
@@ -315,6 +411,18 @@ mod tests {
             <img alt=\"trendyol logo\" src=\"https://x/logo.png\"><p>New   order</p><p>Dear &amp; valued</p>\r\n\
             --b--\r\n";
         assert_eq!(parse(raw.as_bytes()).unwrap().snippet, "New order Dear & valued");
+    }
+
+    #[test]
+    fn snippets_leave_out_styles_and_scripts_with_attributes() {
+        let raw = "Subject: Davet\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
+            <html><head><title>Duyuru</title><style type=\"text/css\">.ReadMsgBody{width:100%;}</style></head>\
+            <body><style media=\"screen\">td{color:#fff}</style><script type=\"text/javascript\">var a = 1 < 2;</script>\
+            <!-- <p>hidden</p> --><table><tr><td>Merhaba,</td><td>Demo&nbsp;Day&rsquo;e davetlisiniz &ccedil;ok</td></tr></table>\
+            </body></html>\r\n";
+        let parsed = parse(raw.as_bytes()).unwrap();
+        assert_eq!(parsed.snippet, "Merhaba, Demo Day\u{2019}e davetlisiniz \u{e7}ok");
+        assert!(!parsed.plain.contains("width"), "{}", parsed.plain);
     }
 
     #[test]

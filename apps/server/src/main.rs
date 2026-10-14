@@ -100,17 +100,8 @@ async fn start_background(state: &AppState) {
     push::start(state.clone());
     let backfill = state.clone();
     tokio::spawn(async move {
-        let stopping = backfill.stopping.subscribe();
-        while !*stopping.borrow() {
-            match db::backfill_search(&backfill.background, 2000).await {
-                Ok(true) => tokio::time::sleep(Duration::from_millis(50)).await,
-                Ok(false) => return,
-                Err(error) => {
-                    tracing::warn!("couldn't rebuild the search of older mail: {error}");
-                    tokio::time::sleep(Duration::from_secs(30)).await;
-                }
-            }
-        }
+        backfill_all(&backfill, "search", |db| async move { db::backfill_search(&db, 2000).await }).await;
+        backfill_all(&backfill, "snippets", |db| async move { db::backfill_snippets(&db, 50).await }).await;
     });
     let cleanup = state.clone();
     tokio::spawn(async move {
@@ -122,6 +113,25 @@ async fn start_background(state: &AppState) {
             }
         }
     });
+}
+
+/// Runs a backfill's batches until it is done or the process stops.
+async fn backfill_all<Batch, Done>(state: &AppState, what: &str, batch: Batch)
+where
+    Batch: Fn(sqlx::PgPool) -> Done,
+    Done: Future<Output = sqlx::Result<bool>>,
+{
+    let stopping = state.stopping.subscribe();
+    while !*stopping.borrow() {
+        match batch(state.background.clone()).await {
+            Ok(true) => tokio::time::sleep(Duration::from_millis(50)).await,
+            Ok(false) => return,
+            Err(error) => {
+                tracing::warn!("couldn't rebuild the {what} of older mail: {error}");
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        }
+    }
 }
 
 fn background_pool(db: &sqlx::PgPool) -> sqlx::PgPool {
