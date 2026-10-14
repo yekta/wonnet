@@ -425,6 +425,8 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     private static let sendersWidth: CGFloat = 190
     private static let iconSide: CGFloat = 16
     private static let starSide: CGFloat = 14
+    /// The least room the date takes, so the stars and the line's ends line up from row to row.
+    private static let dateColumn = ceil(NSAttributedString(string: "Yesterday", attributes: [.font: Platform.face(RowText.dateSize, .semibold)]).size().width)
 
     func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, selecting: Bool, hoverCircle: Bool, hovering: Bool, selectHelp: String) {
         self.row = row
@@ -541,9 +543,10 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
         }
         x += 24
         let dateX = trailing - ceil(text.date.size().width)
+        let dateColumnX = min(dateX, trailing - Self.dateColumn)
         let starred = row.starred && row.draftId == nil
-        let star = NSRect(x: dateX - Space.m - Self.starSide, y: middle - Self.starSide / 2, width: Self.starSide, height: Self.starSide)
-        let lineWidth = max((starred ? star.minX - Space.s : dateX - Space.l) - x, 0)
+        let star = NSRect(x: dateColumnX - Space.m - Self.starSide, y: middle - Self.starSide / 2, width: Self.starSide, height: Self.starSide)
+        let lineWidth = max((starred ? star.minX - Space.s : dateColumnX - Space.l) - x, 0)
         guard hovering, !isSelecting else {
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle)
             if starred { Self.drawSymbol(.starFilled, in: star, color: Tokens.star.platform) }
