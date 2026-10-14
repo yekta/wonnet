@@ -166,7 +166,7 @@ export function ThreadRow({
           </span>
           <span
             className={cn(
-              "min-w-0 flex-1 truncate",
+              "min-w-0 flex-1 truncate text-(--muted-stronger-foreground)",
               thread.starred ? "pr-2" : "pr-4"
             )}
           >
@@ -179,7 +179,7 @@ export function ThreadRow({
             >
               {thread.subject}
             </span>
-            <span className="whitespace-pre text-(--muted-stronger-foreground)">
+            <span className="whitespace-pre">
               {"  –  "}
               {message.text}
             </span>
@@ -196,7 +196,7 @@ export function ThreadRow({
           )}
           <span
             className={cn(
-              "mr-4 shrink-0 text-[12px]",
+              "mr-4 min-w-[58px] shrink-0 text-right text-[12px]",
               !selecting && "group-hover:invisible",
               strong
                 ? "font-semibold text-(--foreground)"
