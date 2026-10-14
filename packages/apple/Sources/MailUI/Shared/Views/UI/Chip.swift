@@ -36,10 +36,11 @@ struct Chip: View {
                 Text(detail).textStyle(.footnote).lineLimit(1)
             }
             if let remove {
-                PlainButton(help: "Remove \(title)", action: remove) {
-                    Image(.x, size: 11).foregroundStyle(Tokens.mutedStrongerForeground.color)
-                }
-                .padding(.trailing, -Space.s)
+                Button(action: remove) { RemoveFace(fill: onCard ? Theme.cardAccentStronger : Tokens.backgroundSecondaryAccentStronger) }
+                    .buttonStyle(.press)
+                    .help("Remove \(title)")
+                    .accessibilityLabel("Remove \(title)")
+                    .padding(.trailing, -(Space.s + 2))
             }
         }
         .padding(.horizontal, Space.s + 2)
@@ -54,5 +55,22 @@ struct Chip: View {
         let hovering = hovered && action != nil
         if onCard { return hovering ? Theme.cardAccentStronger : Theme.cardAccent }
         return hovering ? Tokens.backgroundSecondaryAccent : Tokens.backgroundSecondary
+    }
+
+    /// The x, filling the pill's round end: it hovers in a circle inside it, as far from the
+    /// pill's top, bottom and side.
+    private struct RemoveFace: View {
+        let fill: ThemeColor
+        @Environment(\.hovered) private var hovered
+
+        var body: some View {
+            Image(.x, size: 11)
+                .foregroundStyle(hovered ? Tokens.foreground.color : Tokens.mutedStrongerForeground.color)
+                .frame(width: side, height: side)
+                .background(Circle().fill(hovered ? fill.color : .clear).padding(Space.xs))
+                .contentShape(Rectangle())
+        }
+
+        private var side: CGFloat { Theme.chipHeight * Platform.scale }
     }
 }
