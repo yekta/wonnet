@@ -81,8 +81,7 @@ struct ComposeView: View {
                     card
                         .frame(maxWidth: Theme.cardWidth, minHeight: window.size.height - 2 * Space.l)
                         .pageCard()
-                        .padding(.vertical, Space.l)
-                        .padding(.horizontal, Space.xl + 4)
+                        .padding(Theme.cardMargin)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -92,7 +91,7 @@ struct ComposeView: View {
         .background(Tokens.background.color)
         .modifier(behaviour)
         #else
-        Sheet(title: title, size: .large, close: "Cancel") {
+        Sheet(title: title, size: .large, close: "Cancel", background: Theme.cardFill) {
             VStack(spacing: 0) {
                 ScrollView {
                     card
@@ -102,6 +101,7 @@ struct ComposeView: View {
                 toolbar
             }
             .modifier(behaviour)
+            .environment(\.onCard, true)
         } trailing: {
             Button("Send") { send() }
                 .buttonStyle(.borderedProminent)

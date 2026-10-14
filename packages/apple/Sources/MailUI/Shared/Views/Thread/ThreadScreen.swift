@@ -78,10 +78,7 @@ struct ThreadScreen: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 page
-                    #if os(macOS)
-                    .padding(.vertical, Space.l)
-                    .padding(.horizontal, Space.xl + 4)
-                    #endif
+                    .padding(Theme.cardMargin)
                     .frame(maxWidth: .infinity, minHeight: height, alignment: .top)
                     #if os(macOS)
                     // The page around the card: a click there closes the thread, as Newton's did.

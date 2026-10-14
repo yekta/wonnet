@@ -63,7 +63,7 @@ export function Compose({
           onClick={onSend}
         />
       </div>
-      <div className="mx-auto mt-4 flex min-h-0 w-[1000px] flex-1 flex-col rounded-sm border border-(--border-card) bg-(--card-larger) px-20">
+      <div className="mx-auto mt-4 flex min-h-0 w-[1000px] flex-1 flex-col rounded-sm border border-(--border) bg-(--card-larger) px-20">
         <Field label="To">
           <input
             ref={to}

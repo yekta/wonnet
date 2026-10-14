@@ -123,24 +123,22 @@ enum Theme {
     static let iosAccountBarWidth: CGFloat = 3
     /// The widest the list and the thread's card grow on the Mac.
     static let cardWidth: CGFloat = 1000
-    /// A card that fills the page: the thread's messages, a message being written. The Mac's
-    /// floats on the page, `cardLarger` with `borderCard` hairlines, inset from its edges; the
-    /// phone's is the page itself, `background` with `border` hairlines, edge to edge. What
-    /// rests on it (a chip) fills with `cardAccent` and hovers in `cardAccentStronger`.
-    #if os(macOS)
-    static let cardInset: CGFloat = 80
+    /// A card that fills the page: the thread's messages, a message being written. It floats on
+    /// the page, `cardLarger` outlined in `border`, with `borderCard` hairlines inside; on iOS
+    /// a message being written is a sheet of `cardLarger`. What rests on it (a chip) fills with
+    /// `cardLargerAccent` and hovers in `cardLargerAccentStronger`.
     static let cardRadius: CGFloat = Radius.sm
     static let cardFill = Tokens.cardLarger
     static let cardRule = Tokens.borderCard
     static let cardAccent = Tokens.cardLargerAccent
     static let cardAccentStronger = Tokens.cardLargerAccentStronger
+    #if os(macOS)
+    static let cardInset: CGFloat = 80
+    /// Between the card and the window's edges.
+    static let cardMargin = EdgeInsets(top: Space.l, leading: Space.xl + 4, bottom: Space.l, trailing: Space.xl + 4)
     #else
     static let cardInset: CGFloat = Space.l
-    static let cardRadius: CGFloat = 0
-    static let cardFill = Tokens.background
-    static let cardRule = Tokens.border
-    static let cardAccent = Tokens.backgroundSecondary
-    static let cardAccentStronger = Tokens.backgroundSecondaryAccent
+    static let cardMargin = EdgeInsets(top: Space.s, leading: Space.s, bottom: Space.s, trailing: Space.s)
     #endif
     static let sidebarWidth: CGFloat = 300
     /// The Mac sidebar sliding in and out: a critically damped spring, as the iOS drawer's.
