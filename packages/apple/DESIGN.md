@@ -121,7 +121,7 @@ added to the component, not to the view.
 | `PillTabs` | Tabs on a line with an icon and a count, the chosen one filled in a rounded rectangle; dragged to reorder, with a menu on each |
 | `BottomTabs` | Tabs across the bottom of the screen, full width, each an icon over its name and count; held and dragged to reorder (iOS) |
 | `MovableList` | Rows along an axis that the list picks up and moves itself, in groups, with the rows under one going along; the sidebar and the tab strips are made of it |
-| `SectionHeading`, `FormSection` | A section's name in capitals, with its controls |
+| `SectionHeading`, `FormSection` | A section's name over a muted line about it, with its controls |
 | `Card`, `FormButtons` | A rounded card, and Save and Cancel under a form |
 | `Notice` | A line about something, muted or in error tone, with an optional action |
 | `EmptyState` | An icon and a calm line for an empty list |

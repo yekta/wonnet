@@ -43,7 +43,6 @@ struct GalleryView: View {
                         Text("Caption").textStyle(.caption)
                         Text("Footnote").textStyle(.footnote)
                         Text("Footnote strong").textStyle(.footnoteStrong)
-                        Text("OVERLINE").textStyle(.overline)
                         Text("⌘K  mono").textStyle(.mono)
                     }
                     FormSection(title: "Buttons", detail: "Four variants, three sizes, an icon and a pending state on each.") {

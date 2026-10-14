@@ -484,7 +484,7 @@ private struct AddTabPage: View {
                 }
             }
             ForEach(left.accounts, id: \.account.id) { account, mailboxes in
-                Section(account.title) {
+                SettingsListSection(account.title) {
                     ForEach(mailboxes) { mailbox in row(mailbox) }
                 }
             }
@@ -705,8 +705,8 @@ private struct SettingsList<Content: View>: View {
     }
 }
 
-/// A group of the list: its name over it and the line under it saying what it does, small and
-/// muted as the Mac's. Both are words, so every group's look the same.
+/// A group of the list: its name over it and the muted line under it saying what it does, as
+/// the Mac's. Both are words, so every group looks the same.
 private struct SettingsListSection<Content: View>: View {
     let title: String?
     let footer: String?
@@ -722,9 +722,9 @@ private struct SettingsListSection<Content: View>: View {
         Section {
             content
         } header: {
-            if let title { Text(title) }
+            if let title { Text(title).textStyle(.subheading).textCase(nil) }
         } footer: {
-            if let footer { Text(footer).textStyle(.caption) }
+            if let footer { Text(footer).textStyle(.caption, color: Tokens.mutedForeground.color) }
         }
     }
 }
