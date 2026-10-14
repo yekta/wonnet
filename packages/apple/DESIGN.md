@@ -128,7 +128,7 @@ added to the component, not to the view.
 | `Banner`, `ToastView` | A line across the window that stays, and the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
-| `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right |
+| `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right; a control at either end of a row is as far from the card's side as from the row's top and bottom |
 | `Switch` | The system's switch alone, for a row that says what it does |
 | `KeyCaps`, `KeyRecorder` | Keys on caps, and the Mac's button that records new ones for a keybinding |
 | `Rule`, `.rule(edge)` | A hairline, in `border` or in `borderCard` |

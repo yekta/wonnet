@@ -18,6 +18,7 @@ struct KeybindingSettings: View {
                 .disabled(!changed)
                 .opacity(Opacity.disabled, when: !changed)
         }
+        .padding(.trailing, -Theme.buttonGap / 2)
         .id("keybindings")
         Notice(text: "Click a key to record another in its place, or + to add one. A key given to one command leaves the command that had it.")
             .padding(.horizontal, Space.xs)
