@@ -190,19 +190,9 @@ struct SwipeLayout {
 /// letting go would do it.
 final class SwipeTray: UIView {
     private var buttons: [SwipeButton] = []
-    private let rule = UIView()
     var tapped: ((ThreadCommand) -> Void)?
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        rule.backgroundColor = Tokens.border.platform
-        addSubview(rule)
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    func show(_ commands: [ThreadCommand], for row: ThreadRow, first: Bool) {
-        rule.isHidden = first
+    func show(_ commands: [ThreadCommand], for row: ThreadRow) {
         while buttons.count < commands.count {
             let button = SwipeButton()
             button.addTarget(self, action: #selector(pressed(_:)), for: .touchUpInside)
@@ -222,7 +212,6 @@ final class SwipeTray: UIView {
     }
 
     func layout(_ swipe: SwipeLayout) {
-        rule.frame = CGRect(x: 0, y: 0, width: bounds.width, height: Theme.hairline)
         let edge = bounds.width - swipe.offset
         let count = swipe.commands.count
         // The row uncovers the commands where they rest, the edge's first; past them it pulls them along.
