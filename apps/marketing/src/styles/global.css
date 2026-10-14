@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "@fontsource-variable/dm-sans";
+/* The apps' tokens, for the demo of the Mac app. */
+@import "../../../../packages/theme/tokens.css";
 
 /* Black and white, following the system's appearance. */
 @theme {

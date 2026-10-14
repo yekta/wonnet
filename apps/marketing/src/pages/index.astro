@@ -1,27 +1,24 @@
 ---
-import { getImage } from "astro:assets"
 import {
+  BellIcon,
+  ClockIcon,
   KeyboardIcon,
   LayersIcon,
   ShieldCheckIcon,
   ZapIcon,
-} from "@lucide/astro"
-import inbox from "../../../../docs/screenshots/mac-inbox.png"
-import inboxDark from "../../../../docs/screenshots/mac-dark.png"
+} from "lucide-react"
 import Layout from "@/layouts/main.astro"
+import AppleIcon from "@/components/apple-icon.astro"
 import GithubIcon from "@/components/github-icon.astro"
 import LinkButton from "@/components/link-button.astro"
+import { Demo } from "@/components/demo/demo"
 import {
   DESCRIPTION,
+  DOWNLOAD_URL,
   GETTING_STARTED_URL,
   GITHUB_URL,
   TAGLINE,
 } from "@/lib/links"
-
-const widths = [600, 1200, 1800]
-const sizes = "(min-width: 1200px) 1152px, 100vw"
-const light = await getImage({ src: inbox, widths, sizes })
-const dark = await getImage({ src: inboxDark, widths, sizes })
 
 const features = [
   {
@@ -32,12 +29,22 @@ const features = [
   {
     icon: LayersIcon,
     title: "Gmail and JMAP",
-    text: "Gmail, Fastmail and any JMAP server in one unified inbox, with a colour for each account.",
+    text: "Gmail, Fastmail and any JMAP server in one unified inbox, each account with a colour of its own.",
   },
   {
     icon: KeyboardIcon,
+    title: "Single keys",
+    text: "j and k to move, e to archive, r to reply, and ⌘K for every command. Any key can be changed in the settings.",
+  },
+  {
+    icon: ClockIcon,
     title: "Newton's habits",
-    text: "Snooze, undo send and send later. On the Mac, single keys: j and k to move, e to archive, r to reply.",
+    text: "Snooze, send later, remind me and undo send. A split inbox keeps people apart from newsletters.",
+  },
+  {
+    icon: BellIcon,
+    title: "Sealed notifications",
+    text: "New mail reaches your iPhone sealed with a key only it holds, so Apple carries nothing it can read.",
   },
   {
     icon: ShieldCheckIcon,
@@ -48,7 +55,7 @@ const features = [
 ---
 
 <Layout>
-  <main class="pb-24">
+  <main class="overflow-x-clip pb-24">
     <section class="mx-auto flex max-w-5xl flex-col items-center px-6 pt-10 text-center sm:pt-14">
       <h1 class="max-w-[16ch] text-4xl leading-[1.05] font-medium tracking-tight text-balance sm:text-6xl">
         {TAGLINE}
@@ -57,55 +64,68 @@ const features = [
         {DESCRIPTION}
       </p>
       <div class="mt-8 flex flex-wrap justify-center gap-3">
-        <LinkButton href={GITHUB_URL} size="lg">
+        <LinkButton href={DOWNLOAD_URL} size="lg">
+          <AppleIcon />
+          Download for macOS
+        </LinkButton>
+        <LinkButton href={GITHUB_URL} size="lg" variant="outline">
           <GithubIcon />
           View the source
         </LinkButton>
-        <LinkButton href={GETTING_STARTED_URL} size="lg" variant="outline">
-          Run it yourself
-        </LinkButton>
       </div>
+      <p class="mt-4 text-sm text-muted-foreground">
+        Free and open source. For macOS 14 and later.
+      </p>
     </section>
 
-    <section class="mx-auto mt-12 max-w-6xl px-3 sm:mt-16 sm:px-6">
-      <picture>
-        <source
-          media="(prefers-color-scheme: dark)"
-          srcset={dark.srcSet.attribute}
-          sizes={sizes}
-        />
-        <img
-          src={light.src}
-          srcset={light.srcSet.attribute}
-          sizes={sizes}
-          width={inbox.width}
-          height={inbox.height}
-          alt="The Wonnet inbox on the Mac"
-          class="h-auto w-full drop-shadow-[0_0_1px_rgb(0_0_0/0.35)] dark:drop-shadow-[0_0_1px_rgb(255_255_255/0.4)]"
-        />
-      </picture>
+    <section class="mx-auto mt-10 max-w-[1248px] px-3 sm:mt-14 sm:px-6">
+      <div data-demo-frame>
+        <Demo client:load />
+      </div>
+      <script is:inline>
+        // Safari can paint a stale cqw, so the demo's scale is measured before the first paint.
+        {
+          const frame = document.querySelector("[data-demo-frame]")
+          const fit = () =>
+            frame.style.setProperty(
+              "--demo-fit",
+              Math.min(1, frame.clientWidth / 1200)
+            )
+          fit()
+          new ResizeObserver(fit).observe(frame)
+        }
+      </script>
+      <p class="mt-5 text-center text-sm text-pretty text-muted-foreground">
+        A live demo. Open a thread, or click in and try j and k, e to archive, h
+        to snooze and c to write.
+      </p>
     </section>
 
-    <section class="mx-auto mt-20 grid max-w-5xl gap-10 px-6 sm:mt-28 sm:grid-cols-2 lg:grid-cols-4">
+    <section class="mx-auto mt-24 grid max-w-5xl gap-x-10 gap-y-12 px-6 sm:mt-32 sm:grid-cols-2 lg:grid-cols-3">
       {features.map((feature) => (
         <div>
-          <feature.icon class="size-5" />
+          <feature.icon className="size-5" />
           <h2 class="mt-4 font-medium">{feature.title}</h2>
           <p class="mt-1.5 text-pretty text-muted-foreground">{feature.text}</p>
         </div>
       ))}
     </section>
 
-    <section class="mx-auto mt-20 flex max-w-5xl flex-col items-center px-6 text-center sm:mt-28">
+    <section class="mx-auto mt-24 flex max-w-5xl flex-col items-center px-6 text-center sm:mt-32">
       <h2 class="text-2xl font-medium tracking-tight">Open source</h2>
       <p class="mt-3 max-w-md text-pretty text-muted-foreground">
         Wonnet is MIT licensed. The apps start on our server, and you can run
         your own with Postgres and a single binary.
       </p>
-      <LinkButton href={GITHUB_URL} variant="outline" class="mt-6">
-        <GithubIcon />
-        yekta/wonnet
-      </LinkButton>
+      <div class="mt-6 flex flex-wrap justify-center gap-3">
+        <LinkButton href={GITHUB_URL} variant="outline">
+          <GithubIcon />
+          yekta/wonnet
+        </LinkButton>
+        <LinkButton href={GETTING_STARTED_URL} variant="ghost">
+          Run your own server
+        </LinkButton>
+      </div>
     </section>
   </main>
 </Layout>

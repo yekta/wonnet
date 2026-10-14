@@ -1,4 +1,5 @@
 export const GITHUB_URL = "https://github.com/yekta/wonnet"
+export const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Wonnet.zip`
 export const GETTING_STARTED_URL = `${GITHUB_URL}#getting-started`
 export const CONTACT_EMAIL = "wonnetapp@gmail.com"
 export const TAGLINE = "Email that feels instant"

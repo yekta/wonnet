@@ -115,7 +115,7 @@ events out through the callback given to `mail_core_start`) and a Rust library f
 `tokens.json` is the source of every colour, opacity, radius and shadow, in Motile's names, with
 Wonnet's values measured from Newton Mail. `build.mjs` writes `tokens.css` (the core includes it
 in message pages, where `.light` keeps an element in the light scheme; the server's error page
-too), the Apple kit's `Tokens.swift` (`Tokens`, `Opacity`, `Radius`, `ShadowSize`) and
+and the marketing site's demo too), the Apple kit's `Tokens.swift` (`Tokens`, `Opacity`, `Radius`, `ShadowSize`) and
 `MailPush`'s `AccountColors.swift` (the avatars' colours for the notification extension). Never edit
 them by hand: change `tokens.json` and run `node packages/theme/build.mjs`.
 
@@ -164,8 +164,11 @@ the iOS notification extension uses too. `Sources/MailUI/Shared` is what both us
 
 wonnet.app: `src/pages` has the home page, `privacy.astro` and `terms.astro`. Black and white in
 DM Sans, following the system's appearance; its colours are in `src/styles/global.css`, apart
-from the apps' tokens. The screenshots come from `docs/screenshots`; the favicons are drawn by
-`scripts/icons.mjs` (`pnpm icons`). It is served as static files by static-web-server
+from the apps' tokens. `src/components/demo` is a live demo of the Mac app in React, with the
+core's made-up mail and the apps' `tokens.css`: it follows the Mac app, so a change to how the
+Mac app looks changes it too. `scripts/preview.mjs` (`pnpm preview-image`) draws the link
+preview, `public/preview.png`, from the demo; the favicons are drawn by `scripts/icons.mjs`
+(`pnpm icons`). It is served as static files by static-web-server
 (`server.toml`).
 
 ### apps/macos and apps/ios
