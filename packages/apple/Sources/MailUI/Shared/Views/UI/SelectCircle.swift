@@ -27,12 +27,11 @@ struct SelectCircle: View {
                     Circle().fill(Tokens.primary.color)
                     Image(.check, size: side * 0.67).foregroundStyle(Tokens.primaryForeground.color)
                 } else {
-                    Circle().strokeBorder((hovered ? Tokens.foreground : Tokens.border).color, lineWidth: Theme.selectCircleLine)
+                    Circle().strokeBorder((hovered ? Tokens.mutedForeground : Tokens.border).color, lineWidth: Theme.selectCircleLine)
                 }
             }
             .frame(width: side, height: side)
             .frame(width: height, height: height)
-            .background(Circle().fill(hovered ? Tokens.backgroundAccent.color : .clear))
             .padding(.horizontal, Theme.buttonGap / 2)
             .contentShape(Rectangle())
         }

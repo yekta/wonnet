@@ -94,20 +94,13 @@ export function SelectCircle({
     >
       <span
         className={cn(
-          "flex size-7 items-center justify-center rounded-full",
-          !checked && "group-hover/circle:bg-(--background-accent)"
+          "flex size-[18px] items-center justify-center rounded-full",
+          checked
+            ? "bg-(--primary) text-(--primary-foreground)"
+            : "border-[1.5px] border-(--border) group-hover/circle:border-(--muted-foreground)"
         )}
       >
-        <span
-          className={cn(
-            "flex size-[18px] items-center justify-center rounded-full",
-            checked
-              ? "bg-(--primary) text-(--primary-foreground)"
-              : "border-[1.5px] border-(--border) group-hover/circle:border-(--foreground)"
-          )}
-        >
-          {checked && <CheckIcon className="size-3" strokeWidth={2.5} />}
-        </span>
+        {checked && <CheckIcon className="size-3" strokeWidth={2.5} />}
       </span>
     </button>
   )

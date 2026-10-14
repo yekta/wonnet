@@ -573,12 +573,10 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             return
         }
         guard (hovering && hoverCircle) || isSelecting else { return }
-        let lit = hoveredHit == .select
-        if lit { Self.drawHover(around: rect, color: Tokens.backgroundAccent.platform) }
         let inset = Theme.selectCircleLine / 2
         let ring = NSBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset))
         ring.lineWidth = Theme.selectCircleLine
-        (lit ? Tokens.foreground : Tokens.border).platform.setStroke()
+        (hoveredHit == .select ? Tokens.mutedForeground : Tokens.border).platform.setStroke()
         ring.stroke()
     }
 
