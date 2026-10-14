@@ -15,6 +15,8 @@ struct MovableList<Item: Identifiable, Row: View>: UIViewRepresentable {
     var axis: Axis = .vertical
     /// Room before the first row and after the last.
     var inset: CGFloat = 0
+    /// Room after the last row of a vertical list, when not `inset`.
+    var endInset: CGFloat?
     var fills = false
     var group: (Item) -> String? = { _ in nil }
     var follows: (Item) -> Bool = { _ in false }
@@ -41,7 +43,7 @@ struct MovableList<Item: Identifiable, Row: View>: UIViewRepresentable {
         view.showsVerticalScrollIndicator = indicators
         view.showsHorizontalScrollIndicator = false
         view.isScrollEnabled = axis == .vertical
-        if axis == .vertical { view.contentInset = UIEdgeInsets(top: inset, left: 0, bottom: inset, right: 0) }
+        if axis == .vertical { view.contentInset = UIEdgeInsets(top: inset, left: 0, bottom: endInset ?? inset, right: 0) }
         coordinator.attach(view)
         return view
     }

@@ -113,6 +113,8 @@ enum Theme {
     static let searchHeight: CGFloat = ControlSize.large.height
     /// A popup under a field: suggestions, a combobox's list.
     static let popupWidth: CGFloat = 380
+    /// Room after the sidebar's last row, above its footer.
+    static let sidebarEnd: CGFloat = 48
 
     /// A thread row on the Mac: one line.
     static let macRowHeight: CGFloat = 48

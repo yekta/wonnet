@@ -16,6 +16,8 @@ struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
     var axis: Axis = .vertical
     /// Room before the first row and after the last.
     var inset: CGFloat = 0
+    /// Room after the last row of a vertical list, when not `inset`.
+    var endInset: CGFloat?
     var fills = false
     var scrolls = true
     var group: (Item) -> String? = { _ in nil }
@@ -43,8 +45,9 @@ struct MovableList<Item: Identifiable, Row: View>: NSViewRepresentable {
         scroll.hasVerticalScroller = indicators
         scroll.autohidesScrollers = true
         scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: inset, left: 0, bottom: inset, right: 0)
-        scroll.scrollerInsets = NSEdgeInsets(top: -inset, left: 0, bottom: -inset, right: 0)
+        let end = endInset ?? inset
+        scroll.contentInsets = NSEdgeInsets(top: inset, left: 0, bottom: end, right: 0)
+        scroll.scrollerInsets = NSEdgeInsets(top: -inset, left: 0, bottom: -end, right: 0)
         stack.autoresizingMask = [.width]
         return scroll
     }
