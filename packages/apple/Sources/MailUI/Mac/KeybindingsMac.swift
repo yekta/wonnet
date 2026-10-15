@@ -21,7 +21,7 @@ struct KeybindingSettings: View {
         .padding(.trailing, -Theme.buttonGap / 2)
         .id("keybindings")
         Notice(text: "Click a key to record another in its place, or + to add one. A key given to one command leaves the command that had it.")
-            .padding(.horizontal, Space.xs)
+            .padding(.horizontal, Space.xxs)
             .padding(.top, -Space.l)
         let found = commands
         ForEach(KeyCommand.groups, id: \.self) { group in

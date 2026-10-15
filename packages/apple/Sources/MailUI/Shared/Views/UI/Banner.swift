@@ -32,7 +32,7 @@ struct Banner: View {
             }
         }
         .padding(.leading, Space.m)
-        .padding(.trailing, close == nil ? Space.m - Theme.buttonGap / 2 : Space.xs)
+        .padding(.trailing, close == nil ? Space.m - Theme.buttonGap / 2 : Space.xxs)
         .padding(.vertical, Space.m)
         .frame(width: Banner.width * Platform.scale)
         .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Tokens.popover.color).shadow(.lg))

@@ -15,8 +15,8 @@ struct BottomTabs<Tab: Identifiable & Hashable>: View {
 
     var body: some View {
         MovableList(
-            items: tabs, axis: .horizontal, inset: Space.xs, fills: true, group: { _ in reorder == nil ? nil : "tabs" },
-            rowInset: EdgeInsets(top: Space.xs, leading: 0, bottom: Space.xs, trailing: 0), rowRadius: Radius.md,
+            items: tabs, axis: .horizontal, inset: Space.xxs, fills: true, group: { _ in reorder == nil ? nil : "tabs" },
+            rowInset: EdgeInsets(top: Space.xxs, leading: 0, bottom: Space.xxs, trailing: 0), rowRadius: Radius.md,
             clicked: pick, moved: moved
         ) { tab in
             Face(symbol: symbol(tab), title: title(tab), count: count(tab), chosen: tab.id == selected)
@@ -39,16 +39,16 @@ struct BottomTabs<Tab: Identifiable & Hashable>: View {
         @Environment(\.hovered) private var hovered
 
         var body: some View {
-            VStack(spacing: Space.xs - 1) {
+            VStack(spacing: Space.xxs - 1) {
                 Image(symbol, size: 18).foregroundStyle(foreground)
-                HStack(spacing: Space.xs - 1) {
+                HStack(spacing: Space.xxs - 1) {
                     Text(title).textStyle(chosen ? .footnoteStrong : .footnote, color: foreground).lineLimit(1)
                     if count > 0 {
                         Text("\(count)").textStyle(.footnote).lineLimit(1).fixedSize()
                     }
                 }
             }
-            .padding(.horizontal, Space.xs)
+            .padding(.horizontal, Space.xxs)
             .padding(.top, Space.m)
             .padding(.bottom, Space.s)
             .frame(maxWidth: .infinity)

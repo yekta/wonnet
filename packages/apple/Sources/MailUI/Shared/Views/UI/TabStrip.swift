@@ -28,7 +28,7 @@ struct TabStrip<Tab: Identifiable & Hashable>: View {
         @Environment(\.hovered) private var hovered
 
         var body: some View {
-            HStack(spacing: Space.xs + 2) {
+            HStack(spacing: Space.xs) {
                 Text(title).font((chosen && Platform.strongSelection ? TextStyle.labelStrong : .label).font)
                 if count > 0 {
                     Text("\(count)").textStyle(.footnote)

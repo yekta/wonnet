@@ -42,7 +42,7 @@ struct KeyRecorder: View {
                     Image(.plus, size: 13).foregroundStyle(hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
                 }
             }
-            .padding(.horizontal, Space.xs)
+            .padding(.horizontal, Space.xxs)
             .frame(minWidth: ControlSize.small.height, minHeight: ControlSize.small.height)
             .background(RoundedRectangle(cornerRadius: Radius.sm).fill(fill))
             .padding(.horizontal, Theme.buttonGap / 2)

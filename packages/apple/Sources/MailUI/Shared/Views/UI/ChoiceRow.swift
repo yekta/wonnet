@@ -105,7 +105,7 @@ extension Int {
 /// A card floating over the page, for suggestions and short menus. `inset` is the space to its
 /// edges; none when the content keeps its own, as a combobox's field and list do.
 struct PopupCard<Content: View>: View {
-    var inset: CGFloat = Space.xs + 2
+    var inset: CGFloat = Space.xs
     @ViewBuilder let content: Content
 
     var body: some View {

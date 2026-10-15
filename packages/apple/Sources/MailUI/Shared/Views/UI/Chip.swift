@@ -29,7 +29,7 @@ struct Chip: View {
     }
 
     private var content: some View {
-        HStack(spacing: Space.xs + 2) {
+        HStack(spacing: Space.xs) {
             ButtonIcon(symbol: symbol, pending: pending, size: 12, tint: variant == .invalid ? Tokens.destructive.color : Tokens.mutedForeground.color)
             Text(title).font(.ui(.caption)).lineLimit(1).truncationMode(.middle)
             if let detail {
@@ -67,7 +67,7 @@ struct Chip: View {
             Image(.x, size: 11)
                 .foregroundStyle(hovered ? Tokens.foreground.color : Tokens.mutedStrongerForeground.color)
                 .frame(width: side, height: side)
-                .background(Circle().fill(hovered ? fill.color : .clear).padding(Space.xs))
+                .background(Circle().fill(hovered ? fill.color : .clear).padding(Space.xxs))
                 .contentShape(Rectangle())
         }
 

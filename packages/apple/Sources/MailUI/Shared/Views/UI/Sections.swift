@@ -6,7 +6,7 @@ struct SectionHeading: View {
     var detail: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text(title).textStyle(.subheading)
             if let detail {
                 Text(detail).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)

@@ -605,7 +605,7 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         drawLine(text, x: x, width: width, middle: middle)
         context.setBlendMode(.destinationOut)
-        context.drawLinearGradient(fade, start: CGPoint(x: end - (Space.xxl + Space.xs), y: 0), end: CGPoint(x: end, y: 0), options: [.drawsAfterEndLocation])
+        context.drawLinearGradient(fade, start: CGPoint(x: end - (Space.xxl + Space.xxs), y: 0), end: CGPoint(x: end, y: 0), options: [.drawsAfterEndLocation])
         context.endTransparencyLayer()
         context.restoreGState()
     }

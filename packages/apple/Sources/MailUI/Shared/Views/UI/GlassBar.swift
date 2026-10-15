@@ -8,7 +8,7 @@ struct GlassBar<Content: View>: View {
 
     var body: some View {
         Spread { content }
-            .padding(.horizontal, Space.xs)
+            .padding(.horizontal, Space.xxs)
             .frame(maxWidth: .infinity)
             .frame(height: Theme.barHeight)
             .glassFace(interactive: false, hovered: false)

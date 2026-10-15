@@ -13,7 +13,7 @@ struct InputField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             if let label {
                 Text(label).textStyle(.footnote).fontWeight(.medium)
             }

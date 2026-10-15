@@ -63,7 +63,7 @@ struct AddAccountFlow: View {
                 VStack(spacing: Space.xxl + Space.s) {
                     VStack(spacing: Space.l) {
                         AppMark()
-                        VStack(spacing: Space.xs) {
+                        VStack(spacing: Space.xxs) {
                             Text("Wonnet").textStyle(.display)
                             Text("Email that feels instant.").textStyle(.body, color: Tokens.mutedForeground.color)
                         }
@@ -215,7 +215,7 @@ private struct FormHeading: View {
     let detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text(title).textStyle(.title)
             Text(detail).textStyle(.body, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
         }
