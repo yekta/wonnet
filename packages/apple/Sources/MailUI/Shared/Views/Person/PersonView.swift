@@ -14,7 +14,7 @@ struct PersonView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.l) {
                 Avatar(initials: person?.initials ?? String(email.prefix(1)).uppercased(), email: email, size: 52)
-                VStack(alignment: .leading, spacing: Space.xs) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(name).textStyle(.heading)
                     Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
                 }

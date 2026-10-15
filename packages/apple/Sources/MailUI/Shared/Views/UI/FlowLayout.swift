@@ -3,8 +3,8 @@ import SwiftUI
 /// Lays its views out in lines, wrapping as text does. The last one takes the rest of its line,
 /// for a text field after an address field's chips.
 struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
-    var lineSpacing: CGFloat = 6
+    var spacing: CGFloat = Space.xs
+    var lineSpacing: CGFloat = Space.xs
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity

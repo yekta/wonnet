@@ -67,8 +67,10 @@ extension View {
 
 /// The distances between things. Views space with these, never a number of their own.
 enum Space {
+    /// A label and its field, a control's edge and its contents.
+    static let xxs: CGFloat = 4
     /// Inside a control: an icon and its words.
-    static let xs: CGFloat = 4
+    static let xs: CGFloat = 6
     /// Between controls on a line.
     static let s: CGFloat = 8
     /// Between the lines of a block.

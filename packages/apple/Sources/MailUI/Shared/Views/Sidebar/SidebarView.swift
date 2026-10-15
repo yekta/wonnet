@@ -74,7 +74,7 @@ struct SidebarView: View {
                     SectionHeading(title: "Accounts")
                         .padding(.horizontal, 18)
                         .padding(.top, Space.xl + 2)
-                        .padding(.bottom, Space.xs + 2)
+                        .padding(.bottom, Space.xs)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -93,7 +93,7 @@ struct SidebarView: View {
     private func accountRow(_ account: AccountView) -> some View {
         NavRow(title: account.title, dot: Theme.accountColor(account.color).color, action: nil) {
             if account.status == "syncing" {
-                Spinner()
+                Spinner(tint: Tokens.mutedStrongerForeground.color)
             } else if account.status == "reauth" || account.status == "error" {
                 Image(.circleAlert, size: 13).foregroundStyle(Tokens.destructive.color)
             }

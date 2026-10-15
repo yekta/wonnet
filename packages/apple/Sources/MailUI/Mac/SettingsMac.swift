@@ -70,7 +70,7 @@ private struct SettingsSidebar: View {
                         results
                     }
                 }
-                .padding(.vertical, Space.xs)
+                .padding(.vertical, Space.xxs)
             }
             NavRow(title: "Back", symbol: .arrowLeft, verticalPadding: 2) { store.closeSettings() } trailing: {
                 EmptyView()
@@ -256,7 +256,7 @@ private struct AccountSettings: View {
 
     private func rows(_ accounts: [AccountView]) -> [ScrollStack.Row] {
         let heading = SectionHeading(title: "Accounts", detail: "Each account's colour marks its mail in the list and its mailboxes in the sidebar.")
-            .padding(.horizontal, Space.xs)
+            .padding(.horizontal, Space.xxs)
             .padding(.top, Space.xl)
             .padding(.bottom, Space.s + 2)
         let cards = accounts.enumerated().map { index, account in

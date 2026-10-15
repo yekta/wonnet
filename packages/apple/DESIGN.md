@@ -19,8 +19,8 @@ added to the component, not to the view.
   fills the page), around a popover `borderPopover`. A field is filled with `input` and outlined in `borderInput`.
 - Text comes from the scale, `TextStyle`: `Text("…").textStyle(.caption)`. A view picks a
   style, never a size. A style carries its usual colour; `color:` overrides it.
-- Distances come from `Space`: `xs` 4, `s` 8, `m` 12, `l` 16, `xl` 20, `xxl` 28. Heights of
-  controls come from `ControlSize` and `Theme`.
+- Distances come from `Space`: `xxs` 4, `xs` 6, `s` 8, `m` 12, `l` 16, `xl` 20, `xxl` 28.
+  Heights of controls come from `ControlSize` and `Theme`.
 - Nothing clickable is under 28pt tall. 36pt is the default on the Mac; iOS enlarges everything
   by `Platform.scale`. `ControlSize` is `.small` (28), `.regular` (36) or `.large` (44).
 - Everything clickable has a hover state, shown at once: no animation on colours. A button's

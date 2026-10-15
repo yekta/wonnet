@@ -10,7 +10,7 @@ struct Dropdown<Option: Hashable>: View {
     let title: (Option) -> String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             if let label {
                 Text(label).textStyle(.footnote, color: Tokens.mutedStrongerForeground.color).fontWeight(.medium)
             }

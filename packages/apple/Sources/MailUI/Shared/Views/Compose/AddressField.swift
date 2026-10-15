@@ -17,7 +17,7 @@ struct AddressField<Accessory: View>: View {
 
     var body: some View {
         FieldRow(label: label, wraps: true, focus: { focused = true }) {
-            FlowLayout(spacing: Space.xs + 2, lineSpacing: Space.xs + 2) {
+            FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
                 ForEach(Array(addresses.enumerated()), id: \.offset) { index, address in
                     Chip(
                         title: address.name ?? address.email, variant: address.isValid ? .plain : .invalid,

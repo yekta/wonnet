@@ -171,7 +171,7 @@ struct ActionButton: View {
             if iconOnly {
                 ButtonIcon(symbol: symbol, pending: pending, size: size.icon - 1, tint: foreground)
             } else {
-                HStack(spacing: Space.xs + 2) {
+                HStack(spacing: Space.xs) {
                     ButtonIcon(symbol: symbol, pending: pending, size: size.icon - 1, tint: foreground)
                         // An icon's glyph sits inside room of its own, which reads as more space than
                         // the words have on their side.
@@ -366,7 +366,7 @@ struct PlainButton<Label: View>: View {
 
         var body: some View {
             label
-                .padding(.horizontal, Space.xs)
+                .padding(.horizontal, Space.xxs)
                 .frame(minWidth: ControlSize.small.height, minHeight: ControlSize.small.height)
                 .background(RoundedRectangle(cornerRadius: Radius.sm).fill(hovered ? fill : .clear))
                 .contentShape(Rectangle())

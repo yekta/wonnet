@@ -58,7 +58,7 @@ struct Combobox: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             if let label {
                 Text(label).textStyle(.footnote, color: Tokens.mutedStrongerForeground.color).fontWeight(.medium)
             }
@@ -179,7 +179,7 @@ struct Combobox: View {
                 if style == .field { Spacer(minLength: Space.s) }
                 Image(.chevronDown, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
             }
-            .padding(.horizontal, style == .field ? Space.s + 2 : Space.xs)
+            .padding(.horizontal, style == .field ? Space.s + 2 : Space.xxs)
             .frame(minHeight: style == .field ? Theme.fieldHeight * Platform.scale : ControlSize.small.height)
             .background(RoundedRectangle(cornerRadius: Radius.sm).fill(fill))
             .overlay {
@@ -223,10 +223,10 @@ private struct ComboboxHost: ViewModifier {
             GeometryReader { geometry in
                 ForEach(popups, id: \.id) { popup in
                     let face = geometry[popup.anchor]
-                    let below = face.maxY + Space.xs + popup.height <= geometry.size.height
+                    let below = face.maxY + Space.xxs + popup.height <= geometry.size.height
                     popup.view.offset(
                         x: min(face.minX, max(geometry.size.width - Theme.popupWidth - Space.s, 0)),
-                        y: below ? face.maxY + Space.xs : face.minY - Space.xs - popup.height
+                        y: below ? face.maxY + Space.xxs : face.minY - Space.xxs - popup.height
                     )
                 }
             }

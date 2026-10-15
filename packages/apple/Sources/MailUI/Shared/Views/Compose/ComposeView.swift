@@ -150,7 +150,7 @@ struct ComposeView: View {
                     if dropping {
                         RoundedRectangle(cornerRadius: Radius.sm)
                             .strokeBorder(Tokens.primary.color, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-                            .padding(Space.xs + 2)
+                            .padding(Space.xs)
                             .allowsHitTesting(false)
                     }
                 }
@@ -238,7 +238,7 @@ struct ComposeView: View {
             guard let picked = senders.first(where: { $0.id == choice.id }) else { return }
             choose(picked)
         }
-        .padding(.leading, -Space.xs)
+        .padding(.leading, -Space.xxs)
     }
 
     private var message: some View {
@@ -345,7 +345,7 @@ struct ComposeView: View {
             }
             .frame(maxWidth: Theme.popupWidth)
             .padding(.leading, Space.l)
-            .padding(.bottom, Theme.barHeight + Space.xs)
+            .padding(.bottom, Theme.barHeight + Space.xxs)
         }
     }
 

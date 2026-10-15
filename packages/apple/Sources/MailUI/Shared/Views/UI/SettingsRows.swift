@@ -11,7 +11,7 @@ struct SettingsGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.s + 2) {
             SectionHeading(title: title, detail: detail)
-                .padding(.horizontal, Space.xs)
+                .padding(.horizontal, Space.xxs)
             SettingsCard { content }
         }
         .id(id)
@@ -118,11 +118,11 @@ struct KeyCaps: View {
     let caps: [String]
 
     var body: some View {
-        HStack(spacing: Space.xs) {
+        HStack(spacing: Space.xxs) {
             ForEach(caps.indices, id: \.self) { index in
                 Text(caps[index])
                     .textStyle(.footnoteStrong, color: Tokens.foreground.color)
-                    .padding(.horizontal, Space.xs + 2)
+                    .padding(.horizontal, Space.xs)
                     .frame(minWidth: 22, minHeight: 20)
                     .background(RoundedRectangle(cornerRadius: Radius.xs).fill(Tokens.backgroundSecondary.color))
                     .overlay(RoundedRectangle(cornerRadius: Radius.xs).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))

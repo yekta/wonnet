@@ -16,7 +16,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
     var body: some View {
         MovableList(
             items: tabs, axis: .horizontal, group: { _ in reorder == nil ? nil : "tabs" },
-            rowInset: EdgeInsets(top: 0, leading: Space.xs / 2, bottom: 0, trailing: Space.xs / 2), rowRadius: Radius.md,
+            rowInset: EdgeInsets(top: 0, leading: Space.xxs / 2, bottom: 0, trailing: Space.xxs / 2), rowRadius: Radius.md,
             clicked: pick, moved: moved, menu: menu
         ) { tab in
             Face(symbol: symbol(tab), title: title(tab), count: count(tab), chosen: tab.id == selected)
@@ -37,7 +37,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
         @Environment(\.hovered) private var hovered
 
         var body: some View {
-            HStack(spacing: Space.xs + 2) {
+            HStack(spacing: Space.xs) {
                 Image(symbol, size: ControlSize.regular.icon - 1).foregroundStyle(foreground)
                 Text(title).textStyle(chosen && Platform.strongSelection ? .labelStrong : .label, color: foreground).lineLimit(1)
                 if count > 0 {
@@ -47,7 +47,7 @@ struct PillTabs<Tab: Identifiable & Hashable>: View where Tab.ID == String {
             .padding(.horizontal, Space.m * Platform.scale)
             .frame(height: ControlSize.regular.height * Platform.scale)
             .background(RoundedRectangle(cornerRadius: Radius.md).fill(chosen ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear))
-            .padding(.horizontal, Space.xs / 2)
+            .padding(.horizontal, Space.xxs / 2)
             .contentShape(Rectangle())
         }
 

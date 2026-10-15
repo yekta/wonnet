@@ -150,7 +150,7 @@ struct ThreadScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.s + 2) {
             HStack(alignment: .top, spacing: Space.m) {
-                VStack(alignment: .leading, spacing: Space.xs + 2) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(conversation.subject).textStyle(.title).textSelection(.enabled)
                     participants.textStyle(.label, color: Tokens.mutedForeground.color)
                 }

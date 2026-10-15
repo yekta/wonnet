@@ -16,7 +16,7 @@ struct MailboxTitle: View {
             #endif
             text.textStyle(.subheading).lineLimit(1)
             if store.mailboxSyncing {
-                Spinner(size: Self.side)
+                Spinner(size: Self.side, tint: Tokens.mutedStrongerForeground.color)
             } else {
                 Color.clear.frame(width: Self.slot, height: Self.slot)
             }
