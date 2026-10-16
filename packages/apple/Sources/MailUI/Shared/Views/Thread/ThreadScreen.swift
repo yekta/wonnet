@@ -71,6 +71,13 @@ struct ThreadScreen: View {
     /// The message it opens on: the first unread one.
     private var firstUnread: String? { conversation.messages.first(where: \.unread)?.id }
 
+    private static let top = "top"
+
+    /// Where a message is scrolled to: the first one is the thread's top, so its subject shows.
+    private func anchor(_ message: String) -> String {
+        message == conversation.messages.first?.id ? Self.top : message
+    }
+
     private func thread(height: CGFloat) -> some View {
         // Read as the view is made: its scroll view may report its first layout before it appears.
         let offset = live ? store.threadOffset : nil
@@ -80,6 +87,7 @@ struct ThreadScreen: View {
                 page
                     .padding(Theme.cardMargin)
                     .frame(maxWidth: .infinity, minHeight: height, alignment: .top)
+                    .id(Self.top)
                     #if os(macOS)
                     // The page around the card: a click there closes the thread, as Newton's did.
                     .background { Tokens.background.color.onTapGesture(perform: store.close) }
@@ -96,7 +104,7 @@ struct ThreadScreen: View {
                 let target = kept ?? firstUnread
                 if live { store.focusedMessage = target }
                 guard let target, offset == nil else { return }
-                DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
+                DispatchQueue.main.async { proxy.scrollTo(anchor(target), anchor: .top) }
             }
             .onChange(of: live) { _, live in
                 guard live else { return }
@@ -104,7 +112,7 @@ struct ThreadScreen: View {
             }
             .onChange(of: store.focusedMessage) { _, id in
                 guard live, let id else { return }
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .top) }
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(anchor(id), anchor: .top) }
             }
         }
     }
