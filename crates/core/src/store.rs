@@ -1065,9 +1065,9 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    /// The threads whose messages match, newest first.
-    pub fn search<Tz: TimeZone>(&self, text: &str, now: &DateTime<Tz>) -> Result<Vec<String>> {
-        find(&self.db, &search::parse(text, now), SEARCH_LIMIT)
+    /// The threads whose messages match, newest first, of every account or only of `account`.
+    pub fn search<Tz: TimeZone>(&self, text: &str, account: Option<&str>, now: &DateTime<Tz>) -> Result<Vec<String>> {
+        find(&self.db, &search::parse(text, now), account, SEARCH_LIMIT)
     }
 
     pub fn threads_of_messages(&self, ids: &[String]) -> Vec<String> {
@@ -1312,12 +1312,17 @@ pub struct Reader {
 }
 
 impl Reader {
-    /// The threads that match, and their rows.
-    pub fn search<Tz: TimeZone>(&self, text: &str, now: &DateTime<Tz>) -> Result<(Vec<String>, Vec<ThreadRow>)>
+    /// The threads that match, of every account or only of `account`, and their rows.
+    pub fn search<Tz: TimeZone>(
+        &self,
+        text: &str,
+        account: Option<&str>,
+        now: &DateTime<Tz>,
+    ) -> Result<(Vec<String>, Vec<ThreadRow>)>
     where
         Tz::Offset: std::fmt::Display,
     {
-        let threads = find(&self.db, &search::parse(text, now), SEARCH_LIMIT)?;
+        let threads = find(&self.db, &search::parse(text, now), account, SEARCH_LIMIT)?;
         let rows = rows_of(&self.db, &threads, now)?;
         Ok((threads, rows))
     }
@@ -1325,7 +1330,7 @@ impl Reader {
 
 /// Runs a search: the FTS match newest first (its rowids are in date order, so nothing is sorted),
 /// the conditions on each message, until `limit` threads are found.
-fn find(db: &Connection, query: &Query, limit: usize) -> Result<Vec<String>> {
+fn find(db: &Connection, query: &Query, account: Option<&str>, limit: usize) -> Result<Vec<String>> {
     if query.is_empty() {
         return Ok(Vec::new());
     }
@@ -1338,6 +1343,9 @@ fn find(db: &Connection, query: &Query, limit: usize) -> Result<Vec<String>> {
     }
     if let Some(text) = &query.text {
         conditions.push(format!("search MATCH {}", bind(text.clone().into(), &mut values)));
+    }
+    if let Some(account) = account {
+        conditions.push(format!("m.account_id = {}", bind(account.to_string().into(), &mut values)));
     }
     if !query.includes_trash() {
         conditions.push("m.labels NOT LIKE '%\"trash\"%' AND m.labels NOT LIKE '%\"spam\"%'".into());

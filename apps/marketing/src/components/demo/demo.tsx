@@ -81,18 +81,20 @@ export function Demo() {
     account === null || thread.account === account
   const searching = query.trim().toLowerCase()
   const rows = threads
-    .filter((thread) =>
-      searching
-        ? thread.box !== "trash" &&
-          [
-            thread.subject,
-            thread.with.name,
-            ...thread.messages.map((one) => one.text),
-          ]
-            .join(" ")
-            .toLowerCase()
-            .includes(searching)
-        : ofAccount(thread, view.account) && inMailbox(thread, view.mailbox)
+    .filter(
+      (thread) =>
+        ofAccount(thread, view.account) &&
+        (searching
+          ? thread.box !== "trash" &&
+            [
+              thread.subject,
+              thread.with.name,
+              ...thread.messages.map((one) => one.text),
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(searching)
+          : inMailbox(thread, view.mailbox))
     )
     .sort((a, b) => latest(a).ago - latest(b).ago)
   const unreadIn = (mailbox: Mailbox, account: number | null) =>

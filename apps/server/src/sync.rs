@@ -188,11 +188,17 @@ impl Session {
                     self.send(ServerMessage::Applied { op_id, ok: false, error }).await
                 }
             },
-            ClientMessage::Search { request, query } => {
-                let message_ids = search::run(&self.state.db, self.user_id, &query).await.unwrap_or_else(|error| {
-                    tracing::warn!("search failed: {error}");
-                    Vec::new()
-                });
+            ClientMessage::Search { request, query, account } => {
+                let account = account.as_deref().map(Uuid::parse_str);
+                let message_ids = match account.transpose() {
+                    Ok(account) => {
+                        search::run(&self.state.db, self.user_id, account, &query).await.unwrap_or_else(|error| {
+                            tracing::warn!("search failed: {error}");
+                            Vec::new()
+                        })
+                    }
+                    Err(_) => Vec::new(),
+                };
                 let message_ids = message_ids.iter().map(Uuid::to_string).collect();
                 self.send(ServerMessage::SearchResults { request, message_ids }).await
             }

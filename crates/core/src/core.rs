@@ -32,7 +32,7 @@ use crate::link::{Link, LinkEvent};
 use crate::render::drafts::{self, ReplyKind};
 use crate::render::html::{self, Printed};
 use crate::render::{compose, dates, rows, times};
-use crate::store::{Arrived, Batch, Reader, Store, Touched, shown_in, state_of};
+use crate::store::{Arrived, Batch, Reader, Store, Touched, parse_mailbox, shown_in, state_of};
 use crate::undo;
 
 pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
@@ -526,7 +526,7 @@ impl Core {
             Command::OpenAttachment { message, index } => return self.open_attachment(id, &message, index),
             Command::Avatar { email } => return self.avatar(id, &email),
             Command::PrintThread { thread } => self.print_thread(&thread),
-            Command::Search { query } => return self.search(id, query),
+            Command::Search { query, account } => return self.search(id, query, account),
             Command::Refresh => return self.refresh(id),
             Command::Settle => return self.settle(id),
             Command::SetPushDevice { token, topic, sandbox, key } => {
@@ -673,8 +673,9 @@ impl Core {
         let search = match ui.search.trim() {
             "" => None,
             query => {
+                let account = parse_mailbox(&ui.mailbox).and_then(|(_, account)| account);
                 let reader = self.reader.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                reader.search(query, &Local::now()).ok().map(|(_, rows)| rows)
+                reader.search(query, account.as_deref(), &Local::now()).ok().map(|(_, rows)| rows)
             }
         };
         let values = self.store.preferences()?.into_iter().map(|(key, value)| PreferenceValue { key, value }).collect();
@@ -1623,11 +1624,12 @@ impl Core {
     }
 
     /// Searches this copy on the reader, away from the loop, then asks the server too.
-    fn search(&mut self, id: u64, query: String) -> Option<Result<Value>> {
+    fn search(&mut self, id: u64, query: String, account: Option<String>) -> Option<Result<Value>> {
         self.next_request += 1;
         let request = self.next_request;
         self.latest_search.store(request, Ordering::Relaxed);
-        let (reader, latest, text) = (self.reader.clone(), self.latest_search.clone(), query.clone());
+        let (reader, latest, text, within) =
+            (self.reader.clone(), self.latest_search.clone(), query.clone(), account.clone());
         self.spawn(
             async move {
                 let search = move || {
@@ -1637,7 +1639,7 @@ impl Core {
                     }
                     // A search that panicked leaves the connection as good as it was.
                     let reader = reader.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                    reader.search(&text, &Local::now())
+                    reader.search(&text, within.as_deref(), &Local::now())
                 };
                 tokio::task::spawn_blocking(search).await.map_err(anyhow::Error::from).and_then(|result| result)
             },
@@ -1646,7 +1648,7 @@ impl Core {
                     if core.online() && !query.trim().is_empty() {
                         core.searches.retain(|earlier, _| *earlier + 20 > request);
                         core.searches.insert(request, threads);
-                        core.send(ClientMessage::Search { request, query });
+                        core.send(ClientMessage::Search { request, query, account });
                     }
                     json!({ "request": request, "rows": rows })
                 });
