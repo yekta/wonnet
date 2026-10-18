@@ -49,7 +49,7 @@ async fn search_reads_the_operators(db: PgPool) {
     let ids: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, provider_id FROM messages").fetch_all(&db).await.unwrap();
 
     let found = async |query: &str| -> Vec<String> {
-        let found = search::run(&db, user, query).await.unwrap();
+        let found = search::run(&db, user, None, query).await.unwrap();
         let mut names: Vec<String> =
             found.iter().map(|id| ids.iter().find(|(known, _)| known == id).unwrap().1.clone()).collect();
         names.sort();
@@ -93,6 +93,27 @@ async fn search_reads_the_operators(db: PgPool) {
 }
 
 #[sqlx::test]
+async fn a_search_in_one_account_finds_only_its_mail(db: PgPool) {
+    let user = db::create_user(&db).await.unwrap();
+    let mut accounts = Vec::new();
+    for address in ["me@work.com", "me@home.com"] {
+        let new = NewAccount { user_id: user, provider: Provider::Jmap, address, login: address, credentials: vec![] };
+        let account = db::account(&db, db::upsert_account(&db, new).await.unwrap()).await.unwrap().unwrap();
+        let message = RemoteMessage { provider_id: address.into(), subject: "Invoice".into(), ..Default::default() };
+        db::upsert_messages(&db, &account, &[message]).await.unwrap();
+        accounts.push(account.id);
+    }
+    let of = async |id: Uuid| -> Uuid {
+        sqlx::query_scalar("SELECT account_id FROM messages WHERE id = $1").bind(id).fetch_one(&db).await.unwrap()
+    };
+
+    assert_eq!(search::run(&db, user, None, "invoice").await.unwrap().len(), 2);
+    let found = search::run(&db, user, Some(accounts[1]), "invoice").await.unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(of(found[0]).await, accounts[1]);
+}
+
+#[sqlx::test]
 async fn mail_from_before_the_weights_is_searchable_by_part_once_rebuilt(db: PgPool) {
     let user = db::create_user(&db).await.unwrap();
     let account = NewAccount {
@@ -117,14 +138,14 @@ async fn mail_from_before_the_weights_is_searchable_by_part_once_rebuilt(db: PgP
         .execute(&db)
         .await
         .unwrap();
-    assert!(search::run(&db, user, "from:ann").await.unwrap().is_empty());
+    assert!(search::run(&db, user, None, "from:ann").await.unwrap().is_empty());
 
     let mut batches = 0;
     while db::backfill_search(&db, 2).await.unwrap() {
         batches += 1;
     }
     assert_eq!(batches, 3);
-    assert_eq!(search::run(&db, user, "from:ann").await.unwrap().len(), 5);
+    assert_eq!(search::run(&db, user, None, "from:ann").await.unwrap().len(), 5);
     assert!(!db::backfill_search(&db, 2).await.unwrap(), "done for good");
 }
 
@@ -158,7 +179,7 @@ async fn snippets_made_before_styles_were_left_out_are_made_again(db: PgPool) {
     let fixed = db::message(&db, user, id).await.unwrap().unwrap();
     assert_eq!(fixed.snippet, "Demo Day'e davetlisiniz");
     assert!(fixed.rev > rev, "the apps are sent the new snippet");
-    assert_eq!(search::run(&db, user, "davetlisiniz").await.unwrap(), [id]);
-    assert!(search::run(&db, user, "ReadMsgBody").await.unwrap().is_empty());
+    assert_eq!(search::run(&db, user, None, "davetlisiniz").await.unwrap(), [id]);
+    assert!(search::run(&db, user, None, "ReadMsgBody").await.unwrap().is_empty());
     assert!(!db::backfill_snippets(&db, 10).await.unwrap(), "done for good");
 }

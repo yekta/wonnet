@@ -64,13 +64,17 @@ pub fn parse(text: &str, now: DateTime<Utc>) -> Query {
     query
 }
 
-pub async fn run(db: &PgPool, user_id: Uuid, text: &str) -> sqlx::Result<Vec<Uuid>> {
+/// The newest matches among the user's mail, or only among `account`'s.
+pub async fn run(db: &PgPool, user_id: Uuid, account: Option<Uuid>, text: &str) -> sqlx::Result<Vec<Uuid>> {
     let query = parse(text, Utc::now());
     if query == Query::default() {
         return Ok(Vec::new());
     }
     let mut sql = QueryBuilder::<Postgres>::new("SELECT id FROM messages WHERE NOT deleted AND user_id = ");
     sql.push_bind(user_id);
+    if let Some(account) = account {
+        sql.push(" AND account_id = ").push_bind(account);
+    }
     if !query.words.is_empty() {
         sql.push(" AND search @@ websearch_to_tsquery('simple', ").push_bind(query.words).push(")");
     }

@@ -22,9 +22,12 @@ pub enum ClientMessage {
         request: u64,
         message_id: String,
     },
+    /// Searches every account's mail, or only `account`'s.
     Search {
         request: u64,
         query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        account: Option<String>,
     },
     /// Asks every account's worker to check with its provider now; `Synced` answers once they have.
     Sync {

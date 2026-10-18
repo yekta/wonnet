@@ -338,10 +338,22 @@ fn search_finds_words_by_prefix_in_bodies_too() {
     let mut store = store();
     apply(&mut store, &[account()], &[message("m1", "t1", "Alice", 1_000), message("m2", "t2", "Bob", 2_000)], 1);
     store.save_body("m2", &Body { html: None, text: Some("The telescope arrived".into()) }).unwrap();
-    let search = |store: &Store, query: &str| store.search(query, &Utc::now()).unwrap();
+    let search = |store: &Store, query: &str| store.search(query, None, &Utc::now()).unwrap();
     assert_eq!(search(&store, "teles"), ["a:t2"]);
     assert_eq!(search(&store, "alice"), ["a:t1"]);
     assert!(search(&store, "\"; DROP").is_empty());
+}
+
+#[test]
+fn search_in_one_account_finds_only_its_threads() {
+    let mut store = store();
+    let other = Account { id: "b".into(), address: "me@home.com".into(), ..account() };
+    let theirs = Message { account_id: "b".into(), ..message("m2", "t2", "Alice", 2_000) };
+    apply(&mut store, &[account(), other], &[message("m1", "t1", "Alice", 1_000), theirs], 1);
+    let search = |account| store.search("alice", account, &Utc::now()).unwrap();
+    assert_eq!(search(None), ["b:t2", "a:t1"]);
+    assert_eq!(search(Some("a")), ["a:t1"]);
+    assert_eq!(search(Some("b")), ["b:t2"]);
 }
 
 #[test]
@@ -365,7 +377,7 @@ fn search_takes_operators() {
             ..Default::default()
         })
         .unwrap();
-    let search = |query: &str| store.search(query, &Utc::now()).unwrap();
+    let search = |query: &str| store.search(query, None, &Utc::now()).unwrap();
     assert_eq!(search("from:alice"), ["a:t1"], "trash only when asked for");
     assert_eq!(search("from:alice in:trash"), ["a:t3"]);
     assert_eq!(search("to:alice"), ["a:t4"]);
@@ -778,8 +790,8 @@ fn fill_and_time(messages_count: usize, accounts_count: usize) -> Vec<(&'static 
     timings.push(("split", time(&|| drop(store.thread_page("inbox:important", 0, 100, None, &[], &now).unwrap()))));
     timings.push(("contacts", time(&|| drop(store.contacts("p1", 8).unwrap()))));
     timings.push(("person", time(&|| drop(store.person("p1@x.com", &now).unwrap()))));
-    timings.push(("search, common word", time(&|| drop(store.search("budget", &now).unwrap()))));
-    timings.push(("search, operators", time(&|| drop(store.search("from:p12 is:unread", &now).unwrap()))));
+    timings.push(("search, common word", time(&|| drop(store.search("budget", None, &now).unwrap()))));
+    timings.push(("search, operators", time(&|| drop(store.search("from:p12 is:unread", None, &now).unwrap()))));
     let start = Instant::now();
     let ids: Vec<String> = (0..500).map(|index| format!("m{}", index * 10)).collect();
     store.apply_local("archive", &Op::Archive { ids }).unwrap();

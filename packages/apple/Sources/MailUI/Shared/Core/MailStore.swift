@@ -1153,11 +1153,14 @@ public final class MailStore {
         Task { await searchAgain() }
     }
 
-    /// Runs the current search, for the server's newest matches too.
+    /// Runs the current search, over the account on screen when there is one, for the server's
+    /// newest matches too.
     func searchAgain() async {
         let query = searchQuery
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        guard let found = try? await bridge.call("search", ["query": query], as: SearchReply.self) else { return }
+        var fields: [String: Any] = ["query": query]
+        fields["account"] = listAccount
+        guard let found = try? await bridge.call("search", fields, as: SearchReply.self) else { return }
         guard searchQuery == query else { return }
         searchRequest = found.request
         searchRows = found.rows
