@@ -240,8 +240,8 @@ private struct VersionRow: View {
 
 // MARK: Accounts
 
-/// The accounts' cards, under their heading and over Sign out, in a `ScrollStack`: with many
-/// accounts, a SwiftUI `ScrollView` can't keep up with a scroll.
+/// The accounts' cards, under their heading and Add account and over Sign out, in a
+/// `ScrollStack`: with many accounts, a SwiftUI `ScrollView` can't keep up with a scroll.
 private struct AccountSettings: View {
     @Environment(MailStore.self) private var store
     @State private var adding = false
@@ -268,7 +268,7 @@ private struct AccountSettings: View {
             ))
         }
         let add = ActionButton(title: "Add account", symbol: .plus, variant: .outline) { adding = true }
-            .padding(.top, Space.s + 2)
+            .padding(.bottom, Space.l)
             .padding(.leading, -Theme.buttonGap / 2)
         let signOut = SettingsGroup(id: "sign-out", title: "Wonnet") {
             SettingsRow {
@@ -279,10 +279,10 @@ private struct AccountSettings: View {
         }
         .padding(.top, Space.xxl)
         .padding(.bottom, Space.xxl * 2)
-        return [ScrollStack.Row(id: "accounts", content: AnyView(heading.settingsPageWidth()))] + cards + [
+        return [
+            ScrollStack.Row(id: "accounts", content: AnyView(heading.settingsPageWidth())),
             ScrollStack.Row(id: "add", content: AnyView(add.settingsPageWidth())),
-            ScrollStack.Row(id: "sign-out", content: AnyView(signOut.settingsPageWidth())),
-        ]
+        ] + cards + [ScrollStack.Row(id: "sign-out", content: AnyView(signOut.settingsPageWidth()))]
     }
 
     /// What a search picked: "signatures" is the first card's.

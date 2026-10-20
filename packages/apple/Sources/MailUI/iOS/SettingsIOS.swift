@@ -199,6 +199,11 @@ private struct AccountsPage: View {
 
     var body: some View {
         SettingsListSection("Accounts", footer: "Each account's colour marks its mail in the list and its mailboxes in the sidebar.") {
+            NavigationLink {
+                AddAccountPage()
+            } label: {
+                SettingsActionLabel(title: "Add Account", symbol: .plus)
+            }
             ForEach(store.accounts) { account in
                 NavigationLink {
                     AccountPage(id: account.id)
@@ -208,11 +213,6 @@ private struct AccountsPage: View {
                             .frame(width: SettingsTile.size, height: SettingsTile.size)
                     }
                 }
-            }
-            NavigationLink {
-                AddAccountPage()
-            } label: {
-                SettingsActionLabel(title: "Add Account", symbol: .plus)
             }
         }
         .id("accounts")
