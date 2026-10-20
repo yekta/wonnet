@@ -43,6 +43,8 @@ struct MovableList<Item: Identifiable, Row: View>: UIViewRepresentable {
         view.showsVerticalScrollIndicator = indicators
         view.showsHorizontalScrollIndicator = false
         view.isScrollEnabled = axis == .vertical
+        // A row shows its press as the finger lands, not after the scroll view waits to see a drag.
+        view.delaysContentTouches = false
         if axis == .vertical { view.contentInset = UIEdgeInsets(top: inset, left: 0, bottom: endInset ?? inset, right: 0) }
         coordinator.attach(view)
         return view
