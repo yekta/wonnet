@@ -272,10 +272,19 @@ final class SwipeButton: UIControl {
         }
     }
 
+    /// Pressed, it shows filled, as when letting go would do it.
+    override var isHighlighted: Bool {
+        didSet {
+            guard isHighlighted != oldValue else { return }
+            paint()
+        }
+    }
+
     private func paint() {
         guard let tint = command?.swipeTint else { return }
-        face.backgroundColor = armed ? tint.fill.platform : tint.fill.opacity(Opacity.colorTintStronger).platform
-        glyph.tintColor = armed ? tint.glyph.platform : tint.fill.platform
+        let filled = armed || isHighlighted
+        face.backgroundColor = filled ? tint.fill.platform : tint.fill.opacity(Opacity.colorTintStronger).platform
+        glyph.tintColor = filled ? tint.glyph.platform : tint.fill.platform
     }
 
     override func layoutSubviews() {

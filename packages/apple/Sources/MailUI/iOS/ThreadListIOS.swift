@@ -44,6 +44,8 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         table.contentInset.bottom = bottomInset
         table.verticalScrollIndicatorInsets.bottom = bottomInset
         table.allowsMultipleSelectionDuringEditing = true
+        // A row shows its press as the finger lands, not after the table waits to see a drag.
+        table.delaysContentTouches = false
         table.tintColor = Tokens.primary.platform
         if selectable {
             table.addGestureRecognizer(UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.held(_:))))
@@ -265,7 +267,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
                 store.selection.insert(id)
                 return
             }
-            tableView.deselectRow(at: indexPath, animated: true)
+            tableView.deselectRow(at: indexPath, animated: false)
             open(id)
         }
 
