@@ -91,7 +91,7 @@ struct SelectionActions: View {
 
     private func commands(_ threads: [String], named: Bool) -> some View {
         HStack(spacing: 0) {
-            ForEach(store.applicable([.archive, .trash, .snooze, .label, .read], to: threads)) { command in
+            ForEach(store.applicable(ThreadCommand.selection, to: threads)) { command in
                 let title = command.title(store, threads)
                 let help = store.keyHelp(title, command.rawValue)
                 if named {
@@ -100,7 +100,7 @@ struct SelectionActions: View {
                     IconButton(symbol: command.symbol, help: help, circled: false) { store.run(command, on: threads) }
                 }
             }
-            let more = store.applicable(ThreadCommand.more.filter { $0 != .print }, to: threads)
+            let more = store.applicable(ThreadCommand.selectionMore, to: threads)
             if !more.isEmpty {
                 IconMenu(symbol: .ellipsis, help: "More", circled: false) {
                     ThreadCommandButtons(commands: more, threads: threads)
