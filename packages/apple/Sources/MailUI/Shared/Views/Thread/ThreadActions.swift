@@ -55,6 +55,10 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
     /// What doesn't fit on a toolbar: in its "more" menu.
     static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .deleteForever, .print]
 
+    /// What a bar over selected threads offers, and what its "more" menu does.
+    static let selection: [ThreadCommand] = [.archive, .trash, .snooze, .label, .read]
+    static let selectionMore = more.filter { $0 != .print }
+
     /// Its name where it is picked for a swipe, which does it to any thread.
     var swipeName: String {
         switch self {

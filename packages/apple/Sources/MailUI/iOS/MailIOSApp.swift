@@ -271,7 +271,7 @@ struct MailboxTabBar: View {
 
 /// What can be done to threads along the bottom, spread across a bar of glass. Under a thread,
 /// the usual few with menus for the rest, and Reply on a circle of its own beside it; over a
-/// selection, the few that make sense for many, with no menu to open.
+/// selection, the same as the Mac's selection bar, the rest in More.
 struct CommandBar: View {
     @Environment(MailStore.self) private var store
     let threads: [String]
@@ -280,10 +280,10 @@ struct CommandBar: View {
     var body: some View {
         HStack(spacing: Space.s) {
             GlassBar {
-                if store.applicable([.archive], to: threads).isEmpty {
-                    IconButton(symbol: .trash, help: "Delete", circled: false, strong: true) { store.run(.trash, on: threads) }
+                if reply {
+                    threadCommands
                 } else {
-                    commands
+                    selectionCommands
                 }
             }
             if reply {
@@ -294,12 +294,14 @@ struct CommandBar: View {
         .padding(.bottom, Space.s)
     }
 
-    @ViewBuilder private var commands: some View {
-        if reply {
-            threadCommands
-        } else {
-            ForEach([ThreadCommand.archive, .trash, .snooze, .label, .read, .star]) { command in
-                IconButton(symbol: symbol(command), help: command.title(store, threads), circled: false, strong: true) { store.run(command, on: threads) }
+    @ViewBuilder private var selectionCommands: some View {
+        ForEach(store.applicable(ThreadCommand.selection, to: threads)) { command in
+            IconButton(symbol: symbol(command), help: command.title(store, threads), circled: false, strong: true) { store.run(command, on: threads) }
+        }
+        let more = store.applicable(ThreadCommand.selectionMore, to: threads)
+        if !more.isEmpty {
+            IconMenu(symbol: .ellipsis, help: "More", circled: false, strong: true) {
+                ThreadCommandButtons(commands: more, threads: threads)
             }
         }
     }
