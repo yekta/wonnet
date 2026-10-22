@@ -18,6 +18,8 @@ const TOKENS: &str = include_str!("../../../../packages/theme/tokens.css");
 
 const STYLE: &str = r#"
 html, body { margin: 0; padding: 0; background: transparent; }
+/* The apps size the card to the body: it holds its children's margins and floats. */
+body { display: flow-root; }
 body { font: 15px/1.55 "Avenir", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: var(--foreground);
   -webkit-text-size-adjust: 100%; overflow-wrap: break-word; box-sizing: border-box; }
 a { color: var(--primary); }
