@@ -151,6 +151,8 @@ struct MailboxScreen: View {
             open: { thread in openThread(thread, path: $path, store: store) },
             header: { ListHeader().environment(store) }
         )
+        // The selection's bar floats over the rows, as a thread's does, so they run under it.
+        .ignoresSafeArea(.container, edges: editing ? .bottom : [])
         .overlay {
             if store.rows.isEmpty, store.listReady { EmptyList().background(Tokens.background.color) }
         }
@@ -160,13 +162,12 @@ struct MailboxScreen: View {
                 FloatingButton(symbol: .squarePen, help: "Compose", action: store.newMessage).padding(Space.l)
             }
         }
+        .overlay(alignment: .bottom) {
+            if editing { CommandBar(threads: Array(store.selection)) }
+        }
         .safeAreaInset(edge: .top, spacing: 0) { top }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if editing {
-                CommandBar(threads: Array(store.selection))
-            } else {
-                MailboxTabBar()
-            }
+            if !editing { MailboxTabBar() }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationTitle(store.baseMailboxName)
