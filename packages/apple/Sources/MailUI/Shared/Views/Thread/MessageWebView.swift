@@ -33,6 +33,8 @@ final class WebViewPool {
               }
               if (document.body) { new ResizeObserver(report).observe(document.body); }
               document.addEventListener('toggle', report, true);
+              // iOS applies :active only to pages that listen for touches.
+              document.addEventListener('touchstart', function () {}, { passive: true });
               window.addEventListener('load', report);
               window.addEventListener('resize', report);
               report();
