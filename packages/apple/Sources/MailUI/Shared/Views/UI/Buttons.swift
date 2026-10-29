@@ -213,43 +213,6 @@ struct ActionButton: View {
     }
 }
 
-/// A menu on one of our faces. The face is lit as a button's is, hovered and pressed, and stays
-/// lit while its menu is open: the menu's items come and go with it.
-struct FaceMenu<Content: View, Face: View>: View {
-    @ViewBuilder let content: Content
-    @ViewBuilder let face: Face
-    @State private var open = false
-
-    var body: some View {
-        Menu {
-            content
-                .onAppear { show(true) }
-                .onDisappear { show(false) }
-        } label: {
-            face.modifier(LitWhileOpen(open: open))
-        }
-        .menuStyle(.button)
-        .buttonStyle(.press)
-        .menuIndicator(.hidden)
-    }
-
-    private func show(_ shown: Bool) {
-        var atOnce = Transaction()
-        atOnce.disablesAnimations = true
-        withTransaction(atOnce) { open = shown }
-    }
-}
-
-/// A menu's face hovered while its menu is open.
-private struct LitWhileOpen: ViewModifier {
-    let open: Bool
-    @Environment(\.hovered) private var hovered
-
-    func body(content: Content) -> some View {
-        content.environment(\.hovered, hovered || open)
-    }
-}
-
 /// A button with words, like `ActionButton`, that opens a menu.
 struct ActionMenu<Content: View>: View {
     let title: String
@@ -259,11 +222,14 @@ struct ActionMenu<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        FaceMenu {
+        Menu {
             content
-        } face: {
+        } label: {
             ActionButton.Face(title: title, symbol: symbol, variant: variant, size: size, pending: false, wide: false)
         }
+        .menuStyle(.button)
+        .buttonStyle(.press)
+        .menuIndicator(.hidden)
         .fixedSize()
         .controlFace(size.height)
     }
@@ -277,16 +243,19 @@ struct ChoiceMenu<Option: Hashable>: View {
     let title: (Option) -> String
 
     var body: some View {
-        FaceMenu {
+        Menu {
             Picker(selection: $selection) {
                 ForEach(options, id: \.self) { Text(title($0)).tag($0) }
             } label: {
                 EmptyView()
             }
             .pickerStyle(.inline)
-        } face: {
+        } label: {
             ActionButton.Face(title: title(selection), symbol: nil, variant: .outline, size: size, pending: false, wide: false, chevron: true)
         }
+        .menuStyle(.button)
+        .buttonStyle(.press)
+        .menuIndicator(.hidden)
         .fixedSize()
         .controlFace(size.height)
     }
@@ -327,11 +296,14 @@ struct IconMenu<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        FaceMenu {
+        Menu {
             content
-        } face: {
+        } label: {
             IconCircle(symbol: symbol, size: size, circled: circled, strong: strong)
         }
+        .menuStyle(.button)
+        .buttonStyle(.press)
+        .menuIndicator(.hidden)
         .fixedSize()
         .controlFace(size.height)
         .help(help)
