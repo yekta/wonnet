@@ -839,9 +839,11 @@ impl Core {
             recipients.extend(message.recipients.to.iter().cloned());
             recipients.extend(message.recipients.cc.iter().cloned());
             let body = self.store.body(&message.id);
-            let designed = body.as_ref().and_then(|body| body.html.as_deref()).is_some_and(html::is_designed);
-            let shape = html::shape(body.as_ref(), &message.snippet);
-            let page = body.map(|body| html::page(&body, images, dark));
+            let mut page = body.map(|body| html::page(&body, images, dark));
+            let designed = page.as_ref().is_some_and(|page| page.designed);
+            let shape = page
+                .as_mut()
+                .map_or_else(|| html::placeholder(&message.snippet), |page| std::mem::take(&mut page.shape));
             let failed = page.is_none() && self.body_failed_lately(&message.id);
             if page.is_none() && !failed {
                 missing.push(message.id.clone());
@@ -1477,7 +1479,9 @@ impl Core {
         let original = draft.clone();
         let signature = self.signature(&draft);
         let quote = draft.quote.take();
-        draft.html = Some(compose::html(&draft.text, signature.as_deref(), quote.as_deref()));
+        let quoted = draft.quoted.take().and_then(|id| self.store.body(&id)).and_then(|body| body.html);
+        let quoted = quoted.as_deref().map(html::outgoing);
+        draft.html = Some(compose::html(&draft.text, signature.as_deref(), quote.as_deref(), quoted.as_deref()));
         draft.text = compose::text(&draft.text, signature.as_deref(), quote.as_deref());
         let send_at = send_at.unwrap_or_else(|| mail_protocol::now_ms() + delay as i64 * 1000);
         let op_id = new_id();
@@ -2133,14 +2137,15 @@ mod tests {
         };
         assert_eq!(remind_at, Some(99));
         assert!(outgoing.text.starts_with("Yes, same time!\n\nSam\n\nOn "), "{}", outgoing.text);
-        assert!(outgoing.quote.is_none());
+        assert!(outgoing.quote.is_none() && outgoing.quoted.is_none());
         let html = outgoing.html.unwrap();
-        assert!(html.contains("<div class=\"signature\"") && html.contains("<blockquote"), "{html}");
+        assert!(html.contains("<div class=\"signature\"") && html.contains("<div class=\"gmail_quote\""), "{html}");
+        assert!(html.contains("<blockquote"), "{html}");
         assert!(store.saved_draft(saved["id"].as_str().unwrap()).is_none(), "sending deletes the saved draft");
 
         let cancelled = demo.call(json!({ "type": "cancel_send", "op_id": op_id })).await.unwrap();
         assert_eq!(cancelled["draft"]["text"], "Yes, same time!");
-        assert!(cancelled["draft"]["quote"].is_string());
+        assert!(cancelled["draft"]["quote"].is_string() && cancelled["draft"]["quoted"].is_string());
         assert_eq!(cancelled["id"], saved["id"], "kept again as the draft it was");
         assert!(store.outbox_op(&op_id).is_none());
         let drafts = demo.call(json!({ "type": "threads", "mailbox": "drafts" })).await.unwrap();

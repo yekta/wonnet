@@ -145,6 +145,8 @@ public final class MailStore {
     var downloading: Set<String> = []
     /// Messages of the open thread unfolded by a click or the keyboard.
     var unfoldedMessages: Set<String> = []
+    /// Messages of the open thread folded by a click on their header, or all of them at once.
+    var foldedMessages: Set<String> = []
     /// Designed messages of the open thread shown as their sender made them, not turned dark.
     var originalMessages: Set<String> = []
     /// The message of the open thread that n and p are on.
@@ -311,6 +313,7 @@ public final class MailStore {
         }
         Notifier.shared.bridge = bridge
         SenderPhotos.shared.bridge = bridge
+        AttachmentPreviews.shared.bridge = bridge
         Notifier.shared.answer = { [weak self] answer, thread in await self?.answer(answer, thread: thread) }
         Outgoing.prune()
         #if os(macOS)
@@ -693,6 +696,7 @@ public final class MailStore {
         }
         if conversation?.id != thread {
             unfoldedMessages = []
+            foldedMessages = []
             originalMessages = []
             focusedMessage = nil
             threadOffset = nil
@@ -1090,10 +1094,37 @@ public final class MailStore {
         try? await bridge.call("person", ["email": email], as: Person.self)
     }
 
-    /// Unfolds every message of the open thread.
-    func expandAllMessages() {
+    /// Whether a message of the open thread shows only its line: older read ones start so.
+    func isFolded(_ message: MessageItem) -> Bool {
+        foldedMessages.contains(message.id) || (message.folded && !unfoldedMessages.contains(message.id))
+    }
+
+    func toggleFold(_ message: MessageItem) {
+        guard isFolded(message) else {
+            foldedMessages.insert(message.id)
+            unfoldedMessages.remove(message.id)
+            return
+        }
+        foldedMessages.remove(message.id)
+        unfoldedMessages.insert(message.id)
+    }
+
+    /// Whether any message of the open thread is folded: then all unfold, else all fold.
+    var anyMessageFolded: Bool {
+        conversation?.messages.contains(where: isFolded) ?? false
+    }
+
+    /// Unfolds every message of the open thread, or folds them all when none is folded.
+    func toggleAllMessages() {
         guard let conversation else { return }
-        unfoldedMessages.formUnion(conversation.messages.map(\.id))
+        let ids = conversation.messages.map(\.id)
+        guard anyMessageFolded else {
+            foldedMessages = Set(ids)
+            unfoldedMessages = []
+            return
+        }
+        foldedMessages = []
+        unfoldedMessages.formUnion(ids)
     }
 
     /// Goes to the next (1) or the previous (-1) message of the open thread, unfolding it.
@@ -1102,6 +1133,7 @@ public final class MailStore {
         let index = focusedMessage.flatMap { id in messages.firstIndex(where: { $0.id == id }) } ?? (step > 0 ? -1 : messages.count)
         let next = messages[min(max(index + step, 0), messages.count - 1)]
         unfoldedMessages.insert(next.id)
+        foldedMessages.remove(next.id)
         focusedMessage = next.id
     }
 

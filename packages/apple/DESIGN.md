@@ -113,6 +113,8 @@ added to the component, not to the view.
 | `ToggleRow` | A switch with its words |
 | `Disclosure` | A line that opens more |
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |
+| `AttachmentCard` | A message's file under it, as Gmail shows them: its picture (or its kind's icon) over its name, kind and size; `pending` |
+| `FoldedCount` | A long thread's run of folded messages tucked into one line, their count in a circle where the avatars stand; it shows them |
 | `Spinner` | Lucide's loader turning, in the muted text colour or a `tint`, for what is still coming: a mailbox syncing after its title, the next page of a list, a pending button, an update. Never the system's `ProgressView`, which the Mac won't colour |
 | `ItemRow` | A thing in a list with its controls at the end |
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |

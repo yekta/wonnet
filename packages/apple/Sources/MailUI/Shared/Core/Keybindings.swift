@@ -32,7 +32,7 @@ struct KeyCommand: Identifiable, Hashable {
         KeyCommand(id: "bottom", title: "Jump to the bottom", group: "Moving around", scope: .list, defaults: ["mod+arrowdown"]),
         KeyCommand(id: "nextMessage", title: "Next message", group: "Moving around", scope: .thread, defaults: ["n"]),
         KeyCommand(id: "previousMessage", title: "Previous message", group: "Moving around", scope: .thread, defaults: ["p"]),
-        KeyCommand(id: "expandAll", title: "Expand all messages", group: "Moving around", scope: .thread, defaults: ["shift+o"]),
+        KeyCommand(id: "expandAll", title: "Expand or collapse all messages", group: "Moving around", scope: .thread, defaults: ["shift+o"]),
         KeyCommand(id: "nextSplit", title: "Next split", group: "Moving around", scope: .list, defaults: ["tab"]),
         KeyCommand(id: "previousSplit", title: "Previous split", group: "Moving around", scope: .list, defaults: ["shift+tab"]),
         KeyCommand(id: "search", title: "Search", group: "Moving around", defaults: ["/"]),

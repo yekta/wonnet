@@ -2,7 +2,7 @@ import SwiftUI
 
 /// What can be done to threads, alike from the keys, the toolbars, the menus and the palette.
 enum ThreadCommand: String, CaseIterable, Identifiable {
-    case archive, inbox, trash, deleteForever, spam, star, read, markRead, snooze, label, move, mute, unsubscribe, block, print, reply, replyAll, forward
+    case archive, inbox, trash, deleteForever, spam, star, read, markRead, snooze, label, move, mute, unsubscribe, block, print, reply, replyAll, forward, expandAll
 
     var id: String { rawValue }
 
@@ -27,6 +27,7 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
         case .reply: "Reply"
         case .replyAll: "Reply all"
         case .forward: "Forward"
+        case .expandAll: store.anyMessageFolded ? "Expand all messages" : "Collapse all messages"
         }
     }
 
@@ -49,15 +50,19 @@ enum ThreadCommand: String, CaseIterable, Identifiable {
         case .reply: .reply
         case .replyAll: .replyAll
         case .forward: .forward
+        case .expandAll: .chevronsUpDown
         }
     }
 
     /// What doesn't fit on a toolbar: in its "more" menu.
-    static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .deleteForever, .print]
+    static let more: [ThreadCommand] = [.star, .inbox, .move, .mute, .unsubscribe, .spam, .block, .deleteForever, .print, .expandAll]
 
     /// What a bar over selected threads offers, and what its "more" menu does.
     static let selection: [ThreadCommand] = [.archive, .trash, .snooze, .label, .read]
-    static let selectionMore = more.filter { $0 != .print }
+    static let selectionMore = more.filter { ![.print, .expandAll].contains($0) }
+
+    /// What only the open thread can have done to it, one at a time.
+    static let openOnly: [ThreadCommand] = [.reply, .replyAll, .forward, .print, .expandAll]
 
     /// Its name where it is picked for a swipe, which does it to any thread.
     var swipeName: String {

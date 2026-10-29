@@ -126,7 +126,7 @@ final class KeyCoordinator {
     /// Does the command, or says it doesn't apply here, so the key goes on to the window.
     private func perform(_ id: String) -> Bool {
         let inThread = store.conversation != nil
-        if let command = ThreadCommand(rawValue: id) {
+        if let command = ThreadCommand(rawValue: id), command != .expandAll {
             store.run(command)
             return true
         }
@@ -155,7 +155,7 @@ final class KeyCoordinator {
             store.moveMessage(id == "nextMessage" ? 1 : -1)
         case "expandAll":
             guard inThread else { return false }
-            store.expandAllMessages()
+            store.toggleAllMessages()
         case "nextSplit", "previousSplit":
             guard !store.splits.isEmpty, !inThread else { return false }
             store.moveSplit(id == "nextSplit" ? 1 : -1)

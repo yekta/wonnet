@@ -34,14 +34,47 @@ fn is_quote(line: &str) -> bool {
     line.trim_start().starts_with('>')
 }
 
+/// How "Alice wrote:" ends, in the languages mail is most often written in.
+const WROTE: [&str; 16] = [
+    "wrote:",
+    "writes:",
+    "schrieb:",
+    "a écrit :",
+    "a écrit:",
+    "ha scritto:",
+    "escribió:",
+    "escreveu:",
+    "schreef:",
+    "skrev:",
+    "kirjoitti:",
+    "napisał(a):",
+    "napisał:",
+    "написал(а):",
+    "написал:",
+    "yazdı:",
+];
+
 /// "On Mar 3, Alice wrote:" before a quote belongs to it.
-fn introduces_quote(line: &str) -> bool {
+pub(crate) fn introduces_quote(line: &str) -> bool {
     let line = line.trim();
-    line.ends_with("wrote:") || line.ends_with("schrieb:") || line.ends_with("a écrit :")
+    WROTE.iter().any(|wrote| line.ends_with(wrote))
+}
+
+/// Outlook quotes without `>`: everything from its "Original Message" line or its "From:" and
+/// "Sent:" lines on.
+fn starts_outlook_quote(lines: &[&str], start: usize) -> bool {
+    let line = lines[start].trim();
+    let sent = || lines[start + 1..].iter().take(2).any(|next| next.trim_start().starts_with("Sent:"));
+    line.trim_matches('-').trim().eq_ignore_ascii_case("Original Message") && line.starts_with("---")
+        || line.starts_with("From:") && sent()
 }
 
 /// Where the quote folded from this line on ends, when one starts here.
 fn quote_end(lines: &[&str], start: usize) -> Option<usize> {
+    let written_before = lines[..start].iter().any(|line| !line.trim().is_empty());
+    if written_before && starts_outlook_quote(lines, start) {
+        return Some(lines.len());
+    }
     let quote_follows =
         lines[start + 1..].iter().find(|next| !next.trim().is_empty()).is_some_and(|next| is_quote(next));
     if !is_quote(lines[start]) && !(introduces_quote(lines[start]) && quote_follows) {
@@ -159,6 +192,22 @@ mod tests {
         assert!(html.starts_with("<div class=\"plain\">Sounds good.\n\n<details"), "{html}");
         assert!(html.contains("<blockquote>On Mar 3, Ann wrote:\nLunch?\nFriday\n</blockquote>"), "{html}");
         assert!(html.ends_with("</details>Bye\n</div>"), "{html}");
+    }
+
+    #[test]
+    fn folds_quotes_in_other_languages_and_outlooks() {
+        let italian = to_html("Va bene.\n\nIl giorno 20 ottobre, Ann ha scritto:\n> Pranzo?");
+        assert!(
+            italian.contains("<blockquote>Il giorno 20 ottobre, Ann ha scritto:\nPranzo?</blockquote>"),
+            "{italian}"
+        );
+        let outlook = to_html("Sure.\n\n-----Original Message-----\nFrom: Ann\nSent: Monday\n\nLunch?");
+        assert!(outlook.starts_with("<div class=\"plain\">Sure.\n\n<details"), "{outlook}");
+        assert!(outlook.ends_with("Lunch?</blockquote></details></div>"), "{outlook}");
+        let headers = to_html("Sure.\nFrom: Ann\nSent: Monday\nLunch?");
+        assert!(headers.contains("<blockquote>From: Ann\nSent: Monday\nLunch?</blockquote>"), "{headers}");
+        assert_eq!(line_lengths("Sure.\n\nFrom: Ann\nSent: Monday\nLunch?"), [5, 0, 3]);
+        assert!(!to_html("-----Original Message-----\nFrom: Ann").contains("<details"));
     }
 
     #[test]

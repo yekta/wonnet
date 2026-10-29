@@ -12,7 +12,7 @@ use mail_protocol::Body;
 use serde::Serialize;
 
 use super::dark::Palette;
-use super::text;
+use super::{quote, text};
 
 const TOKENS: &str = include_str!("../../../../packages/theme/tokens.css");
 
@@ -41,17 +41,39 @@ pub struct Page {
     pub html: String,
     /// Remote images were left out; the client offers to load them.
     pub blocked_images: bool,
+    /// The mail sets its own look, apart from what it quotes.
+    pub designed: bool,
+    /// The lines of what the page shows, for its placeholder.
+    pub shape: Vec<Line>,
 }
 
-/// The page. With `dark`, the body carries the `dark` class: in the dark scheme the mail's
-/// colours are turned. The class taken off shows the original.
+/// The page, its quoted history folded. With `dark`, the body carries the `dark` class: in the
+/// dark scheme the mail's colours are turned. The class taken off shows the original.
 pub fn page(body: &Body, show_images: bool, dark: bool) -> Page {
     let blocked = Arc::new(AtomicBool::new(false));
     let palette = Arc::new(Palette::default());
-    let (content, paper) = match &body.html {
-        Some(html) => (sanitize(html, show_images, blocked.clone(), palette.clone()), is_designed(html)),
-        None => (text::to_html(body.text.as_deref().unwrap_or_default()), false),
+    let (content, paper, mut shape) = match &body.html {
+        Some(html) => {
+            let clean = sanitize(html, show_images, blocked.clone(), palette.clone());
+            let (content, paper) = match quote::find(&clean) {
+                Some(quoted) => {
+                    let own = format!("{}{}", &clean[..quoted.start], &clean[quoted.end..]);
+                    (quote::fold(&clean, quoted), is_designed(&own))
+                }
+                None => (clean, is_designed(html)),
+            };
+            let shape = html_shape(&content);
+            (content, paper, shape)
+        }
+        None => {
+            let text = body.text.as_deref().unwrap_or_default();
+            (text::to_html(text), false, text::line_lengths(text).into_iter().map(Line::Text).collect())
+        }
     };
+    if paper && shape.len() < DESIGNED_LINES {
+        shape.resize(DESIGNED_LINES, Line::Text(0));
+    }
+    shape.truncate(SHAPE_LINES);
     let palette = palette.css();
     let images = if show_images { "data: cid: https: http:" } else { "data: cid:" };
     let class = match (paper, dark) {
@@ -66,7 +88,7 @@ pub fn page(body: &Body, show_images: bool, dark: bool) -> Page {
          <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src {images}; style-src 'unsafe-inline'; font-src data:\">\
          <style>{TOKENS}{STYLE}{palette}</style></head><body class=\"{class}\">{content}</body></html>"
     );
-    Page { html, blocked_images: blocked.load(Ordering::Relaxed) }
+    Page { html, blocked_images: blocked.load(Ordering::Relaxed), designed: paper, shape }
 }
 
 /// The most lines a shape has: past them the placeholder is off the screen.
@@ -91,35 +113,24 @@ pub enum Line {
     Image { width: u32, height: u32 },
 }
 
-/// The lines of the page's text and its images: the apps draw a placeholder about as tall as
-/// the page from them while the page is drawn. A body not here yet is its snippet and, when the
-/// snippet was cut, what most mail goes on with.
-pub fn shape(body: Option<&Body>, snippet: &str) -> Vec<Line> {
-    let mut lines = match body {
-        Some(Body { html: Some(html), .. }) => {
-            let mut lines = html_shape(html);
-            if is_designed(html) && lines.len() < DESIGNED_LINES {
-                lines.resize(DESIGNED_LINES, Line::Text(0));
-            }
-            lines
-        }
-        Some(Body { text, .. }) => {
-            text::line_lengths(text.as_deref().unwrap_or_default()).into_iter().map(Line::Text).collect()
-        }
-        None => match snippet.chars().count() as u32 {
-            length @ 1..WHOLE_SNIPPET => vec![Line::Text(length)],
-            length => [length.max(WHOLE_SNIPPET)].into_iter().chain(USUAL_REST).map(Line::Text).collect(),
-        },
-    };
-    lines.truncate(SHAPE_LINES);
-    lines
+/// The lines of a body not here yet, for the placeholder the apps draw while it comes: its
+/// snippet and, when the snippet was cut, what most mail goes on with. A page's own are in
+/// `Page::shape`, its text and its images.
+pub fn placeholder(snippet: &str) -> Vec<Line> {
+    match snippet.chars().count() as u32 {
+        length @ 1..WHOLE_SNIPPET => vec![Line::Text(length)],
+        length => [length.max(WHOLE_SNIPPET)].into_iter().chain(USUAL_REST).map(Line::Text).collect(),
+    }
 }
 
+/// The lines sanitized HTML shows; a folded quote is its short pill.
 fn html_shape(html: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut length = 0;
     let mut tag = String::new();
     let (mut in_tag, mut skipping, mut spaced) = (false, false, true);
+    // How deep in a folded quote's `details` the text is.
+    let mut folded = 0;
     for character in html.chars() {
         match (in_tag, character) {
             (false, '<') => {
@@ -132,6 +143,20 @@ fn html_shape(html: &str) -> Vec<Line> {
                 let name =
                     tag.trim_start_matches('/').split(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or_default();
                 let name = name.to_ascii_lowercase();
+                if name == "details" && (folded > 0 || tag.contains("class=\"quote\"")) {
+                    if folded == 0 && length > 0 {
+                        lines.push(Line::Text(length));
+                    }
+                    if folded == 0 {
+                        lines.push(Line::Text(3));
+                        length = 0;
+                        spaced = true;
+                    }
+                    folded = if closing { folded - 1 } else { folded + 1 };
+                }
+                if folded > 0 || name == "details" {
+                    continue;
+                }
                 if ["style", "script", "head", "title"].contains(&name.as_str()) {
                     skipping = !closing;
                 }
@@ -153,7 +178,7 @@ fn html_shape(html: &str) -> Vec<Line> {
                 }
             }
             (true, _) => tag.push(character),
-            (false, _) if skipping => {}
+            (false, _) if skipping || folded > 0 => {}
             (false, space) if space.is_whitespace() => {
                 if !spaced {
                     length += 1;
@@ -222,11 +247,15 @@ fn without_remote_urls(style: &str) -> String {
     out
 }
 
-/// The mail's colours go to `palette`, which makes the stylesheet the page needs for them.
-pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette: Arc<Palette>) -> String {
+/// What mail may keep: its layout, its colours and the marks of its quotes, nothing that runs.
+fn builder() -> ammonia::Builder<'static> {
     let mut builder = ammonia::Builder::default();
+    for (tag, classes) in quote::CLASSES {
+        builder.add_allowed_classes(tag, classes);
+    }
     builder
         .add_tags(["font", "tfoot", "caption"])
+        .add_clean_content_tags(["title"])
         .add_generic_attributes([
             "style",
             "align",
@@ -240,11 +269,33 @@ pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette
             "color",
             "dir",
             "background",
+            "id",
         ])
         .add_tag_attributes("font", ["face", "size"])
-        .add_url_schemes(["data", "cid"])
+        .add_tag_attributes("blockquote", ["type"])
+        .add_url_schemes(["data", "cid"]);
+    builder
+}
+
+/// A message's HTML to quote in one being sent: its `cid:` images stay behind, not sent along.
+pub fn outgoing(html: &str) -> String {
+    builder()
+        .attribute_filter(|element, attribute, value| match (element, attribute) {
+            (_, "id") => quote::IDS.contains(&value).then_some(Cow::Borrowed(value)),
+            ("img", "src") | (_, "background") if value.trim_start().to_ascii_lowercase().starts_with("cid:") => None,
+            _ => Some(Cow::Borrowed(value)),
+        })
+        .clean(html)
+        .to_string()
+}
+
+/// The mail's colours go to `palette`, which makes the stylesheet the page needs for them.
+pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette: Arc<Palette>) -> String {
+    builder()
         .link_rel(Some("noopener noreferrer"))
         .attribute_filter(move |element, attribute, value| match (element, attribute) {
+            // Only the ids that mark a quote: the rest could clash with the page's own.
+            (_, "id") => quote::IDS.contains(&value).then_some(Cow::Borrowed(value)),
             ("img", "src") | (_, "background") if !show_images && is_remote(value) => {
                 blocked.store(true, Ordering::Relaxed);
                 None
@@ -269,8 +320,9 @@ pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette
                 Some(Cow::Borrowed(value))
             }
             _ => Some(Cow::Borrowed(value)),
-        });
-    builder.clean(html).to_string()
+        })
+        .clean(html)
+        .to_string()
 }
 
 const PRINT_STYLE: &str = r#"
@@ -422,19 +474,20 @@ mod tests {
     #[test]
     fn shapes_the_text_the_page_shows() {
         let texts = |lengths: &[u32]| lengths.iter().copied().map(Line::Text).collect::<Vec<_>>();
+        let shape = |body: &Body| page(body, false, true).shape;
         let text = Body { html: None, text: Some("Sure.\n\nOn Mar 2, Bob wrote:\n> Lunch?\n> Friday\n\nSam".into()) };
-        assert_eq!(shape(Some(&text), ""), texts(&[5, 0, 3, 3]));
+        assert_eq!(shape(&text), texts(&[5, 0, 3, 3]));
         assert_eq!(
-            shape(Some(&html("<head><title>Hi</title></head><p>Hi  Ann,</p><p>See you<br>soon</p>")), ""),
+            shape(&html("<head><title>Hi</title></head><p>Hi  Ann,</p><p>See you<br>soon</p>")),
             texts(&[7, 0, 7, 4])
         );
-        assert_eq!(shape(Some(&html("<div>Hi</div><div><br></div><div>Bye</div>")), ""), texts(&[2, 0, 3]));
-        assert_eq!(shape(None, "See you at noon"), texts(&[15]));
+        assert_eq!(shape(&html("<div>Hi</div><div><br></div><div>Bye</div>")), texts(&[2, 0, 3]));
+        assert_eq!(placeholder("See you at noon"), texts(&[15]));
         let cut = "word ".repeat(40);
-        assert_eq!(shape(None, cut.trim()), texts(&[199, 0, 220, 160, 0, 90, 12]));
-        assert_eq!(shape(None, "").len(), 7);
+        assert_eq!(placeholder(cut.trim()), texts(&[199, 0, 220, 160, 0, 90, 12]));
+        assert_eq!(placeholder("").len(), 7);
         let long = Body { html: None, text: Some("line\n".repeat(500)) };
-        assert_eq!(shape(Some(&long), "").len(), SHAPE_LINES);
+        assert_eq!(shape(&long).len(), SHAPE_LINES);
     }
 
     #[test]
@@ -442,9 +495,34 @@ mod tests {
         let mail = html(
             "<img src=\"https://t.example/p.gif\" width=\"1\" height=\"1\"><table bgcolor=\"#fff\"><tr><td>Sale<img src=\"a.png\" WIDTH=600 height='300' style=\"max-height:9px\"></td></tr></table><img width=\"40\">",
         );
-        let lines = shape(Some(&mail), "");
+        let lines = page(&mail, false, true).shape;
         assert_eq!(lines[..2], [Line::Text(4), Line::Image { width: 600, height: 300 }]);
         assert_eq!(lines.len(), DESIGNED_LINES, "designed mail is padded to its least height");
+    }
+
+    #[test]
+    fn folds_the_quoted_history_of_html_mail() {
+        let reply = html(
+            "<div dir=\"ltr\" class=\"x\" id=\"main\">Thanks!</div><div class=\"gmail_quote\"><div class=\"gmail_attr\">On Mon, Stripe wrote:</div><blockquote class=\"gmail_quote\"><table bgcolor=\"#ffffff\"><tr><td style=\"background:#f4f4f5\">Receipt</td></tr></table></blockquote></div>",
+        );
+        let page = page(&reply, false, true);
+        assert!(page.html.contains("<div dir=\"ltr\" class=\"\">Thanks!</div><details class=\"quote\"><summary>•••</summary><div class=\"gmail_quote\">"), "{}", page.html);
+        assert!(!page.html.contains("id=\"main\""), "ids that mark no quote are dropped");
+        assert!(!page.designed, "a receipt it quotes doesn't make the reply designed");
+        assert_eq!(page.shape, [Line::Text(7), Line::Text(3)]);
+    }
+
+    #[test]
+    fn folds_ios_mails_quote_with_the_line_it_puts_apart() {
+        let reply = html(
+            "<html><head><title>x</title></head><body dir=\"auto\"><div dir=\"ltr\">Sure.</div><div dir=\"ltr\"><br><blockquote type=\"cite\">On 29 Oct 2026, at 11:24, Ann &lt;ann@x.com&gt; wrote:<br><br></blockquote></div><blockquote type=\"cite\"><div dir=\"ltr\">Lunch?</div></blockquote></body></html>",
+        );
+        let page = page(&reply, false, true).html;
+        assert!(
+            page.contains("Sure.</div><details class=\"quote\"><summary>•••</summary><div dir=\"ltr\"><br><blockquote"),
+            "{page}"
+        );
+        assert!(page.contains("Lunch?</div></blockquote></details>"), "{page}");
     }
 
     #[test]

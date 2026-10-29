@@ -9,7 +9,7 @@ import {
 import { useState } from "react"
 import { ACCOUNTS, avatarColor, initials, longDate } from "./mail"
 import type { Message, Thread } from "./mail"
-import { Avatar, Chip, IconButton, cn } from "./ui"
+import { AttachmentCard, Avatar, Chip, IconButton, cn } from "./ui"
 
 export type Reply = "reply" | "replyAll" | "forward"
 
@@ -193,13 +193,11 @@ function MessageView({
             {message.mine ? "Sam" : thread.with.name.split(" ")[0]}
           </p>
           {attachment && (
-            <div className="mt-4">
-              <Chip icon={PaperclipIcon}>
-                <span className="font-medium">{attachment}</span>
-                <span className="text-[11px] text-(--muted-stronger-foreground)">
-                  184 KB
-                </span>
-              </Chip>
+            <div className="mt-[18px]">
+              <p className="mb-2 text-[12px] text-(--muted-stronger-foreground)">
+                1 attachment
+              </p>
+              <AttachmentCard name={attachment} size="184 KB" />
             </div>
           )}
         </div>

@@ -126,6 +126,7 @@ extension MailStore {
         case .reply: reply(.reply, to: first)
         case .replyAll: reply(.replyAll, to: first)
         case .forward: reply(.forward, to: first)
+        case .expandAll: toggleAllMessages()
         }
     }
 

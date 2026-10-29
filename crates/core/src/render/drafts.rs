@@ -28,6 +28,9 @@ fn prefixed(subject: &str, prefix: &str) -> String {
     }
 }
 
+/// The line a forward's quote starts with.
+pub const FORWARDED: &str = "---------- Forwarded message ----------";
+
 /// Addresses as a header shows them: `Ann <ann@x.com>, bob@x.com`.
 pub fn line(addresses: &[Address]) -> String {
     addresses
@@ -71,7 +74,7 @@ where
     let (subject, quote) = match kind {
         ReplyKind::Forward => {
             let header = format!(
-                "---------- Forwarded message ----------\nFrom: {}\nDate: {when}\nSubject: {}\nTo: {}\n\n",
+                "{FORWARDED}\nFrom: {}\nDate: {when}\nSubject: {}\nTo: {}\n\n",
                 line(std::slice::from_ref(&message.from)),
                 message.subject,
                 line(&message.recipients.to)
@@ -96,6 +99,7 @@ where
         subject,
         text: String::new(),
         quote: Some(quote),
+        quoted: Some(message.id.clone()),
         in_reply_to: match kind {
             ReplyKind::Forward => None,
             _ => message.message_id.clone(),

@@ -5,6 +5,7 @@ pub mod dark;
 pub mod dates;
 pub mod drafts;
 pub mod html;
+pub mod quote;
 pub mod rows;
 pub mod text;
 pub mod times;

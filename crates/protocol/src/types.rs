@@ -222,6 +222,9 @@ pub struct Draft {
     /// `html` when sending, so the server never sees it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quote: Option<String>,
+    /// The message the quote is of: its HTML is quoted in `html` as its sender made it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quoted: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<DraftAttachment>,
     /// A message whose attachments go along, for a forward.

@@ -2,7 +2,8 @@ import QuickLook
 import SwiftUI
 
 /// A thread: its subject, its labels, who is in it, and its messages stacked as cards; the
-/// earlier ones folded to a line, as Newton showed them. It opens on the first unread message.
+/// earlier ones folded to a line, as Newton showed them, and a long run of them tucked into one
+/// line with their count, as Gmail does. It opens on the first unread message.
 /// On a wide Mac window a sender clicked is shown beside it. On iOS the threads beside the open
 /// one are drawn too, ahead of a swipe to them; they leave the open one's place in the store alone.
 struct ThreadScreen: View {
@@ -12,8 +13,10 @@ struct ThreadScreen: View {
     @State private var paneEmail: String?
     @State private var sheetEmail: String?
     @State private var preview: URL?
-    /// A copy of an attachment, while the user picks where to save it.
-    @State private var saving: URL?
+    /// Copies of attachments, while the user picks where to save them.
+    @State private var saving: [URL] = []
+    /// The tucked messages were asked for.
+    @State private var showsTucked = false
 
     var body: some View {
         GeometryReader { window in
@@ -37,7 +40,7 @@ struct ThreadScreen: View {
         }
         .background(Tokens.background.color)
         .quickLookPreview($preview)
-        .fileMover(isPresented: Binding(get: { saving != nil }, set: { if !$0 { saving = nil } }), file: saving) { result in
+        .fileMover(isPresented: Binding(get: { !saving.isEmpty }, set: { if !$0 { saving = [] } }), files: saving) { result in
             guard case .failure(let error) = result else { return }
             store.show(error.localizedDescription)
         }
@@ -120,20 +123,27 @@ struct ThreadScreen: View {
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            let tucked = tucked
             ForEach(conversation.messages) { message in
-                let folded = message.folded && !store.unfoldedMessages.contains(message.id)
-                MessageCard(
-                    message: message, folded: folded,
-                    showPerson: { sheetEmail = message.fromEmail },
-                    reply: { kind in store.reply(kind, to: conversation.id, message: message.id) },
-                    open: { index in open(message, index) },
-                    save: { index in save(message, index) }
-                )
-                .contentShape(Rectangle())
-                .onTapGesture { if folded { store.unfoldedMessages.insert(message.id) } }
-                .id(message.id)
-                if message.id != conversation.messages.last?.id {
+                if let count = tucked.starts[message.id] {
+                    FoldedCount(count: count) { showsTucked = true }
                     Rule(color: Theme.cardRule)
+                } else if !tucked.ids.contains(message.id) {
+                    let folded = store.isFolded(message)
+                    MessageCard(
+                        message: message, folded: folded,
+                        toggle: { store.toggleFold(message) },
+                        showPerson: { sheetEmail = message.fromEmail },
+                        reply: { kind in store.reply(kind, to: conversation.id, message: message.id) },
+                        open: { index in open(message, index) },
+                        save: { indices in save(message, indices) }
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture { if folded { store.toggleFold(message) } }
+                    .id(message.id)
+                    if message.id != conversation.messages.last?.id {
+                        Rule(color: Theme.cardRule)
+                    }
                 }
             }
             if let draft = conversation.draftId {
@@ -145,6 +155,28 @@ struct ThreadScreen: View {
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
         .pageCard()
+    }
+
+    /// The messages tucked into one line: of a run of at least five folded ones, all but its first
+    /// and its last two. `starts` has the count where each tucked run starts.
+    private var tucked: (ids: Set<String>, starts: [String: Int]) {
+        guard !showsTucked else { return ([], [:]) }
+        var ids: Set<String> = []
+        var starts: [String: Int] = [:]
+        var run: [MessageItem] = []
+        for message in conversation.messages.map(Optional.some) + [nil] {
+            if let message, store.isFolded(message) {
+                run.append(message)
+                continue
+            }
+            if run.count >= 5 {
+                let middle = run[1..<(run.count - 2)]
+                ids.formUnion(middle.map(\.id))
+                starts[middle[middle.startIndex].id] = middle.count
+            }
+            run = []
+        }
+        return (ids, starts)
     }
 
     /// "Roger Cotes to me@example.com", the "to" fainter than the names.
@@ -218,18 +250,23 @@ struct ThreadScreen: View {
         Task {
             guard let file = await store.openAttachment(message: message.id, index: index) else { return }
             preview = file
+            await AttachmentPreviews.shared.load(message: message.id, index: index, file: file)
         }
     }
 
-    private func save(_ message: MessageItem, _ index: Int) {
-        let name = message.attachments[index].name
+    private func save(_ message: MessageItem, _ indices: [Int]) {
         Task {
-            guard let file = await store.openAttachment(message: message.id, index: index) else { return }
-            do {
-                saving = try await Self.copy(file, named: name)
-            } catch {
-                store.show(error.localizedDescription)
+            var copies: [URL] = []
+            for index in indices {
+                guard let file = await store.openAttachment(message: message.id, index: index) else { return }
+                do {
+                    copies.append(try await Self.copy(file, named: message.attachments[index].name))
+                } catch {
+                    store.show(error.localizedDescription)
+                    return
+                }
             }
+            saving = copies
         }
     }
 
@@ -251,15 +288,17 @@ struct MessageCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let message: MessageItem
     let folded: Bool
+    /// Folds it to its line, or unfolds it.
+    let toggle: () -> Void
     let showPerson: () -> Void
     let reply: (ReplyKind) -> Void
     let open: (Int) -> Void
-    let save: (Int) -> Void
+    let save: ([Int]) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack(alignment: .center, spacing: Space.m) {
-                Avatar(initials: message.initials, email: message.fromEmail, size: 34)
+                Avatar(initials: message.initials, email: message.fromEmail, size: Theme.messageAvatar)
                     .onTapGesture(perform: tapSender)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.fromName)
@@ -278,6 +317,9 @@ struct MessageCard: View {
                     actions
                 }
             }
+            // A click on the line of an open message folds it again, as in Gmail.
+            .contentShape(Rectangle())
+            .onTapGesture(perform: toggle)
             if !folded {
                 Group {
                     if let html = message.html {
@@ -328,7 +370,7 @@ struct MessageCard: View {
     /// A sender's own tap gesture takes the click from the card's, so a folded message unfolds here too.
     private func tapSender() {
         guard folded else { return showPerson() }
-        store.unfoldedMessages.insert(message.id)
+        toggle()
     }
 
     private var original: Bool { store.originalMessages.contains(message.id) }
@@ -338,20 +380,40 @@ struct MessageCard: View {
         !folded && message.designed && message.html != nil && colorScheme == .dark && store.darkMail
     }
 
+    /// The files under the message, as Gmail shows them: their count, Save all, and a card each.
     private var attachments: some View {
-        FlowLayout(spacing: Space.s) {
-            ForEach(Array(message.attachments.enumerated()), id: \.offset) { index, attachment in
-                Chip(
-                    title: attachment.name, symbol: .paperclip,
-                    detail: ByteCountFormatter.string(fromByteCount: attachment.size, countStyle: .file),
-                    pending: store.downloading.contains("\(message.id)/\(index)"), help: "Open \(attachment.name)",
-                    action: { open(index) }
-                )
-                .contextMenu {
-                    Button("Open") { open(index) }
-                    Button("Save") { save(index) }
+        let count = message.attachments.count
+        return VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.s) {
+                Text(count == 1 ? "1 attachment" : "\(count) attachments").textStyle(.caption)
+                Spacer(minLength: 0)
+                if count > 1 {
+                    ActionButton(title: "Save all", symbol: .download, variant: .ghost, size: .small) { save(Array(0..<count)) }
+                        .padding(.trailing, -Theme.buttonGap / 2)
                 }
             }
+            #if os(macOS)
+            FlowLayout(spacing: Space.s) { cards.frame(width: Theme.attachmentWidth) }
+            #else
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: Space.s), GridItem(.flexible())], alignment: .leading, spacing: Space.s) { cards }
+            #endif
+        }
+        .padding(.top, Space.xs)
+    }
+
+    private var cards: some View {
+        ForEach(Array(message.attachments.enumerated()), id: \.offset) { index, attachment in
+            AttachmentCard(
+                name: attachment.name, mime: attachment.mime, size: attachment.size,
+                preview: AttachmentPreviews.shared.previews[AttachmentPreviews.key(message.id, index)],
+                pending: store.downloading.contains("\(message.id)/\(index)"),
+                action: { open(index) }
+            )
+            .contextMenu {
+                Button("Open") { open(index) }
+                Button("Save") { save([index]) }
+            }
+            .task { await AttachmentPreviews.shared.load(message: message.id, index: index, attachment: attachment) }
         }
     }
 }

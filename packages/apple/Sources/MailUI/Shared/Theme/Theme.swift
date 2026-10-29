@@ -108,6 +108,11 @@ enum Theme {
     static let settingsFieldWidth: CGFloat = 240
     /// A chip: the smallest thing that can be clicked.
     static let chipHeight: CGFloat = ControlSize.small.height
+    /// A message's sender in a thread.
+    static let messageAvatar: CGFloat = 34
+    /// A message's file, as a card: its picture over its name. On iOS two share a line.
+    static let attachmentWidth: CGFloat = 168
+    static let attachmentPreviewHeight: CGFloat = 96
     /// A bar across the window: the top bar, a sheet's header, a toolbar. On the Mac the top bar
     /// is the window's toolbar, with the window's buttons in its middle.
     static let barHeight: CGFloat = 52

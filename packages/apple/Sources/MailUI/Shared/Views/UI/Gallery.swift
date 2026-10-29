@@ -138,6 +138,14 @@ struct GalleryView: View {
                             Chip(title: "Unread", symbol: .listFilter, remove: {})
                         }
                     }
+                    FormSection(title: "Attachments") {
+                        FlowLayout(spacing: Space.s) {
+                            AttachmentCard(name: "Q3 report.pdf", mime: "application/pdf", size: 2_400_000) {}
+                            AttachmentCard(name: "Budget 2026.xlsx", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size: 48_000) {}
+                            AttachmentCard(name: "photos.zip", mime: "application/zip", size: 31_000_000, pending: true) {}
+                        }
+                        FoldedCount(count: 4) {}
+                    }
                     FormSection(title: "Rows") {
                         ItemRow(title: "An item", detail: "With a detail and controls", dot: Tokens.account3.color) {
                             IconButton(symbol: .pencil, help: "Edit") {}

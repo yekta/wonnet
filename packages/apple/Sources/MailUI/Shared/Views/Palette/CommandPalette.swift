@@ -73,7 +73,10 @@ struct CommandPalette: View {
         guard !threads.isEmpty else { return [] }
         let many = threads.count > 1
         let opensElsewhere: Set<ThreadCommand> = [.reply, .replyAll, .forward, .block]
-        let commands = store.applicable(ThreadCommand.allCases.filter { !many || ![.reply, .replyAll, .forward, .print].contains($0) }, to: threads)
+        let commands = store.applicable(ThreadCommand.allCases.filter { command in
+            guard command == .expandAll else { return !many || !ThreadCommand.openOnly.contains(command) }
+            return !many && store.conversation?.id == threads.first
+        }, to: threads)
         let suffix = many ? " \(threads.count) threads" : ""
         var items = commands.map { command in
             PaletteItem(

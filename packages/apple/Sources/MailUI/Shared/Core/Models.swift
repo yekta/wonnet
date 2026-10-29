@@ -200,12 +200,14 @@ struct Draft: Codable, Hashable {
     var html: String?
     /// The quoted text under a reply, kept apart while writing.
     var quote: String?
+    /// The message the quote is of, whose HTML is quoted when sending.
+    var quoted: String?
     var attachments: [DraftAttachment] = []
     /// A message whose attachments go along, for a forward.
     var forwardAttachmentsOf: String?
 
     enum CodingKeys: String, CodingKey {
-        case accountId, to, cc, bcc, subject, text, inReplyTo, references, threadId, from, html, quote, attachments, forwardAttachmentsOf
+        case accountId, to, cc, bcc, subject, text, inReplyTo, references, threadId, from, html, quote, quoted, attachments, forwardAttachmentsOf
     }
 
     init(accountId: String, to: [Address], subject: String, text: String) {
@@ -229,6 +231,7 @@ struct Draft: Codable, Hashable {
         from = try values.decodeIfPresent(Address.self, forKey: .from)
         html = try values.decodeIfPresent(String.self, forKey: .html)
         quote = try values.decodeIfPresent(String.self, forKey: .quote)
+        quoted = try values.decodeIfPresent(String.self, forKey: .quoted)
         attachments = try values.decodeIfPresent([DraftAttachment].self, forKey: .attachments) ?? []
         forwardAttachmentsOf = try values.decodeIfPresent(String.self, forKey: .forwardAttachmentsOf)
     }

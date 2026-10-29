@@ -1,4 +1,10 @@
-import { CheckIcon, XIcon, type LucideIcon } from "lucide-react"
+import {
+  CheckIcon,
+  FileImageIcon,
+  FileTextIcon,
+  XIcon,
+  type LucideIcon,
+} from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 
 /** The apps' components (packages/apple/Sources/MailUI/Shared/Views/UI), drawn with tokens.css. */
@@ -117,6 +123,38 @@ export function Chip({
     <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-(--card-larger-accent) px-2.5 text-[12px] text-(--foreground)">
       <Icon className="size-3.5 text-(--muted-foreground)" strokeWidth={1.75} />
       {children}
+    </span>
+  )
+}
+
+/** A message's file under it, as Gmail shows them: its kind's icon over its name, kind and size. */
+export function AttachmentCard({ name, size }: { name: string; size: string }) {
+  const type = name.split(".").pop()?.toUpperCase() ?? ""
+  const Icon = ["JPG", "JPEG", "PNG", "GIF", "HEIC"].includes(type)
+    ? FileImageIcon
+    : FileTextIcon
+  return (
+    <span className="group/card inline-flex w-[168px] flex-col overflow-hidden rounded-lg border border-(--border-card)">
+      <span className="flex h-24 items-center justify-center bg-(--card-larger-accent) group-hover/card:bg-(--card-larger-accent-stronger)">
+        <Icon
+          className="size-7 text-(--muted-stronger-foreground)"
+          strokeWidth={1.5}
+        />
+      </span>
+      <span className="flex items-center gap-1.5 border-t border-(--border-card) px-2 py-1.5 group-hover/card:bg-(--card-larger-accent)">
+        <Icon
+          className="size-3.5 shrink-0 text-(--muted-foreground)"
+          strokeWidth={1.75}
+        />
+        <span className="min-w-0">
+          <span className="block truncate text-[12px] text-(--foreground)">
+            {name}
+          </span>
+          <span className="block text-[11px] text-(--muted-stronger-foreground)">
+            {type} · {size}
+          </span>
+        </span>
+      </span>
     </span>
   )
 }
