@@ -24,7 +24,8 @@ added to the component, not to the view.
 - Nothing clickable is under 28pt tall. 36pt is the default on the Mac; iOS enlarges everything
   by `Platform.scale`. `ControlSize` is `.small` (28), `.regular` (36) or `.large` (44).
 - Everything clickable has a hover state, shown at once: no animation on colours. A button's
-  face reads `@Environment(\.hovered)`, set by `PressStyle`, which every button uses.
+  face reads `@Environment(\.hovered)`, set by `PressStyle`, which every button uses. A
+  menu's face (`FaceMenu`, which every menu uses) stays lit while its menu is open.
 - Hovered and selected things are filled from two pairs of tokens. Small things (buttons, tabs,
   the sidebar's rows) hover in `backgroundAccent` and are selected in
   `backgroundAccentStronger`. Large things (thread rows, choice rows, a banner) hover in

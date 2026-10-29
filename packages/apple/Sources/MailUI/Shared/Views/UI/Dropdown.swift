@@ -14,7 +14,7 @@ struct Dropdown<Option: Hashable>: View {
             if let label {
                 Text(label).textStyle(.footnote, color: Tokens.mutedStrongerForeground.color).fontWeight(.medium)
             }
-            Menu {
+            FaceMenu {
                 if let none {
                     Button(none) { selection = nil }
                 }
@@ -29,12 +29,9 @@ struct Dropdown<Option: Hashable>: View {
                         }
                     }
                 }
-            } label: {
+            } face: {
                 DropdownFace(text: selection.map(title) ?? none ?? "")
             }
-            .menuStyle(.button)
-            .buttonStyle(.press)
-            .menuIndicator(.hidden)
         }
     }
 }
