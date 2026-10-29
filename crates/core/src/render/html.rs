@@ -26,12 +26,14 @@ a { color: var(--primary); }
 img { max-width: 100%; height: auto; }
 .plain { white-space: pre-wrap; }
 blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(--border-card); color: var(--muted-foreground); }
-/* The fold rests and hovers as a chip on the thread's card does; pressed is hovered, at once. */
-details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 0 8px; margin: 6px 0;
-  border-radius: 9px; background: var(--card-larger-accent); color: var(--muted-foreground); font-size: 12px; line-height: 18px; letter-spacing: 1px;
+/* The fold rests and hovers as a chip on the thread's card does; pressed is hovered, at once. Its
+   clear border is room to click around the pill, which is drawn inside it: 32px tall in all. */
+details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 0 8px; margin: -1px 0 -1px -7px;
+  border: 7px solid transparent; background-clip: padding-box; border-radius: 16px;
+  background-color: var(--card-larger-accent); color: var(--muted-foreground); font-size: 12px; line-height: 18px; letter-spacing: 1px;
   -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-details.quote > summary:active { background: var(--card-larger-accent-stronger); }
-@media (hover: hover) { details.quote > summary:hover { background: var(--card-larger-accent-stronger); } }
+details.quote > summary:active { background-color: var(--card-larger-accent-stronger); }
+@media (hover: hover) { details.quote > summary:hover { background-color: var(--card-larger-accent-stronger); } }
 details.quote > summary::-webkit-details-marker { display: none; }
 body.paper { background: var(--card-larger); color: var(--emphasized-foreground); color-scheme: light; border-radius: var(--radius-sm); }
 @media (prefers-color-scheme: dark) {
