@@ -41,6 +41,7 @@ import app.wonnet.ui.FormSection
 import app.wonnet.ui.GlassBar
 import app.wonnet.ui.GlassCircle
 import app.wonnet.ui.GoogleMark
+import app.wonnet.ui.MicrosoftMark
 import app.wonnet.ui.IconButton
 import app.wonnet.ui.InputField
 import app.wonnet.ui.ItemRow
@@ -126,6 +127,7 @@ fun Gallery(close: () -> Unit) {
                 }
                 TabStrip(listOf("Important", "Other"), { it }, tab, { it }, { if (it == "Other") 3 else 0 }) { tab = it }
                 OptionButton("Continue with Google", "Gmail and Google Workspace", {}) { GoogleMark() }
+                OptionButton("Continue with Microsoft", "Outlook, Hotmail and Microsoft 365", {}) { MicrosoftMark() }
                 SwatchRow(swatch) { swatch = it }
             }
             FormSection("Faces") {

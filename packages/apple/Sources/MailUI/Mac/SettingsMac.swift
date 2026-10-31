@@ -394,7 +394,7 @@ private struct SignatureRow: View {
     }
 }
 
-/// Gmail, or a JMAP server; it closes once the account is in.
+/// Gmail, Outlook, or a JMAP server; it closes once the account is in.
 private struct AddAccountSheet: View {
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss

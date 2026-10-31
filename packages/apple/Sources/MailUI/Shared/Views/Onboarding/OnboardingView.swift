@@ -14,7 +14,7 @@ struct OnboardingView: View {
     }
 }
 
-/// The ways to add an account: Google, or a JMAP server on a page of its own. On the first
+/// The ways to add an account: Google, Microsoft, or a JMAP server on a page of its own. On the first
 /// screen (`welcome`) the app's name stands over them and the server this app talks to can be
 /// changed under them, on a page of its own too. iOS pushes the pages; the Mac shows one in
 /// place, with a way back.
@@ -84,6 +84,9 @@ struct AddAccountFlow: View {
         VStack(spacing: Space.s) {
             OptionButton(title: "Continue with Google", detail: "Gmail and Google Workspace", action: store.signInWithGoogle) {
                 GoogleMark()
+            }
+            OptionButton(title: "Continue with Microsoft", detail: "Outlook, Hotmail and Microsoft 365", action: store.signInWithMicrosoft) {
+                MicrosoftMark()
             }
             OptionButton(title: "Continue with JMAP", detail: "Fastmail, Stalwart and others", action: { show(.jmap) }) {
                 Image(.server, size: 20).foregroundStyle(Tokens.foreground.color)

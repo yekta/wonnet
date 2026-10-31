@@ -14,7 +14,7 @@ An email client that feels instant, for the Mac, iOS, Android, Windows and Linux
 </p>
 
 - **Nothing waits on the network.** The apps keep a local copy of your mail in SQLite. Opening, archiving, starring and searching read and write that copy at once; a server syncs it with your mail provider in the background.
-- **Gmail and JMAP.** Gmail through Google's API, and any JMAP server (Fastmail, Stalwart). Microsoft 365 and IMAP are planned.
+- **Gmail, Outlook and JMAP.** Gmail through Google's API, Outlook.com, Hotmail and Microsoft 365 through Microsoft Graph, and any JMAP server (Fastmail, Stalwart). IMAP is planned.
 - **Newton's habits.** A unified inbox with an account colour on every thread, snooze and remind me (typed as "tomorrow 9am"), undo send, send later, and single keys on the Mac, Superhuman's by default: `j`/`k` to move, `e` archive, `s` star, `#` trash, `u` unread, `h` snooze, `r` reply, `a` reply all, `f` forward, `c` compose, `/` search, `z` undo, `g` then `i` for the inbox, and `⌘K` for everything else. `?` lists them all, and any of them can be changed in Settings.
 - **The rest of a full mail client.** Split Inbox (Important, your own splits, Other for newsletters), labels, multi-select, mute, block, one-click unsubscribe, Get Me To Zero, search with Gmail's operators, drafts on every device, signatures, aliases, snippets, attachments in and out, senders' photos (their Gravatar or their company's logo), a contact pane, swipe actions on phones, notifications and printing.
 - **Private by default.** Remote images stay blocked until you ask for them, and message bodies are sanitized before they are drawn. The server keeps your mail credentials encrypted, and new mail is pushed to your phone encrypted with a key only the phone has, so neither Apple nor Google sees it.
@@ -46,10 +46,11 @@ cargo run --release -p mail-server   # on http://localhost:3000
 
 | Variable | What it is |
 | --- | --- |
-| `PUBLIC_URL` | Where the server can be reached, without a trailing slash. Google sends you back to `{PUBLIC_URL}/auth/google/callback` |
+| `PUBLIC_URL` | Where the server can be reached, without a trailing slash. Google sends you back to `{PUBLIC_URL}/auth/google/callback`, Microsoft to `{PUBLIC_URL}/auth/microsoft/callback`. Over https, Outlook pushes changes to `{PUBLIC_URL}/hooks/outlook` |
 | `DATABASE_URL` | Postgres. The server runs its migrations when it starts |
 | `SECRET_KEY` | Seals the mail credentials the server keeps. Any long random text (`openssl rand -hex 32`); changing it loses access to every account |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The Google OAuth client, below. Without them Gmail can't be added |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | The Microsoft app registration, below. Without them Outlook can't be added |
 | `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` | Optional: an APNs auth key (the text of its .p8), its ID and your Apple team ID. Without them nothing is pushed to iPhones |
 | `FCM_SERVICE_ACCOUNT` | Optional: the JSON key of a Firebase service account that may send with Cloud Messaging, as text. Without it nothing is pushed to Android phones |
 | `GMAIL_PUBSUB_TOPIC`, `GMAIL_HOOK_TOKEN` | Optional: Gmail pushes changes to a Pub/Sub topic whose push subscription calls `{PUBLIC_URL}/hooks/gmail?token={GMAIL_HOOK_TOKEN}`. Without them new Gmail mail waits for the next poll |
@@ -73,7 +74,18 @@ In Testing mode, Google ends a refresh token after **7 days**: the account then 
 
 **Before a public launch**, the app has to leave Testing mode. `https://mail.google.com/` is a restricted scope and the server stores the mail it fetches, so Google requires its verification and a yearly **CASA security assessment** (Cloud Application Security Assessment) by an authorized lab. Plan weeks for it, and its cost.
 
-### 3. Build the apps
+### 3. Register the app with Microsoft
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com), open **App registrations → New registration**. A Microsoft account without a directory needs one first: signing up for Azure or for a Microsoft 365 business trial makes one.
+2. Supported account types: **any Entra ID tenant and personal Microsoft accounts**. Redirect URI: platform **Web**, `{PUBLIC_URL}/auth/microsoft/callback`; add one for each server you run.
+3. Under **API permissions → Microsoft Graph → Delegated**, add `offline_access`, `openid`, `email`, `User.Read`, `Mail.ReadWrite`, `Mail.Send` and `MailboxSettings.ReadWrite`.
+4. Under **Certificates & secrets**, make a client secret. Put the **Application (client) ID** in `MICROSOFT_CLIENT_ID` and the secret's **Value** in `MICROSOFT_CLIENT_SECRET`.
+
+A client secret lasts two years at most: make a new one before it runs out, or every Outlook account stops syncing. Without publisher verification, Microsoft calls the app unverified when people sign in; personal accounts can still allow it, and a company may ask its admin to.
+
+Outlook keeps a message in one folder, so labels are its categories, and Outlook's own folders show as archived mail. A message sent through Microsoft Graph can be 3 MB at most, files included.
+
+### 4. Build the apps
 
 ```sh
 apps/macos/scripts/build-app.sh --open
@@ -102,9 +114,9 @@ The Android app from a release (`Wonnet.apk`) and the Windows and Linux app (`Wo
 
 To look at the apps without a server or an account, start them with `--demo`: they show made-up mail, kept apart from your own and made fresh at every start. On the Mac, `open apps/macos/build/Wonnet.app --args --demo`; on iOS, add `--demo` to the scheme's arguments in Xcode; on Windows and Linux, `wonnet --demo`; on Android, `adb shell am start -n app.wonnet.wonnet/app.wonnet.MainActivity --ez demo true`.
 
-### 4. Add an account
+### 5. Add an account
 
-Open the app and choose **Continue with Google**, or add a JMAP server with its address, your email and a password (for Fastmail, an app password and `https://api.fastmail.com`). The first account makes your user; accounts added later in Settings join it.
+Open the app and choose **Continue with Google** or **Continue with Microsoft**, or add a JMAP server with its address, your email and a password (for Fastmail, an app password and `https://api.fastmail.com`). The first account makes your user; accounts added later in Settings join it.
 
 To try it without a real account, give the compose Stalwart a demo mailbox and add it as a JMAP account:
 

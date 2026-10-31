@@ -4,6 +4,7 @@
 
 pub mod gmail;
 pub mod jmap;
+pub mod outlook;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -46,6 +47,7 @@ impl std::error::Error for Refused {}
 pub enum Connection {
     Gmail(gmail::Gmail),
     Jmap(jmap::Jmap),
+    Outlook(outlook::Outlook),
 }
 
 /// One kind of change for many messages, as the worker sends it.
@@ -74,6 +76,7 @@ impl Connection {
                 let login: jmap::Login = serde_json::from_str(&account.login)?;
                 Connection::Jmap(jmap::Jmap::open(&state.http, &login.url, &login.username, &secret).await?)
             }
+            Provider::Outlook => Connection::Outlook(outlook::Outlook::open(state, account, &secret).await?),
         })
     }
 
@@ -82,6 +85,7 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => Connection::Gmail(gmail.background()),
             Connection::Jmap(jmap) => Connection::Jmap(jmap.clone()),
+            Connection::Outlook(outlook) => Connection::Outlook(outlook.clone()),
         }
     }
 
@@ -89,6 +93,7 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => gmail.sync(state, account).await,
             Connection::Jmap(jmap) => jmap.sync(state, account).await,
+            Connection::Outlook(outlook) => outlook.sync(state, account).await,
         }
     }
 
@@ -96,6 +101,7 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => gmail.apply(batch, labels).await,
             Connection::Jmap(jmap) => jmap.apply(batch, labels).await,
+            Connection::Outlook(outlook) => outlook.apply(batch, labels).await,
         }
     }
 
@@ -103,6 +109,7 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => gmail.raw(provider_id).await,
             Connection::Jmap(jmap) => jmap.raw(provider_id).await,
+            Connection::Outlook(outlook) => outlook.raw(provider_id).await,
         }
     }
 
@@ -111,6 +118,7 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => gmail.send(draft, from, files).await,
             Connection::Jmap(jmap) => jmap.send(draft, from, files).await,
+            Connection::Outlook(outlook) => outlook.send(draft, from, files).await,
         }
     }
 
@@ -119,6 +127,7 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => gmail.identities().await,
             Connection::Jmap(jmap) => jmap.identities().await,
+            Connection::Outlook(outlook) => outlook.identities().await,
         }
     }
 
@@ -127,22 +136,25 @@ impl Connection {
         match self {
             Connection::Gmail(gmail) => gmail.create_label(name).await,
             Connection::Jmap(jmap) => jmap.create_label(name).await,
+            Connection::Outlook(outlook) => outlook.create_label(name).await,
         }
     }
 
     /// Wakes the worker when the provider says something changed, over a stream of its own.
-    /// Gmail pushes to the hook instead.
+    /// Gmail and Outlook push to their hooks instead.
     pub async fn push(&self, wake: &Notify) -> Infallible {
         match self {
-            Connection::Gmail(_) => std::future::pending().await,
+            Connection::Gmail(_) | Connection::Outlook(_) => std::future::pending().await,
             Connection::Jmap(jmap) => jmap.push(wake).await,
         }
     }
 
-    /// Asks the provider to push changes, where it can. Gmail's watch lasts a week.
+    /// Asks the provider to push changes, where it can. Gmail's watch lasts a week, Outlook's
+    /// subscription three days.
     pub async fn watch(&self, state: &AppState) -> anyhow::Result<()> {
         match self {
             Connection::Gmail(gmail) => gmail.watch(state).await,
+            Connection::Outlook(outlook) => outlook.watch(state).await,
             Connection::Jmap(_) => Ok(()),
         }
     }

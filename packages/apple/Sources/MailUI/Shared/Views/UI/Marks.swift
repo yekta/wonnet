@@ -42,6 +42,28 @@ struct GoogleMark: View {
     }
 }
 
+/// Microsoft's four squares, as its sign-in buttons carry them.
+struct MicrosoftMark: View {
+    var size: CGFloat = 20
+
+    private static let parts: [(String, ThemeColor)] = [
+        ("M1 1H11V11H1Z", Tokens.microsoftRed),
+        ("M12 1H22V11H12Z", Tokens.microsoftGreen),
+        ("M1 12H11V22H1Z", Tokens.microsoftBlue),
+        ("M12 12H22V22H12Z", Tokens.microsoftYellow),
+    ]
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(Self.parts.enumerated()), id: \.offset) { _, part in
+                VectorPath(part.0, box: 23).fill(part.1.color)
+            }
+        }
+        .frame(width: size * Platform.scale, height: size * Platform.scale)
+        .accessibilityHidden(true)
+    }
+}
+
 /// A shape from an SVG path's `d`, drawn in a square `box` wide, scaled to the frame it is
 /// given. Reads the commands the marks use: M, L, H, V, C, S and Z, absolute or relative.
 struct VectorPath: Shape {

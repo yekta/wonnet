@@ -40,7 +40,12 @@ extension MailStore {
         case "syncing": "Syncing"
         case "reauth": "Sign in again: remove the account and add it back"
         case "error": "Can't reach the provider right now"
-        default: account.provider == "gmail" ? "Gmail" : "JMAP"
+        default:
+            switch account.provider {
+            case "gmail": "Gmail"
+            case "outlook": "Outlook"
+            default: "JMAP"
+            }
         }
     }
 
@@ -171,7 +176,11 @@ extension MailStore {
 
     /// Who keeps the account's mail, as a sentence names them.
     func providerName(_ account: AccountView) -> String {
-        account.provider == "gmail" ? "Gmail" : "your provider"
+        switch account.provider {
+        case "gmail": "Gmail"
+        case "outlook": "Outlook"
+        default: "your provider"
+        }
     }
 
     func ownSignature(_ account: AccountView) -> String {

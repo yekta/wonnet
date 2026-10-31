@@ -70,6 +70,10 @@
   --google-red: #ea4335;
   --google-yellow: #fbbc05;
   --google-green: #34a853;
+  --microsoft-red: #f25022;
+  --microsoft-green: #7fba00;
+  --microsoft-blue: #00a4ef;
+  --microsoft-yellow: #ffb900;
   --account-1: #cd605a;
   --account-2: #c56c21;
   --account-3: #a48100;
@@ -151,6 +155,10 @@
     --google-red: #ea4335;
     --google-yellow: #fbbc05;
     --google-green: #34a853;
+    --microsoft-red: #f25022;
+    --microsoft-green: #7fba00;
+    --microsoft-blue: #00a4ef;
+    --microsoft-yellow: #ffb900;
     --account-1: #f07f77;
     --account-2: #e78a45;
     --account-3: #c7a01e;

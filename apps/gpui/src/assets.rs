@@ -6,7 +6,7 @@ use gpui::{App, AssetSource, Result, SharedString};
 
 pub struct Assets;
 
-const OWN: [(&str, &[u8]); 7] = [
+const OWN: [(&str, &[u8]); 11] = [
     ("wonnet/star-filled.svg", include_bytes!("../assets/wonnet/star-filled.svg")),
     ("wonnet/loader.svg", include_bytes!("../assets/wonnet/loader.svg")),
     ("wonnet/app-mark.svg", include_bytes!("../assets/wonnet/app-mark.svg")),
@@ -14,6 +14,10 @@ const OWN: [(&str, &[u8]); 7] = [
     ("wonnet/google-green.svg", include_bytes!("../assets/wonnet/google-green.svg")),
     ("wonnet/google-yellow.svg", include_bytes!("../assets/wonnet/google-yellow.svg")),
     ("wonnet/google-red.svg", include_bytes!("../assets/wonnet/google-red.svg")),
+    ("wonnet/microsoft-red.svg", include_bytes!("../assets/wonnet/microsoft-red.svg")),
+    ("wonnet/microsoft-green.svg", include_bytes!("../assets/wonnet/microsoft-green.svg")),
+    ("wonnet/microsoft-blue.svg", include_bytes!("../assets/wonnet/microsoft-blue.svg")),
+    ("wonnet/microsoft-yellow.svg", include_bytes!("../assets/wonnet/microsoft-yellow.svg")),
 ];
 
 impl AssetSource for Assets {

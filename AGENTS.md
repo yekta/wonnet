@@ -1,7 +1,7 @@
 ## What is this?
 
 Wonnet is an email client that feels instant. The apps read and write a local SQLite copy of the
-mail; our server syncs with the providers (Gmail and JMAP) and keeps the apps' copies current over
+mail; our server syncs with the providers (Gmail, Outlook and JMAP) and keeps the apps' copies current over
 a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't needed.
 
 | Folder | What it is |

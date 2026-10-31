@@ -32,6 +32,7 @@ pub const ACCOUNT_NAME_MAX: usize = 40;
 pub enum Provider {
     Gmail,
     Jmap,
+    Outlook,
 }
 
 impl Provider {
@@ -39,6 +40,7 @@ impl Provider {
         match self {
             Provider::Gmail => "gmail",
             Provider::Jmap => "jmap",
+            Provider::Outlook => "outlook",
         }
     }
 
@@ -46,6 +48,7 @@ impl Provider {
         match text {
             "gmail" => Some(Provider::Gmail),
             "jmap" => Some(Provider::Jmap),
+            "outlook" => Some(Provider::Outlook),
             _ => None,
         }
     }

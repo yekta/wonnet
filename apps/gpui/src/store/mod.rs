@@ -138,8 +138,9 @@ pub struct Store {
     /// The window is in front, where new mail needs no notification.
     pub active: bool,
     notifier: Notifier,
-    /// When a sign-in in the browser started; the browser comes back to the app with it.
-    pub signing_in: Option<std::time::Instant>,
+    /// Which provider's sign-in in the browser started, and when; the browser comes back to the
+    /// app with it.
+    pub signing_in: Option<(&'static str, std::time::Instant)>,
 }
 
 impl Store {
@@ -1375,17 +1376,25 @@ impl Store {
 
     // MARK: Accounts
 
-    /// Opens Google's sign-in in the browser, which comes back to `wonnet://auth`.
     pub fn sign_in_with_google(&mut self, cx: &mut Context<Self>) {
-        self.ask_or_show(Command::SignInGoogle, cx, |this, start: UrlReply, cx| {
-            this.signing_in = Some(std::time::Instant::now());
+        self.sign_in(Command::SignInGoogle, "google", cx);
+    }
+
+    pub fn sign_in_with_microsoft(&mut self, cx: &mut Context<Self>) {
+        self.sign_in(Command::SignInMicrosoft, "microsoft", cx);
+    }
+
+    /// Opens the provider's sign-in in the browser, which comes back to `wonnet://auth`.
+    fn sign_in(&mut self, command: Command, provider: &'static str, cx: &mut Context<Self>) {
+        self.ask_or_show(command, cx, move |this, start: UrlReply, cx| {
+            this.signing_in = Some((provider, std::time::Instant::now()));
             cx.open_url(&start.url);
         });
     }
 
     /// Forgets a sign-in in the browser that the app came back to without: one left there.
     pub fn forget_sign_in(&mut self) {
-        if self.signing_in.is_some_and(|started| started.elapsed() > Duration::from_secs(20)) {
+        if self.signing_in.is_some_and(|(_, started)| started.elapsed() > Duration::from_secs(20)) {
             self.signing_in = None;
         }
     }

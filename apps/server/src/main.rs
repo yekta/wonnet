@@ -8,6 +8,7 @@ mod e2e;
 mod error;
 mod google;
 mod hub;
+mod microsoft;
 mod mime;
 mod ops;
 mod providers;
@@ -72,8 +73,10 @@ fn router(state: AppState) -> Router {
     let header = |name, value| SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value));
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
-        .route("/auth/google/start", get(sign_in::start))
-        .route("/auth/google/callback", get(sign_in::callback))
+        .route("/auth/google/start", get(sign_in::google_start))
+        .route("/auth/google/callback", get(sign_in::google_callback))
+        .route("/auth/microsoft/start", get(sign_in::microsoft_start))
+        .route("/auth/microsoft/callback", get(sign_in::microsoft_callback))
         .route("/api/auth/exchange", post(api::exchange))
         .route("/api/link-ticket", post(api::link_ticket))
         .route("/api/accounts/jmap", post(api::add_jmap))
@@ -84,6 +87,7 @@ fn router(state: AppState) -> Router {
         .route("/api/devices/{token}", delete(api::remove_device))
         .route("/api/uploads", post(api::upload).layer(DefaultBodyLimit::max(api::UPLOAD_LIMIT)))
         .route("/hooks/gmail", post(api::gmail_hook))
+        .route("/hooks/outlook", post(api::outlook_hook))
         .route("/sync", get(sync::socket))
         .layer(header(X_CONTENT_TYPE_OPTIONS, "nosniff"))
         .layer(header(X_FRAME_OPTIONS, "DENY"))
@@ -183,6 +187,9 @@ async fn main() {
     }
     if !config.google_enabled() {
         tracing::warn!("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing: Gmail accounts can't be added.");
+    }
+    if !config.microsoft_enabled() {
+        tracing::warn!("MICROSOFT_CLIENT_ID or MICROSOFT_CLIENT_SECRET is missing: Outlook accounts can't be added.");
     }
     let db = PgPoolOptions::new().max_connections(20).connect(&config.database_url).await.expect("connect to Postgres");
     sqlx::migrate!().run(&db).await.expect("run migrations");
