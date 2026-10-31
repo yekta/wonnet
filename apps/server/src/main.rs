@@ -176,7 +176,10 @@ async fn main() {
         tracing::warn!("DEV_LOGIN is on: anyone can get a session. Never set it in production.");
     }
     if config.apns.is_none() {
-        tracing::warn!("APNS_KEY, APNS_KEY_ID or APNS_TEAM_ID is missing: nothing is pushed to phones.");
+        tracing::warn!("APNS_KEY, APNS_KEY_ID or APNS_TEAM_ID is missing: nothing is pushed to iPhones.");
+    }
+    if config.fcm.is_none() {
+        tracing::warn!("FCM_SERVICE_ACCOUNT is missing: nothing is pushed to Android phones.");
     }
     if !config.google_enabled() {
         tracing::warn!("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing: Gmail accounts can't be added.");
@@ -185,7 +188,7 @@ async fn main() {
     sqlx::migrate!().run(&db).await.expect("run migrations");
     let state = Arc::new(Inner {
         sealer: seal::Sealer::new(&config.secret_key),
-        pusher: push::Pusher::new(config.apns.as_ref()),
+        pusher: push::Pusher::new(&config),
         config,
         background: background_pool(&db),
         db,

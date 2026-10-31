@@ -5,6 +5,7 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use mail_protocol::api::Platform;
 use mail_protocol::{
     ACCOUNT_COLORS, Account, Address, Attachment, Draft, Identity, Label, Message, MessageState, Op, Preference,
     Provider, Recipients, SavedDraft, Unsubscribe,
@@ -1094,6 +1095,7 @@ pub async fn delete_uploads(db: &PgPool, user_id: Uuid, ids: &[Uuid]) -> sqlx::R
 
 pub struct NewDevice<'a> {
     pub user_id: Uuid,
+    pub platform: Platform,
     pub token: &'a str,
     pub topic: &'a str,
     pub sandbox: bool,
@@ -1104,12 +1106,13 @@ pub struct NewDevice<'a> {
 /// Keeps a device for push notifications. A token already kept moves to this user.
 pub async fn upsert_device(db: &PgPool, device: NewDevice<'_>) -> sqlx::Result<()> {
     sqlx::query(
-        "INSERT INTO devices (token, user_id, topic, sandbox, key) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, topic = excluded.topic,
-             sandbox = excluded.sandbox, key = excluded.key, created_at = now()",
+        "INSERT INTO devices (token, user_id, platform, topic, sandbox, key) VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform,
+             topic = excluded.topic, sandbox = excluded.sandbox, key = excluded.key, created_at = now()",
     )
     .bind(device.token)
     .bind(device.user_id)
+    .bind(device.platform.as_str())
     .bind(device.topic)
     .bind(device.sandbox)
     .bind(device.key)
@@ -1118,7 +1121,15 @@ pub async fn upsert_device(db: &PgPool, device: NewDevice<'_>) -> sqlx::Result<(
     Ok(())
 }
 
+/// APNs tokens are kept in lowercase; FCM tokens as they are.
 pub async fn delete_device(db: &PgPool, user_id: Uuid, token: &str) -> sqlx::Result<()> {
-    sqlx::query("DELETE FROM devices WHERE token = $1 AND user_id = $2").bind(token).bind(user_id).execute(db).await?;
+    sqlx::query(
+        "DELETE FROM devices WHERE user_id = $2
+             AND (token = $1 OR (platform = 'apns' AND token = lower($1)))",
+    )
+    .bind(token)
+    .bind(user_id)
+    .execute(db)
+    .await?;
     Ok(())
 }

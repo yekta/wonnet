@@ -1210,7 +1210,7 @@ public final class MailStore {
             do {
                 let start = try await bridge.call("sign_in_google", as: URLReply.self)
                 guard let url = URL(string: start.url) else { return }
-                let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "mailapp") { callback, error in
+                let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "wonnet") { callback, error in
                     Task { @MainActor in
                         guard let callback else {
                             if let error, (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
@@ -1231,7 +1231,7 @@ public final class MailStore {
         }
     }
 
-    /// Finishes a sign-in from the `mailapp://auth` URL the browser came back with.
+    /// Finishes a sign-in from the `wonnet://auth` URL the browser came back with.
     public func finishSignIn(_ url: URL) async {
         do {
             _ = try await bridge.call("finish_sign_in", ["url": url.absoluteString], as: Empty.self)

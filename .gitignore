@@ -16,3 +16,5 @@ node_modules/
 /apps/ios/Mail/Mail.entitlements
 /apps/ios/NotificationService/Info.plist
 /apps/ios/NotificationService/NotificationService.entitlements
+/apps/gpui/target
+/apps/gpui/build

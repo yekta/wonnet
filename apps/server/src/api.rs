@@ -8,7 +8,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use mail_protocol::Provider;
 use mail_protocol::api::{
-    DevLoginRequest, DeviceRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse, UploadResponse,
+    DevLoginRequest, DeviceRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, Platform, TokenResponse,
+    UploadResponse,
 };
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde_json::{Value, json};
@@ -128,11 +129,15 @@ pub async fn add_device(
 ) -> AppResult<Json<Value>> {
     use base64::Engine;
     let user_id = user(&state, &headers).await.inspect_err(|_| tracing::warn!("refused a device without a session"))?;
-    let token = request.token.to_ascii_lowercase();
-    if !push::valid_token(&token) || !push::valid_topic(&request.topic) {
+    let token = match request.platform {
+        Platform::Apns => request.token.to_ascii_lowercase(),
+        Platform::Fcm => request.token.clone(),
+    };
+    if !push::valid_token(request.platform, &token) || !push::valid_topic(&request.topic) {
         tracing::warn!(
-            "refused device {} ({}) for user {user_id}: not a token and bundle id",
+            "refused device {} ({}, {}) for user {user_id}: not a token and app id",
             push::short(&token),
+            request.platform.as_str(),
             request.topic
         );
         return Err(AppError::bad_request("That isn't a device this server can push to."));
@@ -143,10 +148,16 @@ pub async fn add_device(
         return Err(AppError::bad_request("The device's key should be 32 bytes."));
     }
     let key = state.sealer.seal(&key);
-    let device = NewDevice { user_id, token: &token, topic: &request.topic, sandbox: request.sandbox, key };
+    let sandbox = request.platform == Platform::Apns && request.sandbox;
+    let device = NewDevice { user_id, platform: request.platform, token: &token, topic: &request.topic, sandbox, key };
     db::upsert_device(&state.db, device).await?;
-    let environment = if request.sandbox { "sandbox" } else { "production" };
-    tracing::info!("registered device {} ({environment}, {}) for user {user_id}", push::short(&token), request.topic);
+    let environment = if sandbox { "sandbox" } else { "production" };
+    tracing::info!(
+        "registered device {} ({}, {environment}, {}) for user {user_id}",
+        push::short(&token),
+        request.platform.as_str(),
+        request.topic
+    );
     Ok(Json(json!({})))
 }
 
@@ -156,7 +167,7 @@ pub async fn remove_device(
     Path(token): Path<String>,
 ) -> AppResult<Json<Value>> {
     let user_id = user(&state, &headers).await?;
-    db::delete_device(&state.db, user_id, &token.to_ascii_lowercase()).await?;
+    db::delete_device(&state.db, user_id, &token).await?;
     tracing::info!("removed device {} for user {user_id}", push::short(&token));
     Ok(Json(json!({})))
 }

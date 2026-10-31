@@ -1615,6 +1615,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mail-core-android"
+version = "0.1.0"
+dependencies = [
+ "jni",
+ "libc",
+ "mail-core",
+ "rustls-platform-verifier",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "mail-parser"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

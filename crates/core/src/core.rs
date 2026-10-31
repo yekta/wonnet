@@ -529,8 +529,8 @@ impl Core {
             Command::Search { query, account } => return self.search(id, query, account),
             Command::Refresh => return self.refresh(id),
             Command::Settle => return self.settle(id),
-            Command::SetPushDevice { token, topic, sandbox, key } => {
-                return self.set_push_device(id, DeviceRequest { token, topic, sandbox, key });
+            Command::SetPushDevice { platform, token, topic, sandbox, key } => {
+                return self.set_push_device(id, DeviceRequest { platform, token, topic, sandbox, key });
             }
             Command::UnreadInInbox { threads } => {
                 self.store.unread_in_inbox(&threads).map(|threads| json!({ "threads": threads }))

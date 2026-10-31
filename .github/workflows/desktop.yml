@@ -1,0 +1,71 @@
+name: Desktop
+
+# Checks the Windows and Linux app and builds it, on pull requests that change what it is made of.
+# Main is built and published by release.yml.
+on:
+  pull_request:
+    paths:
+      - apps/gpui/**
+      - apps/macos/Resources/**
+      - packages/theme/**
+      - crates/**
+      - Cargo.toml
+      - .github/workflows/desktop.yml
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $(cat apps/gpui/scripts/linux-packages.txt)
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup component add rustfmt clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui
+          shared-key: desktop-linux
+          save-if: false
+
+      - name: Check
+        working-directory: apps/gpui
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup component add clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui
+          shared-key: desktop-windows
+          save-if: false
+
+      - name: Check
+        working-directory: apps/gpui
+        run: cargo clippy --all-targets -- -D warnings

@@ -23,8 +23,10 @@ pub struct Config {
     pub poll_interval: Duration,
     /// Runs the account workers. Off in tests that only look at the API.
     pub workers: bool,
-    /// Push notifications; without them nothing is pushed.
+    /// Push notifications to iPhones; without them nothing is pushed to them.
     pub apns: Option<ApnsConfig>,
+    /// Push notifications to Android phones; without them nothing is pushed to them.
+    pub fcm: Option<FcmConfig>,
     pub gravatar_url: String,
     /// A company's website, with `{domain}` for its domain.
     pub site_url: String,
@@ -47,6 +49,24 @@ impl ApnsConfig {
             team_id: optional("APNS_TEAM_ID")?,
             production_url: "https://api.push.apple.com".into(),
             sandbox_url: "https://api.sandbox.push.apple.com".into(),
+        })
+    }
+}
+
+pub struct FcmConfig {
+    /// The Firebase service account's JSON key.
+    pub service_account: String,
+    pub url: String,
+    /// Where access tokens come from, in place of the service account's `token_uri`.
+    pub token_url: Option<String>,
+}
+
+impl FcmConfig {
+    fn from_env() -> Option<Self> {
+        Some(Self {
+            service_account: optional("FCM_SERVICE_ACCOUNT")?,
+            url: "https://fcm.googleapis.com".into(),
+            token_url: None,
         })
     }
 }
@@ -84,6 +104,7 @@ impl Config {
             poll_interval: Duration::from_secs(number("POLL_SECONDS", 10)?),
             workers: true,
             apns: ApnsConfig::from_env(),
+            fcm: FcmConfig::from_env(),
             gravatar_url: crate::avatars::GRAVATAR_URL.to_string(),
             site_url: crate::avatars::SITE_URL.to_string(),
         })

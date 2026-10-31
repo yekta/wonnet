@@ -1,0 +1,54 @@
+name: Android
+
+# Builds the Android app and lints it, on pull requests that change what the app is made of. Main
+# is built, signed and published by release.yml.
+on:
+  pull_request:
+    paths:
+      - apps/android/**
+      - packages/theme/**
+      - crates/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/android.yml
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-linux-android x86_64-linux-android
+          cargo install cargo-ndk --locked
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+
+      # The release's cache: the core is built the same way there, and only main saves caches.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: android
+          save-if: false
+
+      - name: Lint and build
+        working-directory: apps/android
+        run: ./gradlew lint assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wonnet-android
+          path: apps/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7

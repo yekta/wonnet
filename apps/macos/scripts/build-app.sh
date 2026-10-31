@@ -64,7 +64,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleURLTypes</key>
     <array><dict>
         <key>CFBundleURLName</key><string>com.yekta.mail.auth</string>
-        <key>CFBundleURLSchemes</key><array><string>mailapp</string></array>
+        <key>CFBundleURLSchemes</key><array><string>wonnet</string></array>
     </dict></array>
     <key>NSUserActivityTypes</key><array><string>INSendMessageIntent</string></array>
     <key>NSContactsUsageDescription</key><string>Wonnet shows the names and photos you gave people in your contacts, and suggests them when you write.</string>
