@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- tokens.json's background, for the window until the app draws: the system reads it before any code runs. -->
+    <color name="launch_background">#f5f6f7</color>
+    <!-- The launcher icon's tile, as the Apple apps' icon has it. -->
+    <color name="icon_top">#ffffff</color>
+    <color name="icon_bottom">#e5e5e5</color>
+</resources>

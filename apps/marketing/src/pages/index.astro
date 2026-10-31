@@ -13,12 +13,21 @@ import GithubIcon from "@/components/github-icon.astro"
 import LinkButton from "@/components/link-button.astro"
 import { Demo } from "@/components/demo/demo"
 import {
+  ANDROID_URL,
   DESCRIPTION,
   DOWNLOAD_URL,
   GETTING_STARTED_URL,
   GITHUB_URL,
+  LINUX_URL,
   TAGLINE,
+  WINDOWS_URL,
 } from "@/lib/links"
+
+const otherDownloads = [
+  ["Windows", WINDOWS_URL],
+  ["Linux", LINUX_URL],
+  ["Android", ANDROID_URL],
+]
 
 const features = [
   {
@@ -44,7 +53,7 @@ const features = [
   {
     icon: BellIcon,
     title: "Sealed notifications",
-    text: "New mail reaches your iPhone sealed with a key only it holds, so Apple carries nothing it can read.",
+    text: "New mail reaches your phone sealed with a key only it holds, so Apple and Google carry nothing they can read.",
   },
   {
     icon: ShieldCheckIcon,
@@ -75,6 +84,22 @@ const features = [
       </div>
       <p class="mt-4 text-sm text-muted-foreground">
         Free and open source. For macOS 14 and later.
+      </p>
+      <p class="mt-1 text-sm text-muted-foreground">
+        Also for{" "}
+        {otherDownloads.map(([name, url], index) => (
+          <>
+            {index > 0 &&
+              (index === otherDownloads.length - 1 ? " and " : ", ")}
+            <a
+              href={url}
+              class="underline underline-offset-2 hover:text-foreground"
+            >
+              {name}
+            </a>
+          </>
+        ))}
+        .
       </p>
     </section>
 

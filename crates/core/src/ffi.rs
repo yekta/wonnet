@@ -4,19 +4,12 @@
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::sync::{Arc, OnceLock};
 
-use tokio::runtime::Runtime;
-
+use crate::Running;
 use crate::api::{Config, Envelope, Event};
-use crate::core::{self, Handle};
 
 /// Called on a background thread with one event as NUL-terminated JSON. The text is only valid
 /// during the call.
 pub type EventCallback = extern "C" fn(event_json: *const c_char, context: *mut c_void);
-
-struct Running {
-    _runtime: Runtime,
-    handle: Handle,
-}
 
 static RUNNING: OnceLock<Running> = OnceLock::new();
 
@@ -42,11 +35,6 @@ pub extern "C" fn mail_core_start(config_json: *const c_char, callback: EventCal
     let Some(config) = text(config_json).and_then(|json| serde_json::from_str::<Config>(&json).ok()) else {
         return false;
     };
-    init_logging();
-    let Ok(runtime) = tokio::runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build() else {
-        return false;
-    };
-
     let context = Context(context);
     let sink = Arc::new(move |event: Event| {
         let context = &context;
@@ -54,12 +42,8 @@ pub extern "C" fn mail_core_start(config_json: *const c_char, callback: EventCal
         let Ok(json) = CString::new(json) else { return };
         callback(json.as_ptr(), context.0);
     });
-    let started = {
-        let _guard = runtime.enter();
-        core::start(config, sink)
-    };
-    match started {
-        Ok(handle) => RUNNING.set(Running { _runtime: runtime, handle }).is_ok(),
+    match Running::start(config, sink) {
+        Ok(running) => RUNNING.set(running).is_ok(),
         Err(error) => {
             tracing::error!("the core couldn't start: {error:#}");
             false
@@ -73,12 +57,7 @@ pub extern "C" fn mail_core_command(command_json: *const c_char) {
     let Some(running) = RUNNING.get() else { return };
     let Some(json) = text(command_json) else { return };
     match serde_json::from_str::<Envelope>(&json) {
-        Ok(envelope) => running.handle.send(envelope.id, envelope.command),
+        Ok(envelope) => running.send(envelope.id, envelope.command),
         Err(error) => tracing::warn!("ignored a malformed command: {error}"),
     }
-}
-
-fn init_logging() {
-    let filter = std::env::var("MAIL_LOG").unwrap_or_else(|_| "warn,mail_core=info".to_string());
-    let _ = tracing_subscriber::fmt().with_env_filter(filter).with_writer(std::io::stderr).with_ansi(false).try_init();
 }

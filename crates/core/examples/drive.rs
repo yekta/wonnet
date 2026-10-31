@@ -6,7 +6,7 @@
 //!
 //!   jmap <url> <username> <password>     add a JMAP account (signs in)
 //!   dev <email>                          dev login
-//!   google, finish <mailapp://auth?...>  add a Gmail account
+//!   google, finish <wonnet://auth?...>  add a Gmail account
 //!   status | mailboxes | signout
 //!   threads [mailbox] [limit]            list a mailbox (inbox by default); rows get numbers
 //!   open <n> [images]                    open a thread

@@ -1,0 +1,73 @@
+# The desktop app for Windows and Linux. A workspace of its own, so that the server's builds
+# never compile GPUI.
+[workspace]
+
+[package]
+name = "wonnet"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "wonnet"
+path = "src/main.rs"
+
+[dependencies]
+mail-core = { path = "../../crates/core" }
+mail-protocol = { path = "../../crates/protocol", features = ["tls"] }
+gpui = { package = "gpui-pre", version = "=0.3.10" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", features = ["runtime_shaders", "wayland", "x11", "font-kit"] }
+gpui-component = "=0.8.1"
+gpui-kit-assets = "=0.8.1"
+anyhow = "1"
+async-channel = "2"
+base64 = "0.22"
+chrono = "0.4"
+dirs = "6"
+futures = "0.3"
+gpui-base = "=0.8.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+interprocess = "2"
+open = "5"
+ring = "0.17"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "blocking"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+wry = "0.57"
+raw-window-handle = "0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+notify-rust = "4"
+webkit2gtk = "=2.0.2"
+zbus = "5"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+self-replace = "1"
+webview2-com = "0.39"
+winreg = "0.55"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+windows = { version = "0.62", features = [
+    "Data_Xml_Dom",
+    "Foundation",
+    "Foundation_Collections",
+    "UI_Notifications",
+    "Win32_Foundation",
+    "Win32_Storage_EnhancedStorage",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+strip = true
+lto = "thin"

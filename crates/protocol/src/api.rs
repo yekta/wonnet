@@ -42,13 +42,37 @@ pub struct UploadResponse {
     pub id: String,
 }
 
-/// `POST /api/devices`: a device to push notifications to. `token` is its APNs token in hex,
-/// `topic` the app's bundle id, `sandbox` true for a development build, `key` the 32 bytes
-/// (base64) that what a notification says is sealed with (AES-256-GCM).
+/// `POST /api/devices`: a device to push notifications to. For `apns`, `token` is its APNs token
+/// in hex, `topic` the app's bundle id and `sandbox` true for a development build; for `fcm`,
+/// `token` is its FCM registration token and `topic` the app's package name. `key` is the 32
+/// bytes (base64) that what a notification says is sealed with (AES-256-GCM).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceRequest {
+    #[serde(default)]
+    pub platform: Platform,
     pub token: String,
     pub topic: String,
+    #[serde(default)]
     pub sandbox: bool,
     pub key: String,
+}
+
+/// Who carries a device's push notifications.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Platform {
+    /// Apple's push service, for the iOS app.
+    #[default]
+    Apns,
+    /// Firebase Cloud Messaging, for the Android app.
+    Fcm,
+}
+
+impl Platform {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Apns => "apns",
+            Self::Fcm => "fcm",
+        }
+    }
 }

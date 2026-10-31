@@ -1,14 +1,17 @@
 name: Release
 
-# On every push to main that touches the apps: signs and notarizes the Mac app and publishes it as
-# a GitHub release, and uploads the iOS app to TestFlight. The version is the one
-# scripts/release-version.sh gives the commit.
+# On every push to main that touches the apps: builds the Mac app (signed and notarized), the
+# Android app and the Windows and Linux app, publishes them together as a GitHub release, and
+# uploads the iOS app to TestFlight. The version is the one scripts/release-version.sh gives the
+# commit. The installed apps update themselves from the release's files, so their names stay.
 on:
   push:
     branches: [main]
     paths:
       - apps/macos/**
       - apps/ios/**
+      - apps/android/**
+      - apps/gpui/**
       - packages/apple/**
       - packages/theme/**
       - crates/**
@@ -89,13 +92,179 @@ jobs:
           xcrun stapler staple apps/macos/build/Wonnet.app
           spctl --assess --type execute --verbose apps/macos/build/Wonnet.app
 
+      - name: Zip the app
+        run: ditto -c -k --keepParent apps/macos/build/Wonnet.app Wonnet.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: Wonnet.zip
+          retention-days: 1
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        run: scripts/release-version.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-linux-android x86_64-linux-android
+          cargo install cargo-ndk --locked
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+
+      # Shared with the Android workflow's pull requests.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: android
+
+      - name: Build and sign the app
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          # An APK signed with any other key can't update the copies already installed.
+          [ -n "$ANDROID_KEYSTORE" ] || { echo "ANDROID_KEYSTORE is missing"; exit 1; }
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          echo "$ANDROID_KEYSTORE" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > apps/android/app/google-services.json
+          fi
+          apps/android/scripts/build-apk.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: apps/android/build/Wonnet.apk
+          retention-days: 1
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        run: scripts/release-version.sh
+
+      - name: Toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+
+      # Shared with the Desktop workflow's pull requests.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui
+          shared-key: desktop-windows
+
+      - name: Build the app
+        run: apps/gpui/scripts/build-windows.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: apps/gpui/build/Wonnet-windows-x86_64.zip
+          retention-days: 1
+
+  linux:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        run: scripts/release-version.sh
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $(cat apps/gpui/scripts/linux-packages.txt)
+          rustup update stable --no-self-update
+          rustup default stable
+
+      # Shared with the Desktop workflow's pull requests.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui
+          shared-key: desktop-linux-${{ matrix.arch }}
+
+      - name: Build the app
+        run: apps/gpui/scripts/build-linux.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-${{ matrix.arch }}
+          path: apps/gpui/build/Wonnet-linux-${{ matrix.arch }}.AppImage
+          retention-days: 1
+
+  # One release with every app that built. Without the Mac app there is none, as before.
+  publish:
+    needs: [macos, android, windows, linux]
+    if: ${{ !cancelled() && needs.macos.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        run: echo "VERSION=$(scripts/release-version.sh)" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+
+      # The Windows and Linux app installs only what this key signed. Its public half is in
+      # apps/gpui/src/updater.rs.
+      - name: Sign the desktop app
+        env:
+          DESKTOP_UPDATE_KEY: ${{ secrets.DESKTOP_UPDATE_KEY }}
+        run: |
+          [ -n "$DESKTOP_UPDATE_KEY" ] || { echo "DESKTOP_UPDATE_KEY is missing"; exit 1; }
+          echo "$DESKTOP_UPDATE_KEY" > "$RUNNER_TEMP/update-key.pem"
+          for file in release/Wonnet-windows-* release/Wonnet-linux-*; do
+            [ -f "$file" ] || continue
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/update-key.pem" -rawin -in "$file" -out "$file.sig"
+          done
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ditto -c -k --keepParent apps/macos/build/Wonnet.app Wonnet.zip
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$VERSION" \
-            --generate-notes Wonnet.zip
+            --generate-notes release/*
 
   ios:
     runs-on: macos-26

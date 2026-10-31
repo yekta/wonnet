@@ -85,6 +85,7 @@ pub fn config(base: &str) -> Config {
         poll_interval: std::time::Duration::from_millis(300),
         workers: false,
         apns: None,
+        fcm: None,
         gravatar_url: String::new(),
         site_url: String::new(),
     }
@@ -110,7 +111,7 @@ impl Server {
         let server_db = PgPoolOptions::new().max_connections(5).connect_lazy_with((*db.connect_options()).clone());
         let state = Arc::new(Inner {
             sealer: seal::Sealer::new(&config.secret_key),
-            pusher: crate::push::Pusher::new(config.apns.as_ref()),
+            pusher: crate::push::Pusher::new(&config),
             config,
             background: crate::background_pool(&db),
             db: server_db,
@@ -127,7 +128,7 @@ impl Server {
         Self { base, state, http, google }
     }
 
-    /// Goes through Google as `email` and returns the `mailapp://auth` URL the app is sent to.
+    /// Goes through Google as `email` and returns the `wonnet://auth` URL the app is sent to.
     pub async fn google_sign_in(&self, verifier: &str, ticket: Option<&str>, email: &str) -> Url {
         let challenge = crate::sha256_hex(verifier.as_bytes());
         let mut start = format!("{}/auth/google/start?challenge={challenge}&state=app-state", self.base);
@@ -356,7 +357,7 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
 
 /// The code and state in the URL the app is sent back to.
 pub fn code_of(url: &Url) -> String {
-    assert_eq!((url.scheme(), url.host_str()), ("mailapp", Some("auth")));
+    assert_eq!((url.scheme(), url.host_str()), ("wonnet", Some("auth")));
     let query: HashMap<String, String> = url.query_pairs().into_owned().collect();
     assert_eq!(query["state"], "app-state");
     query["code"].clone()

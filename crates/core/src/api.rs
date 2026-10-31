@@ -26,6 +26,7 @@
 
 use std::collections::BTreeMap;
 
+use mail_protocol::api::Platform;
 use mail_protocol::{Address, Attachment, Draft, Identity};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -177,7 +178,7 @@ pub enum Command {
     },
     /// Answers with the URL to open in a browser; the core keeps the secret behind it.
     SignInGoogle,
-    /// The `mailapp://auth?...` URL the browser came back with.
+    /// The `wonnet://auth?...` URL the browser came back with.
     FinishSignIn {
         url: String,
     },
@@ -379,13 +380,17 @@ pub enum Command {
     /// sends waiting for their time), or after 25 s. For an app that runs in the background a
     /// short while, as for a notification's action.
     Settle,
-    /// This device, to push new mail to: its APNs token in hex, the app's bundle id, whether it
-    /// is a development build, and the 32 bytes (base64) the notifications are sealed with. Kept,
+    /// This device, to push new mail to, as `DeviceRequest` describes it: who carries its
+    /// pushes (APNs when left out), its token, the app's bundle id or package name, whether it is
+    /// a development build, and the 32 bytes (base64) the notifications are sealed with. Kept,
     /// and given to the server at every sign-in. `{}` once the server has it (at once when signed
     /// out), or the server's error.
     SetPushDevice {
+        #[serde(default)]
+        platform: Platform,
         token: String,
         topic: String,
+        #[serde(default)]
         sandbox: bool,
         key: String,
     },

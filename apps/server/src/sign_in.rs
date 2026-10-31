@@ -1,5 +1,5 @@
 //! The browser's side of adding a Gmail account. The app opens `/auth/google/start`, Google
-//! asks for consent, and the browser is sent back to `mailapp://auth` with a one-time code that
+//! asks for consent, and the browser is sent back to `wonnet://auth` with a one-time code that
 //! only the app holding the secret behind the challenge can use. A link ticket in the start URL
 //! adds the account to the user who asked for the ticket.
 

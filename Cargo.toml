@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/server", "crates/protocol", "crates/core"]
+members = ["apps/server", "apps/android/core", "crates/protocol", "crates/core"]
 
 [workspace.package]
 version = "0.1.0"

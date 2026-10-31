@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The W of the app's icon, in the middle of the adaptive icon's safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="34" android:translateY="34" android:scaleX="1.6667" android:scaleY="1.6667">
+        <path
+            android:fillColor="#000000"
+            android:pathData="M17.47 14.216l2.71-10.727H24l-4.55 16.715h-3.843l-3.56-11.08-3.583 11.08H4.55L0 3.49h3.96l2.76 10.703L10.184 3.49h3.819l3.466 10.727z" />
+    </group>
+</vector>

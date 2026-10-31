@@ -47,7 +47,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         CFBundleURLTypes:
           - CFBundleURLName: com.yekta.mail.auth
-            CFBundleURLSchemes: [mailapp]
+            CFBundleURLSchemes: [wonnet]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         MailServerURL: $(MAIL_SERVER_URL)

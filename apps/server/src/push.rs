@@ -1,8 +1,8 @@
-//! Push notifications through APNs, for the iOS app, which loses the sync socket in the
-//! background. New inbox mail goes to each of the user's devices as an alert whose sender, subject
-//! and snippet are sealed with that device's key: its notification extension opens them, and
-//! Apple only carries ciphertext. When pushed mail is read or leaves the inbox, a silent push
-//! tells the devices to take its notification down. Both carry the inbox's unread count.
+//! Push notifications through APNs for the iOS app and FCM for the Android app, which lose the
+//! sync socket in the background. New inbox mail goes to each of the user's devices as an alert
+//! whose sender, subject and snippet are sealed with that device's key: the app opens them, and
+//! Apple and Google only carry ciphertext. When pushed mail is read or leaves the inbox, a silent
+//! push tells the devices to take its notification down. Both carry the inbox's unread count.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -12,17 +12,20 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+use mail_protocol::api::Platform;
 use ring::rand::SystemRandom;
-use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair};
+use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, RSA_PKCS1_SHA256, RsaKeyPair};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 use uuid::Uuid;
 
 use crate::AppState;
-use crate::config::ApnsConfig;
+use crate::config::{ApnsConfig, Config, FcmConfig};
 
 /// Apple takes a provider token for an hour and asks for a new one at most every 20 minutes.
 const TOKEN_LIFETIME: Duration = Duration::from_secs(40 * 60);
+const FCM_SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 /// How long changes gather before the devices hear of them.
 const SETTLE: Duration = Duration::from_secs(1);
 /// The most alerts one batch of new mail makes; the badge counts the rest.
@@ -32,6 +35,7 @@ pub const KEY_LEN: usize = 32;
 
 pub struct Pusher {
     apns: Option<Apns>,
+    fcm: Option<Fcm>,
     changed: Mutex<HashSet<Uuid>>,
     wake: Notify,
     /// The badge each user's devices were last given.
@@ -39,20 +43,38 @@ pub struct Pusher {
 }
 
 impl Pusher {
-    pub fn new(config: Option<&ApnsConfig>) -> Self {
-        let apns = config.and_then(|config| match Apns::new(config) {
-            Ok(apns) => Some(apns),
-            Err(error) => {
-                tracing::error!("push notifications are off: {error:#}");
-                None
-            }
+    pub fn new(config: &Config) -> Self {
+        let apns = config.apns.as_ref().and_then(|config| {
+            Apns::new(config).inspect_err(|error| tracing::error!("pushes to iPhones are off: {error:#}")).ok()
         });
-        Self { apns, changed: Default::default(), wake: Notify::new(), badges: Default::default() }
+        let fcm = config.fcm.as_ref().and_then(|config| {
+            Fcm::new(config).inspect_err(|error| tracing::error!("pushes to Android phones are off: {error:#}")).ok()
+        });
+        Self { apns, fcm, changed: Default::default(), wake: Notify::new(), badges: Default::default() }
+    }
+
+    fn on(&self) -> bool {
+        self.apns.is_some() || self.fcm.is_some()
+    }
+
+    fn reaches(&self, platform: Platform) -> bool {
+        match platform {
+            Platform::Apns => self.apns.is_some(),
+            Platform::Fcm => self.fcm.is_some(),
+        }
+    }
+
+    async fn send(&self, device: &Device, push: &Push) -> Sent {
+        match (device.platform(), &self.apns, &self.fcm) {
+            (Platform::Apns, Some(apns), _) => apns.send(device, push).await,
+            (Platform::Fcm, _, Some(fcm)) => fcm.send(device, push).await,
+            _ => Sent::Failed,
+        }
     }
 
     /// The user's mail changed: their devices may have something to hear.
     pub fn changed(&self, user_id: Uuid) {
-        if self.apns.is_none() {
+        if !self.on() {
             return;
         }
         self.changed.lock().unwrap().insert(user_id);
@@ -61,7 +83,7 @@ impl Pusher {
 }
 
 pub fn start(state: AppState) {
-    if state.pusher.apns.is_none() {
+    if !state.pusher.on() {
         return;
     }
     tokio::spawn(async move {
@@ -84,10 +106,20 @@ pub fn start(state: AppState) {
 
 #[derive(sqlx::FromRow)]
 struct Device {
+    platform: String,
     token: String,
     topic: String,
     sandbox: bool,
     key: Vec<u8>,
+}
+
+impl Device {
+    fn platform(&self) -> Platform {
+        match self.platform == Platform::Fcm.as_str() {
+            true => Platform::Fcm,
+            false => Platform::Apns,
+        }
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -123,12 +155,14 @@ const FRESH: &str = "WITH fresh AS (
     FROM fresh JOIN pushed ON pushed.message_id = fresh.id ORDER BY fresh.date DESC";
 
 async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
-    let Some(apns) = &state.pusher.apns else { return Ok(()) };
+    let pusher = &state.pusher;
     let db = &state.background;
-    let devices: Vec<Device> = sqlx::query_as("SELECT token, topic, sandbox, key FROM devices WHERE user_id = $1")
-        .bind(user_id)
-        .fetch_all(db)
-        .await?;
+    let mut devices: Vec<Device> =
+        sqlx::query_as("SELECT platform, token, topic, sandbox, key FROM devices WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(db)
+            .await?;
+    devices.retain(|device| pusher.reaches(device.platform()));
     if devices.is_empty() {
         state.pusher.badges.lock().unwrap().remove(&user_id);
         return Ok(());
@@ -171,12 +205,13 @@ async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
         }
         let mut sent = 0;
         for push in pushes {
-            match apns.send(&device, &push).await {
+            match pusher.send(&device, &push).await {
                 Sent::Ok => sent += 1,
                 Sent::Failed => {}
                 Sent::Gone => {
                     sqlx::query("DELETE FROM devices WHERE token = $1").bind(&device.token).execute(db).await?;
-                    tracing::warn!("forgot device {token} of user {user_id}: APNs no longer takes its token");
+                    let carrier = device.platform().as_str();
+                    tracing::warn!("forgot device {token} of user {user_id}: {carrier} no longer takes its token");
                     break;
                 }
             }
@@ -198,13 +233,13 @@ fn thread_key(account_id: Uuid, thread_id: &str) -> String {
     format!("{account_id}:{thread_id}")
 }
 
-struct Push {
-    /// Lets a newer push of the same message replace the notification.
-    collapse: Option<String>,
-    payload: Value,
+enum Push {
+    /// New mail; a newer push of the same message replaces its notification.
+    Alert { message: Uuid, sealed: String, badge: i64 },
+    /// Threads read or gone from the inbox, whose notifications come down.
+    Settle { sealed: String, badge: i64 },
 }
 
-/// New mail. Without the extension (or its key) it reads "New mail".
 fn alert(state: &AppState, key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Push {
     let from = mail_protocol::Address { name: mail.from_name.clone(), email: mail.from_email.clone() };
     let content = json!({
@@ -218,28 +253,11 @@ fn alert(state: &AppState, key: &[u8; KEY_LEN], mail: &Fresh, badge: i64) -> Pus
         "subject": mail.subject,
         "snippet": mail.snippet,
     });
-    let payload = json!({
-        "aps": {
-            "alert": { "title": "New mail" },
-            "sound": "default",
-            "badge": badge,
-            "mutable-content": 1,
-            "category": "message",
-        },
-        "sealed": seal(key, &content),
-    });
-    Push { collapse: Some(mail.id.to_string()), payload }
+    Push::Alert { message: mail.id, sealed: seal(key, &content), badge }
 }
 
-/// Takes down the notifications of threads that were read or left the inbox. An alert with no
-/// text, not a background push: iOS sets its badge even when the app was quit, and throttles
-/// background pushes or drops them.
 fn settle(key: &[u8; KEY_LEN], settled: &[String], badge: i64) -> Push {
-    let payload = json!({
-        "aps": { "content-available": 1, "badge": badge },
-        "sealed": seal(key, &json!({ "settled": settled })),
-    });
-    Push { collapse: None, payload }
+    Push::Settle { sealed: seal(key, &json!({ "settled": settled })), badge }
 }
 
 /// AES-256-GCM: the nonce, the ciphertext and the tag, in base64, as CryptoKit's sealed box.
@@ -270,7 +288,7 @@ struct Apns {
 
 impl Apns {
     fn new(config: &ApnsConfig) -> anyhow::Result<Self> {
-        let der = pem_body(&config.key)?;
+        let der = pem_body(&config.key).ok_or_else(|| anyhow::anyhow!("APNS_KEY isn't a .p8 file's contents"))?;
         let key = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &der, &SystemRandom::new())
             .map_err(|_| anyhow::anyhow!("APNS_KEY isn't a P-256 key in PKCS #8"))?;
         let http = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
@@ -302,6 +320,28 @@ impl Apns {
         token
     }
 
+    /// An alert reads "New mail" without the extension (or its key). A settle is an alert with no
+    /// text, not a background push: iOS sets its badge even when the app was quit, and throttles
+    /// background pushes or drops them.
+    fn payload(push: &Push) -> Value {
+        match push {
+            Push::Alert { sealed, badge, .. } => json!({
+                "aps": {
+                    "alert": { "title": "New mail" },
+                    "sound": "default",
+                    "badge": badge,
+                    "mutable-content": 1,
+                    "category": "message",
+                },
+                "sealed": sealed,
+            }),
+            Push::Settle { sealed, badge } => json!({
+                "aps": { "content-available": 1, "badge": badge },
+                "sealed": sealed,
+            }),
+        }
+    }
+
     async fn send(&self, device: &Device, push: &Push) -> Sent {
         let base = if device.sandbox { &self.sandbox_url } else { &self.production_url };
         let mut request = self
@@ -311,9 +351,9 @@ impl Apns {
             .header("apns-topic", &device.topic)
             .header("apns-push-type", "alert")
             .header("apns-priority", "10")
-            .json(&push.payload);
-        if let Some(collapse) = &push.collapse {
-            request = request.header("apns-collapse-id", collapse);
+            .json(&Self::payload(push));
+        if let Push::Alert { message, .. } = push {
+            request = request.header("apns-collapse-id", message.to_string());
         }
         let response = match request.send().await {
             Ok(response) => response,
@@ -350,23 +390,183 @@ impl Apns {
     }
 }
 
+/// A Firebase service account's JSON key.
+#[derive(Deserialize)]
+struct ServiceAccount {
+    project_id: String,
+    private_key_id: String,
+    private_key: String,
+    client_email: String,
+    token_uri: String,
+}
+
+struct Fcm {
+    key: RsaKeyPair,
+    key_id: String,
+    client_email: String,
+    /// The service account's `token_uri`, which the JWT is for.
+    audience: String,
+    token_url: String,
+    send_url: String,
+    http: reqwest::Client,
+    /// The access token and when to stop using it.
+    token: tokio::sync::Mutex<Option<(String, Instant)>>,
+}
+
+impl Fcm {
+    fn new(config: &FcmConfig) -> anyhow::Result<Self> {
+        let account: ServiceAccount = serde_json::from_str(&config.service_account)
+            .map_err(|error| anyhow::anyhow!("FCM_SERVICE_ACCOUNT isn't a service account's JSON key: {error}"))?;
+        let der = pem_body(&account.private_key)
+            .ok_or_else(|| anyhow::anyhow!("FCM_SERVICE_ACCOUNT's private key isn't PEM"))?;
+        let key = RsaKeyPair::from_pkcs8(&der)
+            .map_err(|_| anyhow::anyhow!("FCM_SERVICE_ACCOUNT's private key isn't an RSA key in PKCS #8"))?;
+        let http = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
+        Ok(Self {
+            key,
+            key_id: account.private_key_id,
+            client_email: account.client_email,
+            token_url: config.token_url.clone().unwrap_or_else(|| account.token_uri.clone()),
+            audience: account.token_uri,
+            send_url: format!("{}/v1/projects/{}/messages:send", config.url, account.project_id),
+            http,
+            token: Default::default(),
+        })
+    }
+
+    /// An OAuth access token, for a JWT signed with the service account's key, kept until shortly
+    /// before it expires.
+    async fn access_token(&self) -> anyhow::Result<String> {
+        let mut cached = self.token.lock().await;
+        if let Some((token, until)) = &*cached
+            && Instant::now() < *until
+        {
+            return Ok(token.clone());
+        }
+        let now = chrono::Utc::now().timestamp();
+        let header = json!({ "alg": "RS256", "typ": "JWT", "kid": self.key_id });
+        let claims = json!({
+            "iss": self.client_email,
+            "scope": FCM_SCOPE,
+            "aud": self.audience,
+            "iat": now,
+            "exp": now + 3600,
+        });
+        let unsigned =
+            format!("{}.{}", URL_SAFE_NO_PAD.encode(header.to_string()), URL_SAFE_NO_PAD.encode(claims.to_string()));
+        let mut signature = vec![0; self.key.public().modulus_len()];
+        self.key
+            .sign(&RSA_PKCS1_SHA256, &SystemRandom::new(), unsigned.as_bytes(), &mut signature)
+            .map_err(|_| anyhow::anyhow!("RSA couldn't sign"))?;
+        let assertion = format!("{unsigned}.{}", URL_SAFE_NO_PAD.encode(signature));
+        let form = [("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"), ("assertion", &assertion)];
+        let response: Value =
+            self.http.post(&self.token_url).form(&form).send().await?.error_for_status()?.json().await?;
+        let Some(token) = response["access_token"].as_str() else {
+            anyhow::bail!("Google answered without an access token");
+        };
+        let lifetime = response["expires_in"].as_u64().unwrap_or(3600);
+        let until = Instant::now() + Duration::from_secs(lifetime.saturating_sub(5 * 60));
+        *cached = Some((token.to_string(), until));
+        Ok(token.to_string())
+    }
+
+    /// Data only, all strings: the app opens `sealed` and posts the notification itself.
+    fn message(device: &Device, push: &Push) -> Value {
+        let (data, android) = match push {
+            Push::Alert { message, sealed, badge } => (
+                json!({ "kind": "alert", "sealed": sealed, "badge": badge.to_string() }),
+                json!({ "priority": "HIGH", "collapse_key": message.to_string() }),
+            ),
+            Push::Settle { sealed, badge } => (
+                json!({ "kind": "settle", "sealed": sealed, "badge": badge.to_string() }),
+                json!({ "priority": "NORMAL" }),
+            ),
+        };
+        json!({ "message": { "token": device.token, "data": data, "android": android } })
+    }
+
+    async fn send(&self, device: &Device, push: &Push) -> Sent {
+        let message = Self::message(device, push);
+        // A second try after FCM turned the access token down.
+        for _ in 0..2 {
+            let token = match self.access_token().await {
+                Ok(token) => token,
+                Err(error) => {
+                    tracing::warn!("FCM gave no access token: {error:#}");
+                    return Sent::Failed;
+                }
+            };
+            let response = match self.http.post(&self.send_url).bearer_auth(token).json(&message).send().await {
+                Ok(response) => response,
+                Err(error) => {
+                    tracing::warn!("FCM can't be reached: {error}");
+                    return Sent::Failed;
+                }
+            };
+            let status = response.status();
+            if status.is_success() {
+                return Sent::Ok;
+            }
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                *self.token.lock().await = None;
+                continue;
+            }
+            let body: Value = response.json().await.unwrap_or_default();
+            let error = &body["error"];
+            let code = error["details"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find_map(|detail| detail["errorCode"].as_str())
+                .or_else(|| error["status"].as_str())
+                .unwrap_or_default();
+            let text = error["message"].as_str().unwrap_or_default();
+            if fcm_token_gone(code, text) {
+                tracing::warn!("FCM ({}) refused device {}: {code} {text}", device.topic, short(&device.token));
+                return Sent::Gone;
+            }
+            tracing::warn!("FCM ({}) refused a push: {status} {code} {text}", device.topic);
+            return Sent::Failed;
+        }
+        tracing::warn!("FCM refused a fresh access token");
+        Sent::Failed
+    }
+}
+
+/// FCM's answer for a registration token it no longer takes.
+fn fcm_token_gone(code: &str, message: &str) -> bool {
+    match code {
+        "UNREGISTERED" | "SENDER_ID_MISMATCH" => true,
+        "INVALID_ARGUMENT" => message.to_ascii_lowercase().contains("registration token"),
+        _ => false,
+    }
+}
+
 /// The DER inside a PEM, which may come with its line breaks written as `\n`.
-fn pem_body(pem: &str) -> anyhow::Result<Vec<u8>> {
+fn pem_body(pem: &str) -> Option<Vec<u8>> {
     let body: String = pem
         .replace("\\n", "\n")
         .lines()
         .filter(|line| !line.starts_with("-----"))
         .flat_map(|line| line.chars().filter(|character| !character.is_whitespace()))
         .collect();
-    STANDARD.decode(body).map_err(|_| anyhow::anyhow!("APNS_KEY isn't a .p8 file's contents"))
+    STANDARD.decode(body).ok()
 }
 
-/// An APNs device token: hex.
-pub fn valid_token(token: &str) -> bool {
-    (32..=200).contains(&token.len()) && token.bytes().all(|byte| byte.is_ascii_hexdigit())
+/// An APNs token is hex, as it goes in APNs' path; an FCM registration token is base64url with
+/// colons.
+pub fn valid_token(platform: Platform, token: &str) -> bool {
+    match platform {
+        Platform::Apns => (32..=200).contains(&token.len()) && token.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        Platform::Fcm => {
+            (1..=4096).contains(&token.len())
+                && token.bytes().all(|byte| byte.is_ascii_alphanumeric() || b":_-".contains(&byte))
+        }
+    }
 }
 
-/// A bundle id.
+/// A bundle id or package name.
 pub fn valid_topic(topic: &str) -> bool {
     (1..=155).contains(&topic.len())
         && topic.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-')
@@ -384,9 +584,16 @@ mod tests {
     }
 
     #[test]
-    fn takes_only_hex_tokens_and_bundle_ids() {
-        assert!(valid_token(&"ab12".repeat(16)));
-        assert!(!valid_token("../../3/device"));
+    fn takes_only_tokens_each_service_makes_and_bundle_ids() {
+        assert!(valid_token(Platform::Apns, &"ab12".repeat(16)));
+        assert!(!valid_token(Platform::Apns, "../../3/device"));
+        let fcm = "dQw4w9WgXcQ:APA91bH-x_Yz0123456789abcdefABCDEF";
+        assert!(valid_token(Platform::Fcm, fcm));
+        assert!(!valid_token(Platform::Apns, fcm), "an FCM token isn't hex");
+        assert!(!valid_token(Platform::Fcm, ""));
+        assert!(!valid_token(Platform::Fcm, "abc/../../messages"));
+        assert!(!valid_token(Platform::Fcm, "abc def"));
+        assert!(!valid_token(Platform::Fcm, &"a".repeat(4097)));
         assert!(valid_topic("app.wonnet.ios"));
         assert!(!valid_topic("app/wonnet"));
     }
