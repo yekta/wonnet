@@ -357,6 +357,7 @@ impl Store {
             "reauth" => "Sign in again: remove the account and add it back".into(),
             "error" => "Can't reach the provider right now".into(),
             _ if account.provider == "gmail" => "Gmail".into(),
+            _ if account.provider == "outlook" => "Outlook".into(),
             _ => "JMAP".into(),
         }
     }
@@ -484,7 +485,11 @@ impl Store {
     }
 
     pub fn provider_name(&self, account: &AccountView) -> &'static str {
-        if account.provider == "gmail" { "Gmail" } else { "your provider" }
+        match account.provider.as_str() {
+            "gmail" => "Gmail",
+            "outlook" => "Outlook",
+            _ => "your provider",
+        }
     }
 
     pub fn own_signature(&self, account: &AccountView) -> String {

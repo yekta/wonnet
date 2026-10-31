@@ -1,6 +1,6 @@
-//! The first screen: add a mail account, which also signs in. Google opens in the browser, which
-//! comes back to the app with a `wonnet://` link; JMAP and the server to use are pages of their
-//! own. In the settings, the same ways to add an account.
+//! The first screen: add a mail account, which also signs in. Google and Microsoft open in the
+//! browser, which comes back to the app with a `wonnet://` link; JMAP and the server to use are
+//! pages of their own. In the settings, the same ways to add an account.
 
 use std::rc::Rc;
 
@@ -127,7 +127,9 @@ impl OnboardingView {
     fn choices(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let this = cx.entity();
         let google = self.store.clone();
-        let signing_in = self.store.read(cx).signing_in.is_some();
+        let microsoft = self.store.clone();
+        let signing_in = self.store.read(cx).signing_in.map(|(provider, _)| provider);
+        let waiting = "Finish signing in in your browser";
         div()
             .flex()
             .flex_col()
@@ -136,9 +138,17 @@ impl OnboardingView {
             .child(option(
                 "google",
                 "Continue with Google",
-                if signing_in { "Finish signing in in your browser" } else { "Gmail and Google Workspace" },
+                if signing_in == Some("google") { waiting } else { "Gmail and Google Workspace" },
                 ui::google_mark(20., cx).into_any_element(),
                 Rc::new(move |_, _, cx| google.update(cx, |store, cx| store.sign_in_with_google(cx))),
+                cx,
+            ))
+            .child(option(
+                "microsoft",
+                "Continue with Microsoft",
+                if signing_in == Some("microsoft") { waiting } else { "Outlook, Hotmail and Microsoft 365" },
+                ui::microsoft_mark(20., cx).into_any_element(),
+                Rc::new(move |_, _, cx| microsoft.update(cx, |store, cx| store.sign_in_with_microsoft(cx))),
                 cx,
             ))
             .child(option(

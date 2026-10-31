@@ -1077,10 +1077,15 @@ class MailStore(private val context: Context) {
 
     // Accounts
 
-    fun signInWithGoogle() {
+    fun signInWithGoogle() = signIn("sign_in_google")
+
+    fun signInWithMicrosoft() = signIn("sign_in_microsoft")
+
+    /** Opens the provider's sign-in in the browser, which comes back to `wonnet://auth`. */
+    private fun signIn(command: String) {
         scope.launch {
             try {
-                Platform.signIn(context, bridge.call("sign_in_google").string("url"))
+                Platform.signIn(context, bridge.call(command).string("url"))
             } catch (error: CoreError) {
                 show(error.message)
             }

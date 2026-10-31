@@ -26,7 +26,7 @@ import app.wonnet.theme.Tokens
 
 /**
  * The app's one screen. `--ez demo true` starts it on made-up mail that never connects; the
- * browser comes back here from a Google sign-in, and a notification's tap opens its thread.
+ * browser comes back here from a Google or Microsoft sign-in, and a notification's tap opens its thread.
  */
 class MainActivity : ComponentActivity() {
     private val store get() = App.store
