@@ -67,19 +67,20 @@ for library in "$LIB"/*.so*; do
 done
 patchelf --set-rpath '$ORIGIN/../..' "$HELPERS"/WebKit*
 patchelf --set-rpath '$ORIGIN/../../..' "$HELPERS/injected-bundle"/*.so "$MODULES"/*.so
-# WebKit looks for its helpers, and GIO for its modules, at paths compiled into them. Made
-# relative ("/usr" becomes "././", as Tauri does), they're found from AppRun's folder, usr.
+# WebKit looks for its helpers at a path compiled into it. Made relative ("/usr" becomes "././",
+# as Tauri does), they're found from AppRun's folder, usr. The build stops when a new WebKit no
+# longer has the path whole.
 sed -i "s|/usr/lib/$TRIPLE/webkit2gtk-4.1|././/lib/$TRIPLE/webkit2gtk-4.1|g" "$LIB/libwebkit2gtk-4.1.so.0"
-sed -i "s|/usr/lib/$TRIPLE/gio/modules|././/lib/$TRIPLE/gio/modules|g" "$LIB/libgio-2.0.so.0"
-# Stops the build when a new WebKit or GLib no longer has the path.
 grep -q "././/lib/$TRIPLE/webkit2gtk-4.1" "$LIB/libwebkit2gtk-4.1.so.0"
-grep -q "././/lib/$TRIPLE/gio/modules" "$LIB/libgio-2.0.so.0"
 chmod -R a+rX "$APPDIR"
 
-cat > "$APPDIR/AppRun" <<'APPRUN'
+# GIO's module folder is compiled into it too, split up on x86_64, so AppRun names it. The app
+# leaves it out of what it opens (platform::open).
+cat > "$APPDIR/AppRun" <<APPRUN
 #!/bin/sh
-cd "$(dirname "$(readlink -f "$0")")/usr" || exit 1
-exec ./bin/wonnet "$@"
+cd "\$(dirname "\$(readlink -f "\$0")")/usr" || exit 1
+export GIO_MODULE_DIR="\$PWD/lib/$TRIPLE/gio/modules"
+exec ./bin/wonnet "\$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 

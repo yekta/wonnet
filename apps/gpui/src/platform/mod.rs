@@ -19,7 +19,7 @@ pub fn print(html: &str) -> Result<(), String> {
         .replacen("</body>", "<script nonce=\"print\">window.onload = () => window.print();</script></body>", 1);
     let path = std::env::temp_dir().join(format!("wonnet-print-{}.html", std::process::id()));
     std::fs::write(&path, page).map_err(|error| format!("The page couldn't be printed: {error}"))?;
-    open::that_detached(&path).map_err(|error| format!("The page couldn't be printed: {error}"))
+    open(&path).map_err(|error| format!("The page couldn't be printed: {error}"))
 }
 
 /// The folder files going out with drafts are copied into until the core uploads them.
@@ -81,5 +81,30 @@ pub fn drag_window(window: &gpui::Window) {
 
 /// Opens a file in the app the system has for it.
 pub fn open_file(path: &str) -> Result<(), String> {
-    open::that_detached(path).map_err(|error| format!("{path} couldn't be opened: {error}"))
+    open(path).map_err(|error| format!("{path} couldn't be opened: {error}"))
+}
+
+/// Opens a link or a file in the app the system has for it, without the AppImage's GIO modules,
+/// which AppRun points the app's own GIO at.
+pub fn open(target: impl AsRef<std::ffi::OsStr>) -> std::io::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt as _;
+        use std::process::Stdio;
+
+        let mut failed = None;
+        for mut command in open::commands(target) {
+            command.env_remove("GIO_MODULE_DIR").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+            match command.process_group(0).spawn() {
+                Ok(mut child) => {
+                    std::thread::spawn(move || child.wait());
+                    return Ok(());
+                }
+                Err(error) => failed = Some(error),
+            }
+        }
+        Err(failed.unwrap_or_else(|| std::io::Error::other("nothing can open it")))
+    }
+    #[cfg(not(target_os = "linux"))]
+    open::that_detached(target)
 }

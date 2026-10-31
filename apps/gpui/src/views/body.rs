@@ -630,11 +630,11 @@ mod web {
                 if url.starts_with("about:") || url.starts_with("data:") {
                     return true;
                 }
-                let _ = open::that_detached(&url);
+                let _ = crate::platform::open(&url);
                 false
             })
             .with_new_window_req_handler(|url, _| {
-                let _ = open::that_detached(&url);
+                let _ = crate::platform::open(&url);
                 wry::NewWindowResponse::Deny
             })
     }
