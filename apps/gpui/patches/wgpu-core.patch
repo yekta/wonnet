@@ -1,0 +1,73 @@
+diff --git a/src/present.rs b/src/present.rs
+index c7e051b..0d14cb2 100644
+--- a/src/present.rs
++++ b/src/present.rs
+@@ -280,6 +280,13 @@ impl Surface {
+     }
+ 
+     pub fn present(&self) -> Result<Status, SurfaceError> {
++        self.present_with_damage(&[])
++    }
++
++    pub fn present_with_damage(
++        &self,
++        damage_rects: &[wgt::DamageRect],
++    ) -> Result<Status, SurfaceError> {
+         profiling::scope!("Surface::present");
+ 
+         let presentation = self.presentation.lock();
+@@ -295,12 +302,20 @@ impl Surface {
+             .ok_or(SurfaceError::Device(DeviceError::Lost))?;
+         drop(presentation);
+ 
+-        queue.present(self)
++        queue.present_with_damage(self, damage_rects)
+     }
+ }
+ 
+ impl Queue {
+     pub fn present(&self, surface: &Surface) -> Result<Status, SurfaceError> {
++        self.present_with_damage(surface, &[])
++    }
++
++    pub fn present_with_damage(
++        &self,
++        surface: &Surface,
++        damage_rects: &[wgt::DamageRect],
++    ) -> Result<Status, SurfaceError> {
+         profiling::scope!("Queue::present");
+ 
+         let texture = {
+@@ -353,7 +368,7 @@ impl Queue {
+                 // other present calls. Locking command indices prevents submits which must increment the
+                 // submission index, and by `write`ing prevents other present calls.
+                 let _command_indices = device.command_indices.write();
+-                unsafe { raw_queue.present(raw_surface, raw) }
++                unsafe { raw_queue.present(raw_surface, raw, damage_rects) }
+             }
+             _ => unreachable!(),
+         };
+@@ -472,6 +487,14 @@ impl Global {
+     }
+ 
+     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
++        self.surface_present_with_damage(surface_id, &[])
++    }
++
++    pub fn surface_present_with_damage(
++        &self,
++        surface_id: id::SurfaceId,
++        damage_rects: &[wgt::DamageRect],
++    ) -> Result<Status, SurfaceError> {
+         let surface = self.surfaces.get(surface_id);
+ 
+         #[cfg(feature = "trace")]
+@@ -481,7 +504,7 @@ impl Global {
+             }
+         }
+ 
+-        surface.present()
++        surface.present_with_damage(damage_rects)
+     }
+ 
+     pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
