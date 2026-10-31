@@ -12,9 +12,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(cd ../.. && pwd)"
 APP="build/Wonnet.app"
-# The App ID the iOS app shares with the Mac. It moves to app.wonnet.wonnet once installed copies
-# take updates under either name (AppUpdater.verify).
-BUNDLE_ID="app.wonnet.wonnettest"
+# The App ID the iOS app shares with the Mac.
+BUNDLE_ID="app.wonnet.wonnet"
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
 
 echo "▸ Building the core…"
