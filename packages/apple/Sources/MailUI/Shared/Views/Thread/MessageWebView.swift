@@ -25,11 +25,13 @@ final class WebViewPool {
                 body.style.transformOrigin = '0 0';
                 body.style.transform = 'scale(' + shown / wide + ')';
               }
-              function report() {
+              // Until its images are in, a page is shorter than it will be; a folded quote is not.
+              function report(event) {
                 var body = document.body;
                 if (body) { fit(body); }
                 var height = Math.ceil(body ? body.getBoundingClientRect().height : 0);
-                window.webkit.messageHandlers.height.postMessage(height);
+                var settled = document.readyState === 'complete' || (event && event.type === 'toggle');
+                window.webkit.messageHandlers.height.postMessage({ height: height, settled: !!settled });
               }
               if (document.body) { new ResizeObserver(report).observe(document.body); }
               document.addEventListener('toggle', report, true);
@@ -91,13 +93,15 @@ final class WebViewPool {
 /// Passes each page's height to the web view that shows it.
 private final class HeightReporter: NSObject, WKScriptMessageHandler {
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let height = message.body as? NSNumber, let view = message.webView as? MessageWKWebView else { return }
-        view.onHeight?(CGFloat(height.doubleValue))
+        guard let body = message.body as? [String: Any], let height = body["height"] as? NSNumber,
+              let view = message.webView as? MessageWKWebView else { return }
+        view.onHeight?(CGFloat(height.doubleValue), body["settled"] as? Bool ?? false)
     }
 }
 
 final class MessageWKWebView: WKWebView, WKNavigationDelegate {
-    var onHeight: ((CGFloat) -> Void)?
+    /// The page's height, and whether it is settled: its images in, or a quote folded.
+    var onHeight: ((CGFloat, Bool) -> Void)?
     var loaded: String?
     /// The page shown as its sender made it: the `dark` class the core put on its body taken off,
     /// and a paper card kept in the light scheme.
@@ -145,7 +149,8 @@ final class MessageWKWebView: WKWebView, WKNavigationDelegate {
 
 /// A message body, as tall as its page. It opens at the height the store kept for it, when
 /// it was last measured at this width, so the thread is laid out before the page is; else its
-/// placeholder stands in, about as tall, until the page says how tall it is.
+/// placeholder stands in, about as tall, until the page says how tall it is. It only grows
+/// until the page is settled, and only a settled height is kept.
 /// `original` shows a designed mail as its sender made it.
 struct MessageWebView: View {
     @Environment(MailStore.self) private var store
@@ -199,9 +204,10 @@ private struct WebRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> MessageWKWebView {
         let view = WebViewPool.shared.take(html)
-        view.onHeight = { [weak view] measured in
+        view.onHeight = { [weak view] measured, settled in
             DispatchQueue.main.async {
-                reported(view?.bounds.width ?? 0, measured)
+                if settled { reported(view?.bounds.width ?? 0, measured) }
+                guard settled || measured > (height ?? 0) else { return }
                 guard height.map({ abs($0 - measured) > 0.5 }) ?? true else { return }
                 height = max(measured, 20)
             }
@@ -229,9 +235,10 @@ private struct WebRepresentable: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MessageWKWebView {
         let view = WebViewPool.shared.take(html)
-        view.onHeight = { [weak view] measured in
+        view.onHeight = { [weak view] measured, settled in
             DispatchQueue.main.async {
-                reported(view?.bounds.width ?? 0, measured)
+                if settled { reported(view?.bounds.width ?? 0, measured) }
+                guard settled || measured > (height ?? 0) else { return }
                 guard height.map({ abs($0 - measured) > 0.5 }) ?? true else { return }
                 height = max(measured, 20)
             }

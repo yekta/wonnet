@@ -107,10 +107,16 @@ impl BodyView {
                     web::Said::Key(keystroke) => cx.update(|window, cx| {
                         window.dispatch_keystroke(keystroke, cx);
                     }),
-                    web::Said::Height(height) => this.update(cx, |this, cx| {
+                    web::Said::Height { height, settled } => this.update(cx, |this, cx| {
+                        let store = this.store.read(cx);
+                        let kept = store.body_height(&this.message.id, store.body_width).map(|kept| kept as f32);
                         let Some(page) = &mut this.web else { return };
                         // Said when the page is laid out, a new one too: it's scrolled again.
                         page.scrolled = None;
+                        if !settled && height <= page.height.or(kept).unwrap_or(0.) {
+                            return;
+                        }
+                        page.settled = settled;
                         page.height = Some(height.max(20.));
                         cx.notify();
                     }),
@@ -216,7 +222,7 @@ impl Render for BodyView {
                                     body.stale = false;
                                     body.want_snapshot(cx);
                                 }
-                                let Some(page) = &body.web else { return };
+                                let Some(page) = body.web.as_ref().filter(|page| page.settled) else { return };
                                 let Some(height) = page.height else { return };
                                 body.store.update(cx, |store, _| {
                                     store.note_body_height(&message_id, width as f64, height as f64)
@@ -263,7 +269,11 @@ mod web {
     /// it (the app's shortcuts work over a page too), a click that selected nothing, after which
     /// the keys go back to the app, that it looks different now, and a picture of it.
     pub enum Said {
-        Height(f32),
+        /// Settled: its images are in, or a quote was folded.
+        Height {
+            height: f32,
+            settled: bool,
+        },
         Wheel(f32),
         Key(Keystroke),
         Done,
@@ -344,11 +354,13 @@ mod web {
     body.style.width = wide + 'px'; body.style.transformOrigin = '0 0';
     body.style.transform = 'scale(' + shown / wide + ')';
   }
-  function report() {
+  // Until its images are in, a page is shorter than it will be; a folded quote is not.
+  function report(event) {
     var body = document.body;
     if (!body) { return; }
     fit(body);
-    window.ipc.postMessage('height:' + Math.ceil(body.getBoundingClientRect().height));
+    var settled = document.readyState === 'complete' || (event && event.type === 'toggle');
+    window.ipc.postMessage((settled ? 'settled:' : 'height:') + Math.ceil(body.getBoundingClientRect().height));
   }
   function drawn() { window.ipc.postMessage('drawn'); }
   window.wonnetDrawn = drawn;
@@ -358,7 +370,7 @@ mod web {
     report();
     drawn();
   });
-  document.addEventListener('toggle', function () { report(); drawn(); }, true);
+  document.addEventListener('toggle', function (event) { report(event); drawn(); }, true);
   document.addEventListener('load', drawn, true);
   window.addEventListener('load', function () { report(); drawn(); });
   window.addEventListener('resize', function () {
@@ -427,6 +439,9 @@ mod web {
     pub struct Page {
         pub view: WebView,
         pub height: Option<f32>,
+        /// The height was said once the page was settled: before, the body only grows and its
+        /// height isn't kept.
+        pub settled: bool,
         pub shown: Option<Bounds<Pixels>>,
         /// How far the page is scrolled, unknown since it was laid out.
         pub scrolled: Option<f32>,
@@ -484,6 +499,7 @@ mod web {
             Some(Self {
                 view,
                 height: None,
+                settled: false,
                 shown: None,
                 scrolled: None,
                 original: false,
@@ -501,6 +517,7 @@ mod web {
             let _ = self.view.set_background_color(background(dark));
             let _ = self.view.load_html(&themed(html, dark));
             self.scrolled = None;
+            self.settled = false;
             self.dark = dark;
             self.html = html.to_string();
         }
@@ -610,7 +627,9 @@ mod web {
             .with_ipc_handler(move |request| {
                 let body = request.body();
                 let message = if let Some(height) = body.strip_prefix("height:") {
-                    height.parse().ok().map(Said::Height)
+                    height.parse().ok().map(|height| Said::Height { height, settled: false })
+                } else if let Some(height) = body.strip_prefix("settled:") {
+                    height.parse().ok().map(|height| Said::Height { height, settled: true })
                 } else if let Some(delta) = body.strip_prefix("wheel:") {
                     delta.parse().ok().map(Said::Wheel)
                 } else if let Some(pressed) = body.strip_prefix("key:") {
