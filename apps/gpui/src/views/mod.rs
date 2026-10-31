@@ -654,6 +654,20 @@ impl MailWindow {
         overlays
     }
 
+    /// What covers the thread, which the system's web views keep out of.
+    #[cfg(not(target_os = "linux"))]
+    fn occlusion(&self, cx: &App) -> body::Occlusion {
+        let store = self.store.read(cx);
+        let all = self.chooser.is_some()
+            || self.gallery.is_some()
+            || store.confirmation.is_some()
+            || store.contact.is_some()
+            || store.sidebar_open
+            || ui::menu_open(cx);
+        let bottom = if store.toast.is_some() || self.updater.read(cx).banner_shown() { px(110.) } else { px(0.) };
+        body::Occlusion { all, bottom }
+    }
+
     /// A new version: the offer, the download as it goes, and the restart that finishes it.
     fn update_banner(&self, cx: &App) -> Option<gpui::AnyElement> {
         let updater = self.updater.read(cx);
@@ -876,17 +890,11 @@ impl Render for MailWindow {
             self.focus_search = false;
             self.search.update(cx, |search, cx| search.focus(window, cx));
         }
+        #[cfg(not(target_os = "linux"))]
+        cx.set_global(self.occlusion(cx));
         let store = self.store.read(cx);
-        let covered = self.chooser.is_some()
-            || self.gallery.is_some()
-            || store.confirmation.is_some()
-            || store.contact.is_some()
-            || store.sidebar_open
-            || ui::menu_open(cx);
-        let bottom = if store.toast.is_some() || self.updater.read(cx).banner_shown() { px(110.) } else { px(0.) };
         let hidden =
             self.compose.is_some() || store.settings.is_some() || store.conversation.is_none() || !store.signed_in;
-        cx.set_global(body::Occlusion { all: covered, bottom });
         if hidden {
             let thread = self.thread.clone();
             cx.defer(move |cx| thread.update(cx, |thread, cx| thread.hide_pages(cx)));

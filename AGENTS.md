@@ -37,11 +37,13 @@ a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't 
 - Android's push goes through Firebase, iOS's through APNs; both are sealed with the device's key.
   The APK must always be signed with the same key, or installed copies can no longer update. The
   desktop app installs only updates signed with `DESKTOP_UPDATE_KEY`, whose public half it holds.
-- The desktop app draws mail in the system's web view: WebView2 on Windows, WebKitGTK on Linux.
-  On Linux it runs on X11 (XWayland on a Wayland desktop), as WebKitGTK can only be laid into an
-  X11 window. The AppImage carries WebKitGTK 4.1 and GTK (`build-linux.sh`), so nothing needs
-  installing; what every desktop has (glibc, graphics drivers, X11, fonts, GnuTLS) it takes from
-  the system.
+- The desktop app draws mail with a web engine. On Windows it's WebView2, laid over the window.
+  On Linux it's WPE WebKit, which paints the page off the screen, on the CPU, and the app draws
+  what it paints like the rest of the window, on Wayland and X11 alike. Ubuntu packages no WPE,
+  so `scripts/build-wpe.sh` builds it into `apps/gpui/build/wpe` (an hour or more, once for each
+  version; CI caches it) and the AppImage carries it (`build-linux.sh`), so nothing needs
+  installing; what every desktop has (glibc, graphics drivers, fonts, GnuTLS) it takes from the
+  system.
 - The desktop app builds on GPUI and wgpu with patches of ours, so that Linux redraws and presents
   only what changed in a frame: `apps/gpui/patches` holds a `.patch` for each crate, and
   `scripts/patch-crates.sh` unpacks the crates with them into `patched/`, which
@@ -102,6 +104,7 @@ the three systems; on Linux it needs the packages `.github/workflows/desktop.yml
     cd apps/ios && xcodegen generate && open Mail.xcodeproj
     cd apps/android && ./gradlew installDebug    # the Android app, on a running emulator or phone
     adb shell am start -n app.wonnet.wonnet/app.wonnet.MainActivity --ez demo true  # Android with made-up mail
+    apps/gpui/scripts/build-wpe.sh                               # once on Linux, for the desktop app
     apps/gpui/scripts/patch-crates.sh && cargo run --manifest-path apps/gpui/Cargo.toml -- --demo  # the desktop app with made-up mail
 
 Checks (`cargo test` needs the compose services; the Stalwart test runs when `STALWART_URL` is set):
