@@ -108,6 +108,22 @@ fun GoogleMark(size: Float = 20f) {
     }
 }
 
+private val microsoftParts = listOf(
+    "M1 1H11V11H1Z" to Tokens.microsoftRed,
+    "M12 1H22V11H12Z" to Tokens.microsoftGreen,
+    "M1 12H11V22H1Z" to Tokens.microsoftBlue,
+    "M12 12H22V22H12Z" to Tokens.microsoftYellow,
+)
+
+/** Microsoft's four squares, as its sign-in buttons carry them. */
+@Composable
+fun MicrosoftMark(size: Float = 20f) {
+    val side = (size * SCALE).dp
+    Box(Modifier.size(side)) {
+        for ((d, color) in microsoftParts) VectorShape(d, 23f, color.color, Modifier.size(side))
+    }
+}
+
 /** A small pill: an address in a field, a file, a thread's label. `invalid` is an address that can't be sent to. */
 @Composable
 fun Chip(

@@ -76,7 +76,11 @@ fun MailStore.status(account: AccountView): String = when (account.status) {
     "syncing" -> "Syncing"
     "reauth" -> "Sign in again: remove the account and add it back"
     "error" -> "Can't reach the provider right now"
-    else -> if (account.provider == "gmail") "Gmail" else "JMAP"
+    else -> when (account.provider) {
+        "gmail" -> "Gmail"
+        "outlook" -> "Outlook"
+        else -> "JMAP"
+    }
 }
 
 /** The line under an account's name: its status, after its address when the name hides it. */
@@ -172,7 +176,11 @@ fun MailStore.saveSnippet(snippet: Snippet) {
 fun providedSignature(account: AccountView): String? = account.identities.firstOrNull()?.signature?.takeIf { it.isNotEmpty() }
 
 /** Who keeps the account's mail, as a sentence names them. */
-fun providerName(account: AccountView): String = if (account.provider == "gmail") "Gmail" else "your provider"
+fun providerName(account: AccountView): String = when (account.provider) {
+    "gmail" -> "Gmail"
+    "outlook" -> "Outlook"
+    else -> "your provider"
+}
 
 fun MailStore.ownSignature(account: AccountView): String = preferences["signature:${account.id}"]?.text ?: ""
 

@@ -41,6 +41,7 @@ import app.wonnet.ui.ActionButton
 import app.wonnet.ui.AppMark
 import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.GoogleMark
+import app.wonnet.ui.MicrosoftMark
 import app.wonnet.ui.InputField
 import app.wonnet.ui.Notice
 import app.wonnet.ui.OptionButton
@@ -58,7 +59,7 @@ fun Onboarding(store: MailStore) {
 }
 
 /**
- * The ways to add an account: Google, or a JMAP server on a page of its own. On the first screen
+ * The ways to add an account: Google, Microsoft, or a JMAP server on a page of its own. On the first screen
  * (`welcome`) the app's name stands over them and the server this app talks to can be changed
  * under them, on a page of its own too.
  */
@@ -80,6 +81,7 @@ fun AddAccountFlow(store: MailStore, welcome: Boolean = false) {
     val choices = @Composable {
         Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
             OptionButton("Continue with Google", "Gmail and Google Workspace", store::signInWithGoogle) { GoogleMark() }
+            OptionButton("Continue with Microsoft", "Outlook, Hotmail and Microsoft 365", store::signInWithMicrosoft) { MicrosoftMark() }
             OptionButton("Continue with JMAP", "Fastmail, Stalwart and others", { page = AddPage.Jmap }) { Icon(Symbol.Server, 20f, Tokens.foreground.color) }
         }
     }

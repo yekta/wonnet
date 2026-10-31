@@ -480,6 +480,21 @@ pub fn google_mark(side: f32, cx: &App) -> impl IntoElement + use<> {
     )
 }
 
+/// Microsoft's four squares.
+pub fn microsoft_mark(side: f32, cx: &App) -> impl IntoElement + use<> {
+    let parts = [
+        ("wonnet/microsoft-red.svg", MICROSOFT_RED),
+        ("wonnet/microsoft-green.svg", MICROSOFT_GREEN),
+        ("wonnet/microsoft-blue.svg", MICROSOFT_BLUE),
+        ("wonnet/microsoft-yellow.svg", MICROSOFT_YELLOW),
+    ];
+    div().relative().size(px(side)).children(
+        parts.map(|(path, color)| {
+            svg().path(path).absolute().top_0().left_0().size(px(side)).text_color(cx.color(color))
+        }),
+    )
+}
+
 /// Keys to press, one cap each.
 pub fn key_caps(caps: Vec<String>, cx: &App) -> impl IntoElement + use<> {
     div().flex().items_center().gap(px(space::XXS)).children(caps.into_iter().map(|cap| {
