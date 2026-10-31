@@ -15,6 +15,7 @@ cd "$(dirname "$0")/.."
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' ../../Cargo.toml | head -1)"
 
 echo "▸ Building Wonnet $VERSION for Linux $ARCH"
+scripts/patch-crates.sh
 cargo build --release
 
 APPDIR="build/AppDir"

@@ -18,3 +18,4 @@ node_modules/
 /apps/ios/NotificationService/NotificationService.entitlements
 /apps/gpui/target
 /apps/gpui/build
+/apps/gpui/patched

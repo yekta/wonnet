@@ -93,7 +93,7 @@ Xcode builds the core for the iOS app itself. Set your team under Signing to run
 ```sh
 rustup target add aarch64-linux-android x86_64-linux-android
 cd apps/android && ./gradlew installDebug     # on a running emulator or a phone
-cargo run --release --manifest-path apps/gpui/Cargo.toml   # Windows, Linux (and macOS, for development)
+apps/gpui/scripts/patch-crates.sh && cargo run --release --manifest-path apps/gpui/Cargo.toml   # Windows, Linux (and macOS, for development)
 ```
 
 Gradle builds the core for the Android app itself. `MAIL_SERVER_URL` set while building points the Android and desktop apps at another server too. Push to Android needs a Firebase project: put its `google-services.json` in `apps/android/app`.

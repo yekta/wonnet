@@ -1,0 +1,112 @@
+diff --git a/src/api/queue.rs b/src/api/queue.rs
+index 13b4a26..96955f2 100644
+--- a/src/api/queue.rs
++++ b/src/api/queue.rs
+@@ -379,6 +379,26 @@ impl Queue {
+         self.inner.present(&surface_texture.detail);
+     }
+ 
++    /// Schedule a surface texture to be presented on the owning surface, with
++    /// damage hints.
++    ///
++    /// `damage_rects` describes the regions that changed since the last
++    /// present. On backends that support incremental presentation (e.g.,
++    /// Vulkan with `VK_KHR_incremental_present`), these are forwarded to the
++    /// compositor so it can limit repainting to the affected area.
++    ///
++    /// An empty slice is equivalent to calling [`present`](Self::present):
++    /// the entire surface is considered damaged.
++    pub fn present_with_damage(
++        &self,
++        mut surface_texture: SurfaceTexture,
++        damage_rects: &[wgt::DamageRect],
++    ) {
++        surface_texture.presented = true;
++        self.inner
++            .present_with_damage(&surface_texture.detail, damage_rects);
++    }
++
+     /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the
+     /// callback provided called.
+     ///
+diff --git a/src/backend/webgpu.rs b/src/backend/webgpu.rs
+index 870e98a..807bc29 100644
+--- a/src/backend/webgpu.rs
++++ b/src/backend/webgpu.rs
+@@ -2879,6 +2879,14 @@ impl dispatch::QueueInterface for WebQueue {
+     fn present(&self, _detail: &dispatch::DispatchSurfaceOutputDetail) {
+         // Swapchain is presented automatically on the web.
+     }
++
++    fn present_with_damage(
++        &self,
++        _detail: &dispatch::DispatchSurfaceOutputDetail,
++        _damage_rects: &[wgt::DamageRect],
++    ) {
++        // Swapchain is presented automatically on the web.
++    }
+ }
+ impl Drop for WebQueue {
+     fn drop(&mut self) {
+diff --git a/src/backend/wgpu_core.rs b/src/backend/wgpu_core.rs
+index 0494b96..fbfee1c 100644
+--- a/src/backend/wgpu_core.rs
++++ b/src/backend/wgpu_core.rs
+@@ -2161,6 +2161,28 @@ impl dispatch::QueueInterface for CoreQueue {
+             }
+         }
+     }
++
++    fn present_with_damage(
++        &self,
++        detail: &dispatch::DispatchSurfaceOutputDetail,
++        damage_rects: &[wgt::DamageRect],
++    ) {
++        let detail = detail.as_core();
++        match self
++            .context
++            .0
++            .surface_present_with_damage(detail.surface_id, damage_rects)
++        {
++            Ok(_status) => (),
++            Err(err) => {
++                self.context.handle_error_nolabel(
++                    &self.error_sink,
++                    err,
++                    "Queue::present_with_damage",
++                );
++            }
++        }
++    }
+ }
+ 
+ impl Drop for CoreQueue {
+diff --git a/src/dispatch.rs b/src/dispatch.rs
+index c16675c..276c012 100644
+--- a/src/dispatch.rs
++++ b/src/dispatch.rs
+@@ -263,6 +263,11 @@ pub trait QueueInterface: CommonTraits {
+     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
+ 
+     fn present(&self, detail: &DispatchSurfaceOutputDetail);
++    fn present_with_damage(
++        &self,
++        detail: &DispatchSurfaceOutputDetail,
++        damage_rects: &[wgt::DamageRect],
++    );
+ }
+ 
+ pub trait ShaderModuleInterface: CommonTraits {
+diff --git a/src/lib.rs b/src/lib.rs
+index d0df7ef..7ae4813 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -278,7 +278,7 @@ pub use wgt::{
+     BlendState, BufferAddress, BufferBindingType, BufferSize, BufferTextureCopyInfo,
+     BufferTransition, BufferUsages, BufferUses, Color, ColorTargetState, ColorWrites,
+     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CooperativeMatrixProperties,
+-    CooperativeScalarType, CopyExternalImageDestInfo, CoreCounters, DepthBiasState,
++    CooperativeScalarType, CopyExternalImageDestInfo, CoreCounters, DamageRect, DepthBiasState,
+     DepthStencilState, DeviceLostReason, DeviceType, DisplayChromaticity, DisplayCoarseRange,
+     DisplayGamut, DisplayHdrInfo, DisplayHeadroom, DisplayLuminance, DownlevelCapabilities,
+     DownlevelFlags, DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,

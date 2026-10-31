@@ -42,6 +42,13 @@ a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't 
   X11 window. The AppImage carries WebKitGTK 4.1 and GTK (`build-linux.sh`), so nothing needs
   installing; what every desktop has (glibc, graphics drivers, X11, fonts, GnuTLS) it takes from
   the system.
+- The desktop app builds on GPUI and wgpu with patches of ours, so that Linux redraws and presents
+  only what changed in a frame: `apps/gpui/patches` holds a `.patch` for each crate, and
+  `scripts/patch-crates.sh` unpacks the crates with them into `patched/`, which
+  `[patch.crates-io]` points at. Run it before `cargo`; the scripts and CI do. To change a patch,
+  edit its crate in `patched/`, then run `scripts/patch-crates.sh --save`. Another GPUI or wgpu
+  needs the patches redone for its versions in `patches/crates`; the script refuses a patch that
+  `Cargo.lock` left unused.
 - Production is the `Wonnet` project on Unbind; a push to `main` deploys what it touches. When a
   deploy changes required variables, deploy the code first and change the variables after: Unbind
   restarts the service on every variable change.
@@ -95,7 +102,7 @@ the three systems; on Linux it needs the packages `.github/workflows/desktop.yml
     cd apps/ios && xcodegen generate && open Mail.xcodeproj
     cd apps/android && ./gradlew installDebug    # the Android app, on a running emulator or phone
     adb shell am start -n app.wonnet.wonnet/app.wonnet.MainActivity --ez demo true  # Android with made-up mail
-    cargo run --manifest-path apps/gpui/Cargo.toml -- --demo     # the desktop app with made-up mail
+    apps/gpui/scripts/patch-crates.sh && cargo run --manifest-path apps/gpui/Cargo.toml -- --demo  # the desktop app with made-up mail
 
 Checks (`cargo test` needs the compose services; the Stalwart test runs when `STALWART_URL` is set):
 
@@ -103,7 +110,7 @@ Checks (`cargo test` needs the compose services; the Stalwart test runs when `ST
     cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
     node packages/theme/build.mjs --check
     cd apps/marketing && pnpm check && pnpm build
-    cd apps/gpui && cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
+    cd apps/gpui && scripts/patch-crates.sh && cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
     cd apps/android && ./gradlew lint assembleDebug
 
 ## Commit Messages
