@@ -45,18 +45,19 @@ enum Platform {
     /// Where the core keeps its database.
     static let dataFolder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let folder = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.yekta.mail", isDirectory: true)
+        let folder = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.wonnet.wonnet", isDirectory: true)
         #if os(macOS)
-        adoptOldMacInstall(into: folder, base: base)
+        for old in ["app.wonnet.wonnettest", "com.yekta.mail.mac"] {
+            adoptOldMacInstall(old, into: folder, base: base)
+        }
         #endif
         return folder
     }()
 
     #if os(macOS)
-    /// The Mac app was `com.yekta.mail.mac` before it shared the iOS app's App ID: its mail,
-    /// session and settings move over, so nobody is signed out by the change.
-    private static func adoptOldMacInstall(into folder: URL, base: URL) {
-        let old = "com.yekta.mail.mac"
+    /// The Mac app was `com.yekta.mail.mac`, then `app.wonnet.wonnettest`: an older install's
+    /// mail, session and settings move over, so nobody is signed out by the change.
+    private static func adoptOldMacInstall(_ old: String, into folder: URL, base: URL) {
         let oldFolder = base.appendingPathComponent(old, isDirectory: true)
         guard Bundle.main.bundleIdentifier != old,
               !FileManager.default.fileExists(atPath: folder.path),

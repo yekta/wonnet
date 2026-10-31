@@ -12,7 +12,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(cd ../.. && pwd)"
 APP="build/Wonnet.app"
-# The iOS app's App ID, which has the Mac too.
+# The App ID the iOS app shares with the Mac. It moves to app.wonnet.wonnet once installed copies
+# take updates under either name (AppUpdater.verify).
 BUNDLE_ID="app.wonnet.wonnettest"
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
 
@@ -63,7 +64,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
     <key>CFBundleURLTypes</key>
     <array><dict>
-        <key>CFBundleURLName</key><string>com.yekta.mail.auth</string>
+        <key>CFBundleURLName</key><string>app.wonnet.wonnet.auth</string>
         <key>CFBundleURLSchemes</key><array><string>wonnet</string></array>
     </dict></array>
     <key>NSUserActivityTypes</key><array><string>INSendMessageIntent</string></array>

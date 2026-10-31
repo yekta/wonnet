@@ -192,13 +192,15 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         return (information as? [String: Any])?[kSecCodeInfoTeamIdentifier as String] as? String
     }
 
-    /// The new app has to be intact and meet this app's own requirement: the same identifier,
-    /// signed by the same developer.
+    /// The new app has to be intact, be Wonnet under its new or its old identifier, and be signed
+    /// by the same developer as this one.
     private static func verify(_ app: URL) throws {
         let notOurs = Failure(message: "The download isn’t signed by the app’s developer.")
-        guard let running = runningCode() else { throw notOurs }
+        guard let team = team(of: runningCode()) else { throw notOurs }
+        let rule = "anchor apple generic and certificate leaf[subject.OU] = \"\(team)\""
+            + " and (identifier \"app.wonnet.wonnet\" or identifier \"app.wonnet.wonnettest\")"
         var requirement: SecRequirement?
-        guard SecCodeCopyDesignatedRequirement(running, [], &requirement) == errSecSuccess, let requirement else { throw notOurs }
+        guard SecRequirementCreateWithString(rule as CFString, [], &requirement) == errSecSuccess, let requirement else { throw notOurs }
         var downloaded: SecStaticCode?
         guard SecStaticCodeCreateWithPath(app as CFURL, [], &downloaded) == errSecSuccess, let downloaded else { throw notOurs }
         let strict = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate)

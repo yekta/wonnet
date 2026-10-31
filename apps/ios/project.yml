@@ -1,7 +1,7 @@
 # The iOS app's Xcode project: `xcodegen` makes Mail.xcodeproj from this file.
 name: Mail
 options:
-  bundleIdPrefix: com.yekta.mail
+  bundleIdPrefix: app.wonnet
   deploymentTarget:
     iOS: "18.0"
 packages:
@@ -10,7 +10,7 @@ packages:
 settings:
   base:
     # The app's bundle id. The extension's and the app group's follow it; testflight.sh sets it.
-    APP_BUNDLE_ID: com.yekta.mail.ios
+    APP_BUNDLE_ID: app.wonnet.wonnet
     APP_GROUP: group.$(APP_BUNDLE_ID)
     # Which APNs the device's token is for: `production` in builds for TestFlight.
     APS_ENVIRONMENT: development
@@ -46,7 +46,7 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         CFBundleURLTypes:
-          - CFBundleURLName: com.yekta.mail.auth
+          - CFBundleURLName: app.wonnet.wonnet.auth
             CFBundleURLSchemes: [wonnet]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

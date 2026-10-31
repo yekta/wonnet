@@ -13,7 +13,7 @@ final class CoreBridge: @unchecked Sendable {
     /// Called on the main thread with each event that isn't an answer.
     var onEvent: ((CoreEvent) -> Void)?
 
-    private let decoding = DispatchQueue(label: "com.yekta.mail.events", qos: .userInitiated)
+    private let decoding = DispatchQueue(label: "app.wonnet.wonnet.events", qos: .userInitiated)
     private let lock = NSLock()
     private var nextID: UInt64 = 0
     /// What to do with each answer, on the decoding queue: whether it went well, and its value.
