@@ -41,11 +41,13 @@ private const val MEASURE = """
     body.style.transformOrigin = '0 0';
     body.style.transform = 'scale(' + shown / wide + ')';
   }
-  function report() {
+  // Until its images are in, a page is shorter than it will be; a folded quote is not.
+  function report(event) {
     var body = document.body;
     if (body) { fit(body); }
     var height = Math.ceil(body ? body.getBoundingClientRect().height : 0);
-    Wonnet.height(height);
+    var settled = document.readyState === 'complete' || (event && event.type === 'toggle');
+    Wonnet.height(height, !!settled);
   }
   if (document.body) { new ResizeObserver(report).observe(document.body); }
   document.addEventListener('toggle', report, true);
@@ -58,8 +60,9 @@ private const val MEASURE = """
 /**
  * A message body, as tall as its page. It opens at the height the store kept for it, when it was
  * last measured at this width, so the thread is laid out before the page is; else its placeholder
- * stands in, about as tall, until the page says how tall it is. Links open in the browser; the
- * page never navigates. `original` shows a designed mail as its sender made it.
+ * stands in, about as tall, until the page says how tall it is. It only grows until the page is
+ * settled, and only a settled height is kept. Links open in the browser; the page never
+ * navigates. `original` shows a designed mail as its sender made it.
  */
 @Composable
 fun MessageWebView(store: MailStore, message: String, html: String, shape: List<ShapeLine>, original: Boolean) {
@@ -74,8 +77,9 @@ fun MessageWebView(store: MailStore, message: String, html: String, shape: List<
                 factory = { context -> WebViewPool.take(context, page) },
                 modifier = Modifier.fillMaxWidth().let { modifier -> height?.let { modifier.height(it.dp) } ?: modifier.height(1.dp) }.alpha(if (height == null) 0f else 1f),
                 update = { view ->
-                    view.onHeight = { measured ->
-                        store.noteBodyHeight(message, width, measured)
+                    view.onHeight = onHeight@{ measured, settled ->
+                        if (settled) store.noteBodyHeight(message, width, measured)
+                        if (!settled && measured <= (height ?: 0.0)) return@onHeight
                         if (height?.let { abs(it - measured) > 0.5 } != false) height = maxOf(measured, 20.0)
                     }
                     view.show(page, original)
@@ -137,7 +141,8 @@ object WebViewPool {
 /** A web view that shows one message's page, tells its height and opens its links elsewhere. */
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 class MessagePage(context: Context) : WebView(context) {
-    var onHeight: ((Double) -> Unit)? = null
+    /** The page's height, and whether it is settled: its images in, or a quote folded. */
+    var onHeight: ((Double, Boolean) -> Unit)? = null
     var loaded: String? = null
         private set
     private var original = false
@@ -176,8 +181,8 @@ class MessagePage(context: Context) : WebView(context) {
     /** All the page can reach of the app: where it says how tall it is. */
     inner class Bridge {
         @JavascriptInterface
-        fun height(value: Double) {
-            main.post { onHeight?.invoke(value) }
+        fun height(value: Double, settled: Boolean) {
+            main.post { onHeight?.invoke(value, settled) }
         }
     }
 
