@@ -7,6 +7,7 @@
 //!   jmap <url> <username> <password>     add a JMAP account (signs in)
 //!   dev <email>                          dev login
 //!   google, finish <wonnet://auth?...>  add a Gmail account
+//!   microsoft, finish <...>             add an Outlook account
 //!   status | mailboxes | signout
 //!   threads [mailbox] [limit]            list a mailbox (inbox by default); rows get numbers
 //!   open <n> [images]                    open a thread
@@ -72,6 +73,7 @@ fn main() {
                 json!({ "type": "add_jmap_account", "url": words.get(1), "username": words.get(2), "password": words.get(3) })
             }
             "google" => json!({ "type": "sign_in_google" }),
+            "microsoft" => json!({ "type": "sign_in_microsoft" }),
             "finish" => json!({ "type": "finish_sign_in", "url": words.get(1) }),
             "threads" => json!({ "type": "threads", "mailbox": words.get(1).unwrap_or(&"inbox"),
                 "limit": words.get(2).and_then(|n| n.parse::<usize>().ok()).unwrap_or(20) }),

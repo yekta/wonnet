@@ -245,3 +245,27 @@ pub async fn gmail_hook(
     }
     StatusCode::NO_CONTENT
 }
+
+/// Graph checks the hook when a subscription is made by asking it to echo a token, then posts
+/// notices carrying the client state the account's subscription was given.
+pub async fn outlook_hook(
+    State(state): State<AppState>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+    body: Bytes,
+) -> Response {
+    if let Some(token) = query.get("validationToken") {
+        return (StatusCode::OK, [(CONTENT_TYPE, "text/plain")], token.clone()).into_response();
+    }
+    let Some(account_id) = query.get("account").and_then(|id| id.parse::<Uuid>().ok()) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let expected = sha256_hex(crate::providers::outlook::client_state(&state.config.secret_key, account_id).as_bytes());
+    let notices: Value = serde_json::from_slice(&body).unwrap_or_default();
+    let notices = notices["value"].as_array().cloned().unwrap_or_default();
+    let ours = |notice: &Value| sha256_hex(notice["clientState"].as_str().unwrap_or_default().as_bytes()) == expected;
+    if notices.is_empty() || !notices.iter().all(ours) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    crate::hub::notify_ops(&state.db, account_id).await;
+    StatusCode::ACCEPTED.into_response()
+}

@@ -90,7 +90,7 @@ pub struct SignIn {
     pub id: String,
     pub challenge: String,
     pub app_state: String,
-    pub google_verifier: String,
+    pub verifier: String,
     pub nonce: String,
     pub link_user_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
@@ -100,22 +100,22 @@ pub struct NewSignIn<'a> {
     pub id: &'a str,
     pub challenge: &'a str,
     pub app_state: &'a str,
-    pub google_verifier: &'a str,
+    pub verifier: &'a str,
     pub nonce: &'a str,
     pub link_user_id: Option<Uuid>,
 }
 
-const SIGN_IN_COLUMNS: &str = "id, challenge, app_state, google_verifier, nonce, link_user_id, user_id";
+const SIGN_IN_COLUMNS: &str = "id, challenge, app_state, verifier, nonce, link_user_id, user_id";
 
 pub async fn create_sign_in(db: &PgPool, sign_in: &NewSignIn<'_>) -> sqlx::Result<()> {
     sqlx::query(
-        "INSERT INTO sign_ins (id, challenge, app_state, google_verifier, nonce, link_user_id, expires_at)
+        "INSERT INTO sign_ins (id, challenge, app_state, verifier, nonce, link_user_id, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(sign_in.id)
     .bind(sign_in.challenge)
     .bind(sign_in.app_state)
-    .bind(sign_in.google_verifier)
+    .bind(sign_in.verifier)
     .bind(sign_in.nonce)
     .bind(sign_in.link_user_id)
     .bind(Utc::now() + SIGN_IN_LIFETIME)
@@ -255,6 +255,16 @@ pub async fn account_by_login(
     .bind(login)
     .fetch_optional(db)
     .await
+}
+
+/// Gives the account the credentials its provider renewed.
+pub async fn set_credentials(db: &PgPool, account_id: Uuid, credentials: &[u8]) -> sqlx::Result<()> {
+    sqlx::query("UPDATE accounts SET credentials = $2 WHERE id = $1 AND NOT deleted")
+        .bind(account_id)
+        .bind(credentials)
+        .execute(db)
+        .await?;
+    Ok(())
 }
 
 pub async fn gmail_accounts_by_address(db: &PgPool, address: &str) -> sqlx::Result<Vec<Uuid>> {

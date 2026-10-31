@@ -10,6 +10,11 @@ pub struct Config {
     pub google_authorize_url: String,
     pub google_token_url: String,
     pub gmail_api_url: String,
+    pub microsoft_client_id: String,
+    pub microsoft_client_secret: String,
+    pub microsoft_authorize_url: String,
+    pub microsoft_token_url: String,
+    pub graph_api_url: String,
     /// Seals provider credentials. Any text; the key is its SHA-256.
     pub secret_key: String,
     /// Lets anyone sign in as anyone. For tests and local work only.
@@ -96,6 +101,11 @@ impl Config {
             google_authorize_url: crate::google::AUTHORIZE_URL.to_string(),
             google_token_url: crate::google::TOKEN_URL.to_string(),
             gmail_api_url: crate::providers::gmail::API_URL.to_string(),
+            microsoft_client_id: optional("MICROSOFT_CLIENT_ID").unwrap_or_default(),
+            microsoft_client_secret: optional("MICROSOFT_CLIENT_SECRET").unwrap_or_default(),
+            microsoft_authorize_url: crate::microsoft::AUTHORIZE_URL.to_string(),
+            microsoft_token_url: crate::microsoft::TOKEN_URL.to_string(),
+            graph_api_url: crate::providers::outlook::API_URL.to_string(),
             secret_key: required("SECRET_KEY")?,
             dev_login: optional("DEV_LOGIN").is_some_and(|value| value == "1"),
             initial_sync_limit: number("INITIAL_SYNC_LIMIT", 2000)? as usize,
@@ -112,5 +122,9 @@ impl Config {
 
     pub fn google_enabled(&self) -> bool {
         !self.google_client_id.is_empty() && !self.google_client_secret.is_empty()
+    }
+
+    pub fn microsoft_enabled(&self) -> bool {
+        !self.microsoft_client_id.is_empty() && !self.microsoft_client_secret.is_empty()
     }
 }

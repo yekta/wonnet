@@ -1,6 +1,6 @@
-//! The server's real router on a fresh database per test. Google is played by a small server
-//! that answers the token endpoint and enough of Gmail's API; Stalwart, when STALWART_URL is set,
-//! is real.
+//! The server's real router on a fresh database per test. Google and Microsoft are played by a
+//! small server that answers their token endpoints, enough of Gmail's API and Graph's `/me`;
+//! Stalwart, when STALWART_URL is set, is real.
 
 mod attachments;
 mod avatars;
@@ -30,7 +30,7 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::db::{self, AccountRow, NewAccount};
-use crate::{AppState, Inner, google, router, seal};
+use crate::{AppState, Inner, google, microsoft, router, seal};
 
 const GOOGLE_CLIENT_ID: &str = "google-client";
 
@@ -58,6 +58,8 @@ struct FakeGoogle {
     listed: Vec<(String, Option<String>)>,
     /// How many message fetches Gmail refuses next.
     refused_fetches: usize,
+    /// The scopes Microsoft says it granted.
+    microsoft_scope: String,
 }
 
 /// What every message at the fake Gmail is: a note with a PDF attached.
@@ -77,6 +79,11 @@ pub fn config(base: &str) -> Config {
         google_authorize_url: google::AUTHORIZE_URL.into(),
         google_token_url: String::new(),
         gmail_api_url: String::new(),
+        microsoft_client_id: "microsoft-client".into(),
+        microsoft_client_secret: "microsoft-secret".into(),
+        microsoft_authorize_url: microsoft::AUTHORIZE_URL.into(),
+        microsoft_token_url: String::new(),
+        graph_api_url: String::new(),
         secret_key: "test-secret".into(),
         dev_login: true,
         initial_sync_limit: 200,
@@ -105,6 +112,8 @@ impl Server {
         let mut config = config(&base);
         config.google_token_url = format!("{google_base}/token");
         config.gmail_api_url = format!("{google_base}/gmail/v1/users/me");
+        config.microsoft_token_url = format!("{google_base}/microsoft/token");
+        config.graph_api_url = format!("{google_base}/graph");
         configure(&mut config);
         // A pool of the server's own: a test's pool keeps the connections it opened counted against
         // one limit shared by every test, and tests starting together would wait on each other.
@@ -149,6 +158,24 @@ impl Server {
         let response = self.http.get(callback).send().await.unwrap();
         assert!(response.status().is_redirection(), "{}", response.text().await.unwrap());
         Url::parse(response.headers()[LOCATION].to_str().unwrap()).unwrap()
+    }
+
+    /// Goes through Microsoft as `email`, granting `scope`, and answers where the browser is sent.
+    pub async fn microsoft_sign_in(&self, verifier: &str, email: &str, scope: &str) -> reqwest::Response {
+        let challenge = crate::sha256_hex(verifier.as_bytes());
+        let start = format!("{}/auth/microsoft/start?challenge={challenge}&state=app-state", self.base);
+        let response = self.http.get(&start).send().await.unwrap();
+        assert!(response.status().is_redirection(), "{}", response.text().await.unwrap());
+        let microsoft = Url::parse(response.headers()[LOCATION].to_str().unwrap()).unwrap();
+        let query: HashMap<String, String> = microsoft.query_pairs().into_owned().collect();
+        assert_eq!(query["scope"], microsoft::SCOPES);
+        assert_eq!(query["redirect_uri"], format!("{}/auth/microsoft/callback", self.base));
+        {
+            let mut fake = self.google.lock().unwrap();
+            (fake.email, fake.microsoft_scope) = (email.into(), scope.into());
+        }
+        let callback = format!("{}/auth/microsoft/callback?code=microsoft-code&state={}", self.base, query["state"]);
+        self.http.get(callback).send().await.unwrap()
     }
 
     pub async fn post(&self, path: &str, token: Option<&str>, body: Value) -> reqwest::Response {
@@ -314,6 +341,26 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
             { "sendAsEmail": "ann@unverified.com", "verificationStatus": "pending" },
         ]}))
     };
+    let microsoft = google.clone();
+    let microsoft_token = move |Form(form): Form<HashMap<String, String>>| {
+        let fake = microsoft.lock().unwrap();
+        let answer = match form.get("grant_type").map(String::as_str) {
+            Some("refresh_token") => {
+                json!({ "access_token": "access", "expires_in": 3600, "refresh_token": "microsoft-renewed" })
+            }
+            _ => json!({
+                "access_token": "access",
+                "refresh_token": format!("microsoft-{}", fake.email),
+                "scope": fake.microsoft_scope,
+            }),
+        };
+        async move { Json(answer) }
+    };
+    let graph_user = google.clone();
+    let me = move || {
+        let email = graph_user.lock().unwrap().email.clone();
+        async move { Json(json!({ "mail": null, "userPrincipalName": email })) }
+    };
     let token = move |Form(form): Form<HashMap<String, String>>| {
         let google = google.lock().unwrap();
         let answer = match form.get("grant_type").map(String::as_str) {
@@ -350,7 +397,9 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
     let app = Router::new()
         .nest("/gmail/v1/users/me", gmail)
         .route("/upload/gmail/v1/users/me/messages/send", post(send))
-        .route("/token", post(token));
+        .route("/token", post(token))
+        .route("/microsoft/token", post(microsoft_token))
+        .route("/graph/me", get(me));
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     base
 }

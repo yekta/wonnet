@@ -12,8 +12,8 @@ pub use ops::{MessageState, Op};
 pub use types::*;
 
 /// Bump when an old client or server could no longer understand the other.
-pub const PROTOCOL_VERSION: u32 = 2;
-/// Where the server sends the browser once a Google sign-in is done; the apps own this scheme.
+pub const PROTOCOL_VERSION: u32 = 3;
+/// Where the server sends the browser once a Google or Microsoft sign-in is done; the apps own this scheme.
 pub const APP_REDIRECT: &str = "wonnet://auth";
 /// How many messages one `Changes` batch holds at most.
 pub const BATCH_SIZE: usize = 500;

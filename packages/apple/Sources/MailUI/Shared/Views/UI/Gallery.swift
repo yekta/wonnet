@@ -61,12 +61,14 @@ struct GalleryView: View {
                             ActionButton(title: "Disabled", symbol: .plus) {}.disabled(true)
                         }
                         OptionButton(title: "Continue with Google", detail: "Gmail and Google Workspace", action: {}) { GoogleMark() }
+                        OptionButton(title: "Continue with Microsoft", detail: "Outlook, Hotmail and Microsoft 365", action: {}) { MicrosoftMark() }
                         OptionButton(title: "Continue with JMAP", detail: "Fastmail, Stalwart and others", action: {}) {
                             Image(.server, size: 20).foregroundStyle(Tokens.foreground.color)
                         }
                         HStack(spacing: Space.l) {
                             AppMark(size: 40)
                             GoogleMark(size: 24)
+                            MicrosoftMark(size: 24)
                         }
                         HStack(spacing: 0) {
                             IconButton(symbol: .archive, help: "Archive") {}

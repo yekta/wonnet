@@ -93,3 +93,68 @@ async fn the_gmail_hook_needs_its_token(db: PgPool) {
         server.http.post(format!("{}/hooks/gmail?token=hook-token", server.base)).json(&push).send().await.unwrap();
     assert_eq!(response.status(), 204);
 }
+
+const MICROSOFT_SCOPE: &str =
+    "openid email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.ReadWrite";
+
+#[sqlx::test]
+async fn adding_outlook_makes_the_user_and_hands_the_app_a_session(db: PgPool) {
+    let server = Server::start(db).await;
+    let response = server.microsoft_sign_in("verifier-1", "Ann@Outlook.com", MICROSOFT_SCOPE).await;
+    assert!(response.status().is_redirection());
+    let back = reqwest::Url::parse(response.headers()["location"].to_str().unwrap()).unwrap();
+    let code = code_of(&back);
+
+    let session = token_text(token(&server, &code, "verifier-1").await).await;
+    let user = server.user_of(&session).await.unwrap();
+    let account =
+        db::account_by_login(&server.state.db, Provider::Outlook, "ann@outlook.com", "").await.unwrap().unwrap();
+    assert_eq!(account.user_id, user);
+    let secret = server.state.sealer.open(&account.credentials).unwrap();
+    assert!(String::from_utf8(secret).unwrap().contains("microsoft-Ann@Outlook.com"));
+    assert!(!String::from_utf8_lossy(&account.credentials).contains("microsoft-Ann"));
+
+    assert_eq!(token(&server, &code, "verifier-1").await.status(), 400);
+    assert_eq!(token(&server, &code, "wrong").await.status(), 400);
+}
+
+#[sqlx::test]
+async fn outlook_without_mail_access_is_refused(db: PgPool) {
+    let server = Server::start(db).await;
+    let response = server.microsoft_sign_in("v", "ann@outlook.com", "openid email User.Read").await;
+    assert_eq!(response.status(), 400);
+    let account = db::account_by_login(&server.state.db, Provider::Outlook, "ann@outlook.com", "").await.unwrap();
+    assert!(account.is_none());
+}
+
+#[sqlx::test]
+async fn outlook_keeps_the_refresh_token_microsoft_renews(db: PgPool) {
+    let server = Server::start(db).await;
+    let response = server.microsoft_sign_in("v", "ann@outlook.com", MICROSOFT_SCOPE).await;
+    assert!(response.status().is_redirection());
+    let account =
+        db::account_by_login(&server.state.db, Provider::Outlook, "ann@outlook.com", "").await.unwrap().unwrap();
+
+    crate::providers::Connection::open(&server.state, &account).await.unwrap();
+    let account = db::account(&server.state.db, account.id).await.unwrap().unwrap();
+    let secret = String::from_utf8(server.state.sealer.open(&account.credentials).unwrap()).unwrap();
+    assert!(secret.contains("microsoft-renewed"), "{secret}");
+}
+
+#[sqlx::test]
+async fn the_outlook_hook_wants_the_accounts_client_state(db: PgPool) {
+    let server = Server::start(db).await;
+    let hook = format!("{}/hooks/outlook", server.base);
+    let validation = server.http.post(format!("{hook}?validationToken=echo%20me")).send().await.unwrap();
+    assert_eq!(validation.status(), 200);
+    assert_eq!(validation.text().await.unwrap(), "echo me");
+
+    let account = uuid::Uuid::new_v4();
+    let notice = |client_state: &str| json!({ "value": [{ "clientState": client_state, "changeType": "created" }] });
+    let right = crate::providers::outlook::client_state("test-secret", account);
+    let other = crate::providers::outlook::client_state("test-secret", uuid::Uuid::new_v4());
+    let post = |body: Value| server.http.post(format!("{hook}?account={account}")).json(&body).send();
+    assert_eq!(post(notice(&other)).await.unwrap().status(), 403);
+    assert_eq!(post(notice("")).await.unwrap().status(), 403);
+    assert_eq!(post(notice(&right)).await.unwrap().status(), 202);
+}

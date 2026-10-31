@@ -178,6 +178,7 @@ pub enum Command {
     },
     /// Answers with the URL to open in a browser; the core keeps the secret behind it.
     SignInGoogle,
+    SignInMicrosoft,
     /// The `wonnet://auth?...` URL the browser came back with.
     FinishSignIn {
         url: String,

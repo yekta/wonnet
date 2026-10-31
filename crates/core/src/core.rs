@@ -134,7 +134,7 @@ pub fn start(config: Config, sink: Sink) -> Result<Handle> {
         link: None,
         generation: 0,
         connection: "offline".into(),
-        google: None,
+        signing_in: None,
         next_request: 0,
         backlog: VecDeque::new(),
         pending: Touched::default(),
@@ -199,8 +199,8 @@ struct Core {
     link: Option<Link>,
     generation: u64,
     connection: String,
-    /// The secret and the state of the Google sign-in in progress.
-    google: Option<(String, String)>,
+    /// The secret and the state of the Google or Microsoft sign-in in progress.
+    signing_in: Option<(String, String)>,
     next_request: u64,
     backlog: VecDeque<Step>,
     /// What changed and the apps weren't told yet.
@@ -476,7 +476,8 @@ impl Core {
             Command::Boot => self.boot(),
             Command::SaveUi { ui } => self.save_ui(&ui),
             Command::SetServer { url } => self.set_server(&url),
-            Command::SignInGoogle => return self.sign_in_google(id),
+            Command::SignInGoogle => return self.sign_in(id, "google"),
+            Command::SignInMicrosoft => return self.sign_in(id, "microsoft"),
             Command::FinishSignIn { url } => return self.finish_sign_in(id, &url),
             Command::AddJmapAccount { url, username, password } => {
                 let request = JmapAccountRequest { url, username, password };
@@ -724,12 +725,13 @@ impl Core {
         Ok(())
     }
 
-    fn sign_in_google(&mut self, id: u64) -> Option<Result<Value>> {
+    fn sign_in(&mut self, id: u64, provider: &str) -> Option<Result<Value>> {
         let Some(server) = self.server() else { return Some(Err(anyhow!("Set the server first."))) };
         let (verifier, state) = (random_hex(), random_hex());
         let challenge = hex::encode(Sha256::digest(verifier.as_bytes()));
-        self.google = Some((verifier, state.clone()));
-        let start = format!("{}/auth/google/start?challenge={challenge}&state={state}", server.trim_end_matches('/'));
+        self.signing_in = Some((verifier, state.clone()));
+        let server_url = server.trim_end_matches('/');
+        let start = format!("{server_url}/auth/{provider}/start?challenge={challenge}&state={state}");
         let Some(token) = self.token() else {
             return Some(Ok(json!({ "url": start })));
         };
@@ -748,18 +750,18 @@ impl Core {
     fn finish_sign_in(&mut self, id: u64, url: &str) -> Option<Result<Value>> {
         let Ok(url) = reqwest::Url::parse(url) else { return Some(Err(anyhow!("That isn't a sign-in link."))) };
         let query: HashMap<String, String> = url.query_pairs().into_owned().collect();
-        let Some((verifier, state)) = self.google.clone() else {
+        let Some((verifier, state)) = self.signing_in.clone() else {
             return Some(Err(anyhow!("No sign-in is in progress. Start again.")));
         };
         if query.get("state") != Some(&state) {
             return Some(Err(anyhow!("This sign-in was started elsewhere. Start again.")));
         }
         if query.contains_key("error") {
-            self.google = None;
+            self.signing_in = None;
             return Some(Err(anyhow!("The sign-in was cancelled.")));
         }
         let Some(code) = query.get("code").cloned() else { return Some(Err(anyhow!("The sign-in link has no code."))) };
-        self.google = None;
+        self.signing_in = None;
         self.get_token(id, "/api/auth/exchange", json!(ExchangeRequest { code, verifier }))
     }
 

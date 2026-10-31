@@ -50,7 +50,7 @@ struct SettingsEntry: Identifiable, Hashable {
         SettingsEntry(id: "appearance", title: "Theme", section: .general, keywords: "appearance light dark system mode"),
         SettingsEntry(id: "updates", title: "Updates", section: .general, keywords: "version check for updates release about"),
         SettingsEntry(id: "server", title: "Server", section: .general, keywords: "connection connected offline sync"),
-        SettingsEntry(id: "accounts", title: "Accounts", section: .accounts, keywords: "add remove gmail jmap fastmail colour color notifications"),
+        SettingsEntry(id: "accounts", title: "Accounts", section: .accounts, keywords: "add remove gmail outlook microsoft hotmail jmap fastmail colour color notifications"),
         SettingsEntry(id: "signatures", title: "Signatures", section: .accounts, keywords: "sign off footer"),
         SettingsEntry(id: "sign-out", title: "Sign out", section: .accounts, keywords: "log out leave"),
         SettingsEntry(id: "split-inbox", title: "Split Inbox", section: .inbox, keywords: "important other newsletters notifications splits"),

@@ -1206,9 +1206,18 @@ public final class MailStore {
     // MARK: Accounts
 
     func signInWithGoogle() {
+        signIn("sign_in_google")
+    }
+
+    func signInWithMicrosoft() {
+        signIn("sign_in_microsoft")
+    }
+
+    /// Opens the provider's sign-in in a browser sheet that comes back to `wonnet://auth`.
+    private func signIn(_ command: String) {
         Task {
             do {
-                let start = try await bridge.call("sign_in_google", as: URLReply.self)
+                let start = try await bridge.call(command, as: URLReply.self)
                 guard let url = URL(string: start.url) else { return }
                 let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "wonnet") { callback, error in
                     Task { @MainActor in
@@ -1309,7 +1318,7 @@ public final class MailStore {
     }
 }
 
-/// Where the Google sign-in sheet is shown.
+/// Where the Google and Microsoft sign-in sheets are shown.
 final class SignInAnchor: NSObject, ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         #if os(macOS)

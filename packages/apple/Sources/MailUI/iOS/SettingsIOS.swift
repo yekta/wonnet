@@ -321,7 +321,7 @@ private struct SignatureSection: View {
     }
 }
 
-/// Gmail, or a JMAP server; it goes back once the account is in.
+/// Gmail, Outlook, or a JMAP server; it goes back once the account is in.
 private struct AddAccountPage: View {
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
