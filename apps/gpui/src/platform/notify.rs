@@ -247,7 +247,7 @@ mod windows {
     use super::{Answer, text};
     use crate::models::NewMailItem;
 
-    const APP_ID: &str = "app.wonnet";
+    const APP_ID: &str = "app.wonnet.wonnet";
     const GROUP: &str = "mail";
 
     /// Gives the process the app's id, and the Start menu its shortcut, off the window's thread.
