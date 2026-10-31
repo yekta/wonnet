@@ -11,6 +11,13 @@
   --color-muted: #f2f2f2;
   --color-muted-foreground: #6b6b6b;
   --color-border: #e6e6e6;
+  /* A menu's shadow, of the apps' size and colour. */
+  --shadow-popover: var(--shadow-md)
+    color-mix(
+      in srgb,
+      var(--shadow) calc(var(--opacity-shadow) * 100%),
+      transparent
+    );
 }
 
 @media (prefers-color-scheme: dark) {

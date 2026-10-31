@@ -8,26 +8,16 @@ import {
   ZapIcon,
 } from "lucide-react"
 import Layout from "@/layouts/main.astro"
-import AppleIcon from "@/components/apple-icon.astro"
 import GithubIcon from "@/components/github-icon.astro"
 import LinkButton from "@/components/link-button.astro"
 import { Demo } from "@/components/demo/demo"
+import { DownloadButton } from "@/components/download-button"
 import {
-  ANDROID_URL,
   DESCRIPTION,
-  DOWNLOAD_URL,
   GETTING_STARTED_URL,
   GITHUB_URL,
-  LINUX_URL,
   TAGLINE,
-  WINDOWS_URL,
 } from "@/lib/links"
-
-const otherDownloads = [
-  ["Windows", WINDOWS_URL],
-  ["Linux", LINUX_URL],
-  ["Android", ANDROID_URL],
-]
 
 const features = [
   {
@@ -72,35 +62,13 @@ const features = [
       <p class="mt-5 max-w-md text-lg text-pretty text-muted-foreground">
         {DESCRIPTION}
       </p>
-      <div class="mt-8 flex flex-wrap justify-center gap-3">
-        <LinkButton href={DOWNLOAD_URL} size="lg">
-          <AppleIcon />
-          Download for macOS
-        </LinkButton>
+      <DownloadButton client:load>
         <LinkButton href={GITHUB_URL} size="lg" variant="outline">
           <GithubIcon />
           View the source
         </LinkButton>
-      </div>
-      <p class="mt-4 text-sm text-muted-foreground">
-        Free and open source. For macOS 14 and later.
-      </p>
-      <p class="mt-1 text-sm text-muted-foreground">
-        Also for{" "}
-        {otherDownloads.map(([name, url], index) => (
-          <>
-            {index > 0 &&
-              (index === otherDownloads.length - 1 ? " and " : ", ")}
-            <a
-              href={url}
-              class="underline underline-offset-2 hover:text-foreground"
-            >
-              {name}
-            </a>
-          </>
-        ))}
-        .
-      </p>
+      </DownloadButton>
+      <p class="mt-4 text-sm text-muted-foreground">Free and open source.</p>
     </section>
 
     <section class="mx-auto mt-10 max-w-[1248px] px-3 sm:mt-14 sm:px-6">
