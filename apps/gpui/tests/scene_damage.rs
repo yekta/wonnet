@@ -117,6 +117,14 @@ fn a_rotated_sprite_damages_where_it_is_drawn() {
 }
 
 #[test]
+fn an_image_uploaded_into_a_reused_tile_is_damaged_where_drawn() {
+    let drawn = rect(20., 30., 200., 50.);
+    let mut uploaded = scene(&[quad(drawn, 0.5)], &[]);
+    uploaded.uploads.push(drawn);
+    assert_eq!(rects(SceneDamage::between(&scene(&[quad(drawn, 0.5)], &[]), &uploaded)), [drawn]);
+}
+
+#[test]
 fn union_covers_both() {
     assert_eq!(SceneDamage::Full.union(SceneDamage::Rects(vec![rect(0., 0., 1., 1.)])), SceneDamage::Full);
     assert_eq!(SceneDamage::Unchanged.union(SceneDamage::Unchanged), SceneDamage::Unchanged);
