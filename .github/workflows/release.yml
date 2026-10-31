@@ -196,7 +196,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
         with:
@@ -211,6 +211,16 @@ jobs:
           sudo apt-get install -y $(cat apps/gpui/scripts/linux-packages.txt)
           rustup update stable --no-self-update
           rustup default stable
+
+      # Shared with the Desktop workflow's pull requests. A new WPE takes a few hours to build.
+      - uses: actions/cache@v4
+        with:
+          path: apps/gpui/build/wpe
+          key: wpe-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/gpui/scripts/build-wpe.sh', 'apps/gpui/patches/wpewebkit.patch') }}
+
+      - name: WPE WebKit
+        timeout-minutes: 270
+        run: apps/gpui/scripts/build-wpe.sh
 
       # Shared with the Desktop workflow's pull requests.
       - uses: Swatinem/rust-cache@v2

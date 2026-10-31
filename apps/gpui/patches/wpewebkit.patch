@@ -1,0 +1,83 @@
+diff -ru a/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp b/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp
+--- a/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp
++++ b/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp
+@@ -27,6 +27,7 @@
+ #include "config.h"
+ #include "ProcessExecutablePath.h"
+ 
++#include <dlfcn.h>
+ #include <glib.h>
+ #include <wtf/FileSystem.h>
+ 
+@@ -42,8 +43,21 @@
+ }
+ #endif
+ 
++String helperDirectory()
++{
++    Dl_info info;
++    if (!dladdr(reinterpret_cast<void*>(&helperDirectory), &info) || !info.dli_fname)
++        return { };
++    String library = FileSystem::stringFromFileSystemRepresentation(info.dli_fname);
++    return FileSystem::pathByAppendingComponent(FileSystem::parentPath(library), "wpe-webkit-2.0"_s);
++}
++
+ static String findWebKitProcess(const ASCIILiteral processName)
+ {
++    String besideLibrary = FileSystem::pathByAppendingComponent(helperDirectory(), processName);
++    if (FileSystem::fileExists(besideLibrary))
++        return besideLibrary;
++
+ #if ENABLE(DEVELOPER_MODE)
+     static const char* execDirectory = g_getenv("WEBKIT_EXEC_PATH");
+     if (execDirectory) {
+diff -ru a/Source/WebKit/Shared/ProcessExecutablePath.h b/Source/WebKit/Shared/ProcessExecutablePath.h
+--- a/Source/WebKit/Shared/ProcessExecutablePath.h
++++ b/Source/WebKit/Shared/ProcessExecutablePath.h
+@@ -29,6 +29,7 @@
+ 
+ namespace WebKit {
+ 
++String helperDirectory();
+ String executablePathOfWebProcess();
+ String executablePathOfNetworkProcess();
+ #if ENABLE(GPU_PROCESS)
+diff -ru a/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp b/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
+--- a/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
++++ b/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
+@@ -27,6 +27,7 @@
+ #include "FrameInfoData.h"
+ #include "LegacyGlobalSettings.h"
+ #include "NetworkProcessMessages.h"
++#include "ProcessExecutablePath.h"
+ #include "TextChecker.h"
+ #include "TextCheckerState.h"
+ #include "WebAutomationSession.h"
+@@ -347,6 +348,10 @@
+     if (bundleDirectory && g_file_test(bundleDirectory, G_FILE_TEST_IS_DIR))
+         return bundleDirectory;
+ 
++    static CString besideLibrary = FileSystem::fileSystemRepresentation(FileSystem::pathByAppendingComponent(helperDirectory(), "injected-bundle/"_s));
++    if (g_file_test(besideLibrary.data(), G_FILE_TEST_IS_DIR))
++        return besideLibrary.data();
++
+     static const char* injectedBundlePath = PKGLIBDIR G_DIR_SEPARATOR_S "injected-bundle" G_DIR_SEPARATOR_S;
+     return injectedBundlePath;
+ }
+diff -ru a/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp b/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp
+--- a/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp
++++ b/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp
+@@ -215,10 +215,11 @@
+     auto height = wpe_buffer_get_height(buffer.get());
+ 
+     if (WPE_IS_BUFFER_DMA_BUF(buffer.get())) {
+-        auto* dmaBuffer = WPE_BUFFER_DMA_BUF(buffer.get());
+         SkAlphaType alphaType = kPremul_SkAlphaType;
+-        if (wpe_buffer_dma_buf_get_format(dmaBuffer) == DRM_FORMAT_XRGB8888)
++#if USE(LIBDRM)
++        if (wpe_buffer_dma_buf_get_format(WPE_BUFFER_DMA_BUF(buffer.get())) == DRM_FORMAT_XRGB8888)
+             alphaType = kOpaque_SkAlphaType;
++#endif
+         return SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, alphaType, SkColorSpace::MakeSRGB());
+     }
+ 

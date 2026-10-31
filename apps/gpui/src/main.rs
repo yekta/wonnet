@@ -14,6 +14,8 @@ mod theme;
 mod ui;
 mod updater;
 mod views;
+#[cfg(target_os = "linux")]
+mod wpe;
 
 use std::sync::Arc;
 
@@ -63,7 +65,7 @@ fn main() {
     }
     let local = LocalSettings::load(data.join("settings.json"));
 
-    application().with_assets(assets::Assets).run(move |cx: &mut App| {
+    gpui_platform::application().with_assets(assets::Assets).run(move |cx: &mut App| {
         gpui_component::init(cx);
         assets::load_fonts(cx);
         cx.set_global(Look::default());
@@ -80,16 +82,6 @@ fn main() {
         }
         cx.activate(true);
     });
-}
-
-/// On Linux the app runs on X11 (XWayland on a Wayland desktop): WebKitGTK's pages can only be
-/// laid into an X11 window.
-fn application() -> gpui::Application {
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("DISPLAY").is_some_and(|display| !display.is_empty()) {
-        return gpui_platform::linux(gpui::WindowingModes::X11);
-    }
-    gpui_platform::application()
 }
 
 fn window_options(cx: &App) -> WindowOptions {
