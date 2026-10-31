@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use super::{Batch, Reauth, Refused, Synced, one_line};
 use crate::db::{self, AccountRow, RemoteMessage};
-use crate::mime::{File, ListHeaders};
+use crate::mime::File;
 use crate::{AppState, mime};
 
 pub const API_URL: &str = "https://graph.microsoft.com/v1.0";
@@ -45,7 +45,7 @@ const FOLDERS: [(&str, &str); 9] = [
 ];
 const SELECT: &str = "id,conversationId,parentFolderId,from,sender,toRecipients,ccRecipients,bccRecipients,replyTo,\
     subject,bodyPreview,receivedDateTime,isRead,flag,categories,hasAttachments,internetMessageId,\
-    inferenceClassification,unsubscribeData";
+    inferenceClassification";
 /// Graph takes requests up to 4 MB, and sendMail takes the message in base64.
 const SEND_LIMIT: usize = 4 * 1024 * 1024 - 64 * 1024;
 /// How long a push subscription lasts; it is renewed daily. Graph allows mail ones under 7 days.
@@ -625,19 +625,6 @@ fn remote(message: &Value, labels: &HashMap<String, Uuid>, roles: &HashMap<Strin
     let mut normalized: Vec<String> = role.filter(|role| *role != ARCHIVE).map(String::from).into_iter().collect();
     let categories = message["categories"].as_array().into_iter().flatten().filter_map(Value::as_str);
     normalized.extend(categories.filter_map(|name| labels.get(name)).map(Uuid::to_string));
-    let list = ListHeaders {
-        unsubscribe: message["unsubscribeData"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .map(|url| url.trim().trim_start_matches('<').trim_end_matches('>').to_string())
-            .collect(),
-        unsubscribe_post: None,
-        list_id: None,
-        precedence: None,
-        auto_submitted: None,
-    };
     let date = message["receivedDateTime"]
         .as_str()
         .and_then(|date| chrono::DateTime::parse_from_rfc3339(date).ok())
@@ -667,8 +654,8 @@ fn remote(message: &Value, labels: &HashMap<String, Uuid>, roles: &HashMap<Strin
         message_id: message["internetMessageId"].as_str().map(String::from),
         in_reply_to: None,
         references: Vec::new(),
-        bulk: list.bulk() || message["inferenceClassification"] == "other",
-        unsubscribe: list.unsubscribe(),
+        bulk: message["inferenceClassification"] == "other",
+        unsubscribe: None,
     })
 }
 
@@ -707,18 +694,5 @@ mod tests {
         let archived = remote(&message("arc"), &labels, &roles).unwrap();
         assert_eq!(archived.labels, [work.to_string()]);
         assert!(remote(&message("out"), &labels, &roles).is_none());
-    }
-
-    #[test]
-    fn newsletters_are_bulk() {
-        let message = json!({
-            "id": "m", "inferenceClassification": "other",
-            "unsubscribeData": ["<mailto:leave@list.org>", "<https://list.org/leave>"],
-        });
-        let newsletter = remote(&message, &HashMap::new(), &HashMap::new()).unwrap();
-        assert!(newsletter.bulk);
-        let unsubscribe = newsletter.unsubscribe.unwrap();
-        assert_eq!(unsubscribe.url.as_deref(), Some("https://list.org/leave"));
-        assert_eq!(unsubscribe.mailto.as_deref(), Some("mailto:leave@list.org"));
     }
 }
