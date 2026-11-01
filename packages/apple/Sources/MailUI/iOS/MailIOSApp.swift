@@ -230,12 +230,14 @@ struct SearchScreen: View {
         }
         .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
         .safeAreaInset(edge: .top, spacing: 0) {
-            HeaderBar {
+            // Back sits where the mailbox's menu does; the field runs to the page's inset.
+            HStack(spacing: 0) {
                 IconButton(symbol: .arrowLeft, help: "Back", circled: false) { path.removeAll { $0 == .search } }
                 SearchField(placeholder: "Search", text: $query, style: .bar, submit: { store.search(query) }, clear: store.endSearch)
-            } trailing: {
-                EmptyView()
             }
+            .padding(.leading, Space.s)
+            .padding(.trailing, Space.l)
+            .frame(height: Theme.barHeight)
             .topBar()
         }
         .toolbar(.hidden, for: .navigationBar)
