@@ -35,9 +35,10 @@ extension ItemRow where Trailing == EmptyView {
     }
 }
 
-/// A row that goes somewhere: a mailbox in the sidebar, Settings. `selected` is where the app
-/// is. `count` is its unread, shown when above zero. Half of `Theme.rowGap` above and below
-/// keeps its face off the next row's while the hit areas touch. Without an `action` it is the
+/// A row that goes somewhere: a mailbox in the sidebar, Settings, a person's thread. `selected`
+/// is where the app is. `count` is its unread, shown when above zero. Half of `Theme.rowGap`
+/// above and below keeps its face off the next row's while the hit areas touch. `inset` is the
+/// space at both its ends, for words that line up with a page's. Without an `action` it is the
 /// face alone, for a list that takes the clicks itself and says when it is hovered.
 struct NavRow<Trailing: View>: View {
     let title: String
@@ -46,6 +47,7 @@ struct NavRow<Trailing: View>: View {
     var count = 0
     var selected = false
     var indent: CGFloat = 0
+    var inset: CGFloat?
     var verticalPadding: CGFloat = 0
     let action: (() -> Void)?
     @ViewBuilder var trailing: Trailing
@@ -61,7 +63,7 @@ struct NavRow<Trailing: View>: View {
     private var face: some View {
         Face(
             title: title, symbol: symbol, dot: dot, count: count, selected: selected, indent: indent,
-            verticalPadding: verticalPadding, trailing: trailing
+            inset: inset, verticalPadding: verticalPadding, trailing: trailing
         )
     }
 
@@ -72,20 +74,19 @@ struct NavRow<Trailing: View>: View {
         let count: Int
         let selected: Bool
         let indent: CGFloat
+        let inset: CGFloat?
         let verticalPadding: CGFloat
         let trailing: Trailing
         @Environment(\.hovered) private var hovered
+        @Environment(\.onCard) private var onCard
 
         var body: some View {
             HStack(spacing: Space.m) {
-                Group {
-                    if let dot {
-                        Circle().fill(dot).frame(width: 8, height: 8)
-                    } else if let symbol {
-                        Image(symbol, size: 15)
-                    }
+                if let dot {
+                    Circle().fill(dot).frame(width: 8, height: 8).frame(width: 18)
+                } else if let symbol {
+                    Image(symbol, size: 15).frame(width: 18)
                 }
-                .frame(width: 18)
                 Text(title).textStyle(selected && Platform.strongSelection ? .labelStrong : .label, color: Tokens.foreground.color).lineLimit(1).truncationMode(.middle)
                 Spacer()
                 if count > 0 {
@@ -94,19 +95,31 @@ struct NavRow<Trailing: View>: View {
                 trailing
             }
             .foregroundStyle(Tokens.foreground.color)
-            .padding(.leading, 18 + indent)
-            .padding(.trailing, Space.l)
+            .padding(.leading, (inset ?? 18) + indent)
+            .padding(.trailing, inset ?? Space.l)
             .frame(height: Theme.rowHeight * Platform.scale)
             .padding(.vertical, verticalPadding * Platform.scale)
-            .background(selected ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear)
+            .background(fill)
             .padding(.vertical, Theme.rowGap / 2)
             .contentShape(Rectangle())
+        }
+
+        private var fill: Color {
+            if selected { return (onCard ? Theme.cardAccentStronger : Tokens.backgroundAccentStronger).color }
+            if hovered { return (onCard ? Theme.cardAccent : Tokens.backgroundAccent).color }
+            return .clear
         }
     }
 }
 
 extension NavRow where Trailing == EmptyView {
-    init(title: String, symbol: Symbol? = nil, dot: Color? = nil, count: Int = 0, selected: Bool = false, indent: CGFloat = 0, action: (() -> Void)? = nil) {
-        self.init(title: title, symbol: symbol, dot: dot, count: count, selected: selected, indent: indent, action: action, trailing: { EmptyView() })
+    init(
+        title: String, symbol: Symbol? = nil, dot: Color? = nil, count: Int = 0, selected: Bool = false, indent: CGFloat = 0,
+        inset: CGFloat? = nil, action: (() -> Void)? = nil
+    ) {
+        self.init(
+            title: title, symbol: symbol, dot: dot, count: count, selected: selected, indent: indent, inset: inset, action: action,
+            trailing: { EmptyView() }
+        )
     }
 }

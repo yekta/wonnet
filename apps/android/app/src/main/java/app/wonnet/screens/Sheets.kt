@@ -3,12 +3,15 @@ package app.wonnet.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -16,7 +19,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.wonnet.core.Action
 import app.wonnet.core.Address
 import app.wonnet.core.Labeling
@@ -33,6 +35,7 @@ import app.wonnet.core.createLabel
 import app.wonnet.core.labels
 import app.wonnet.core.parseTime
 import app.wonnet.core.remindsInsteadOfSnoozing
+import app.wonnet.theme.Dims
 import app.wonnet.theme.Space
 import app.wonnet.theme.Symbol
 import app.wonnet.theme.Text
@@ -42,7 +45,9 @@ import app.wonnet.ui.ActionButton
 import app.wonnet.ui.Avatar
 import app.wonnet.ui.ChoiceList
 import app.wonnet.ui.ChoiceRow
-import app.wonnet.ui.FormSection
+import app.wonnet.ui.LocalOnCard
+import app.wonnet.ui.NavRow
+import app.wonnet.ui.SectionHeading
 import app.wonnet.ui.SearchField
 import app.wonnet.ui.Sheet
 import kotlinx.coroutines.delay
@@ -195,25 +200,28 @@ fun PersonView(store: MailStore, email: String, closeSheet: () -> Unit, openThre
     var person by remember { mutableStateOf<Person?>(null) }
     LaunchedEffect(email) { person = store.person(email) }
     val name = person?.name?.takeIf { it.isNotEmpty() } ?: email
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.l)) {
-        Avatar(person?.initials ?: email.take(1).uppercase(), email, 52f)
-        Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-            Text(name, TextStyle.Heading)
-            SelectionContainer { Text(email, TextStyle.Label, color = Tokens.mutedStrongerForeground.color) }
-        }
-        ActionButton("New message", symbol = Symbol.SquarePen) {
-            closeSheet()
-            store.write(Address(person?.name?.takeIf { it.isNotEmpty() }, email))
-        }
-        val threads = person?.threads ?: emptyList()
-        if (threads.isNotEmpty()) {
-            Column(Modifier.padding(top = Space.s)) {
-                FormSection("Recent") {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        for (row in threads) ChoiceRow(row.subject.ifEmpty { "(no subject)" }, detail = row.date) { openThread(row.id) }
-                    }
+    CompositionLocalProvider(LocalOnCard provides true) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                Avatar(person?.initials ?: email.take(1).uppercase(), email, 52f)
+                Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    Text(name, TextStyle.Heading)
+                    SelectionContainer { Text(email, TextStyle.Label, color = Tokens.mutedStrongerForeground.color) }
+                }
+                ActionButton("New message", symbol = Symbol.SquarePen) {
+                    closeSheet()
+                    store.write(Address(person?.name?.takeIf { it.isNotEmpty() }, email))
                 }
             }
+            val threads = person?.threads ?: emptyList()
+            if (threads.isEmpty()) return@Column
+            SectionHeading("Recent", Modifier.padding(start = Space.xl, end = Space.xl, top = Space.xxs, bottom = Space.m - Dims.rowGap / 2))
+            for (row in threads) {
+                NavRow(row.subject.ifEmpty { "(no subject)" }, inset = Space.xl, onClick = { openThread(row.id) }) {
+                    Text(row.date, TextStyle.Caption)
+                }
+            }
+            Spacer(Modifier.height(Space.xl))
         }
     }
 }

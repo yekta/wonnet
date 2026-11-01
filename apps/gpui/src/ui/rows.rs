@@ -33,8 +33,9 @@ pub enum Lead {
     Avatar(Address),
 }
 
-/// A row that goes somewhere: a mailbox in the sidebar, Settings. `selected` is where the app
-/// is; `count` its unread, shown when above zero.
+/// A row that goes somewhere: a mailbox in the sidebar, Settings, a thread with someone.
+/// `selected` is where the app is; `count` its unread, shown when above zero. `inset` puts its
+/// text that far from both sides, for a row under a page's padded heading.
 #[derive(IntoElement)]
 pub struct NavRow {
     id: SharedString,
@@ -44,6 +45,9 @@ pub struct NavRow {
     selected: bool,
     indent: f32,
     vertical: f32,
+    inset: Option<f32>,
+    detail: Option<SharedString>,
+    on_card: bool,
     trailing: Vec<AnyElement>,
     on_click: Option<OnClick>,
     menu: Option<RowMenu>,
@@ -82,6 +86,9 @@ impl NavRow {
             selected: false,
             indent: 0.,
             vertical: 0.,
+            inset: None,
+            detail: None,
+            on_card: false,
             trailing: Vec::new(),
             on_click: None,
             menu: None,
@@ -119,6 +126,23 @@ impl NavRow {
         self
     }
 
+    pub fn inset(mut self, inset: f32) -> Self {
+        self.inset = Some(inset);
+        self
+    }
+
+    /// A word at the end, like a date.
+    pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    /// On a card it hovers in the card's accent.
+    pub fn on_card(mut self) -> Self {
+        self.on_card = true;
+        self
+    }
+
     pub fn trailing(mut self, element: impl IntoElement) -> Self {
         self.trailing.push(element.into_any_element());
         self
@@ -148,10 +172,15 @@ impl NavRow {
 impl RenderOnce for NavRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let fill = if self.selected { Some(cx.color(BACKGROUND_ACCENT_STRONGER)) } else { None };
+        let hover = cx.color(if self.on_card { CARD_ACCENT } else { BACKGROUND_ACCENT });
         let lead = match &self.lead {
-            Lead::Dot(color) => div().size(px(8.)).rounded_full().bg(cx.color(*color)).into_any_element(),
-            Lead::Symbol(symbol) => icon(*symbol, 15.).into_any_element(),
-            _ => div().into_any_element(),
+            Lead::Dot(color) => Some(div().size(px(8.)).rounded_full().bg(cx.color(*color)).into_any_element()),
+            Lead::Symbol(symbol) => Some(icon(*symbol, 15.).into_any_element()),
+            _ => None,
+        };
+        let (leading, trailing) = match self.inset {
+            Some(inset) => (inset, inset),
+            None => (18., space::L),
         };
         let on_click = self.on_click.clone();
         let face = div()
@@ -159,14 +188,15 @@ impl RenderOnce for NavRow {
             .items_center()
             .gap(px(space::M))
             .h(px(size::ROW + self.vertical * 2.))
-            .pl(px(18. + self.indent))
-            .pr(px(space::L))
+            .pl(px(leading + self.indent))
+            .pr(px(trailing))
             .text_color(cx.color(FOREGROUND))
             .when_some(fill, |face, fill| face.bg(fill))
-            .when(!self.selected, |face| face.hover(|face| face.bg(cx.color(BACKGROUND_ACCENT))))
-            .child(div().w(px(18.)).flex().justify_center().child(lead))
+            .when(!self.selected, |face| face.hover(|face| face.bg(hover)))
+            .when_some(lead, |face, lead| face.child(div().w(px(18.)).flex().justify_center().child(lead)))
             .child(line_in(self.title.clone(), TextStyle::Label, FOREGROUND, cx).flex_1())
             .when(self.count > 0, |face| face.child(line(self.count.to_string(), TextStyle::Caption, cx).flex_none()))
+            .when_some(self.detail.clone(), |face, detail| face.child(line(detail, TextStyle::Caption, cx).flex_none()))
             .children(self.trailing);
         let row = div()
             .id(self.id.clone())

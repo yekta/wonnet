@@ -39,6 +39,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import app.wonnet.theme.ControlSize
 import app.wonnet.theme.Dims
 import app.wonnet.theme.LocalDark
 import app.wonnet.theme.Radius
@@ -57,7 +58,8 @@ val LocalSheetOverlay = compositionLocalOf<@Composable BoxScope.() -> Unit> { {}
 /**
  * What every sheet is made of: a bar with its title and a way to close it, and its content, over
  * the whole screen. The close is an X at the bar's start, or a word such as Cancel; `trailing`
- * is what the sheet is for, at the bar's end. The back gesture closes it too.
+ * is what the sheet is for, at the bar's end. The close's face is as far from the sheet's side as
+ * from the bar's top and bottom. The back gesture closes it too.
  */
 @Composable
 fun Sheet(
@@ -89,6 +91,7 @@ fun Sheet(
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
             ) {
                 HeaderBar(
+                    inset = (Dims.barHeight - ControlSize.Regular.scaled) / 2 - Dims.buttonGap / 2,
                     leading = {
                         if (close == "Close") {
                             IconButton(Symbol.X, "Close", circled = false, strong = true, onClick = onClose)
