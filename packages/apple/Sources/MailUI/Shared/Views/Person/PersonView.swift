@@ -12,29 +12,36 @@ struct PersonView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.l) {
-                Avatar(initials: person?.initials ?? String(email.prefix(1)).uppercased(), email: email, size: 52)
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text(name).textStyle(.heading)
-                    Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: Space.l) {
+                    Avatar(initials: person?.initials ?? String(email.prefix(1)).uppercased(), email: email, size: 52)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(name).textStyle(.heading)
+                        Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
+                    }
+                    ActionButton(title: "New message", symbol: .squarePen, variant: .outline, action: write)
                 }
-                ActionButton(title: "New message", symbol: .squarePen, variant: .outline, action: write)
+                .padding(Space.xl)
                 if let threads = person?.threads, !threads.isEmpty {
-                    FormSection(title: "Recent") {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(threads) { row in
-                                ChoiceRow(title: row.subject.isEmpty ? "(no subject)" : row.subject, detail: row.date) { openThread?(row.id) }
-                                    .disabled(openThread == nil)
+                    SectionHeading(title: "Recent")
+                        .padding(.horizontal, Space.xl)
+                        .padding(.top, Space.xxs)
+                        .padding(.bottom, Space.m - Theme.rowGap / 2)
+                    VStack(spacing: 0) {
+                        ForEach(threads) { row in
+                            NavRow(title: row.subject.isEmpty ? "(no subject)" : row.subject, inset: Space.xl) { openThread?(row.id) } trailing: {
+                                Text(row.date).textStyle(.caption)
                             }
+                            .disabled(openThread == nil)
                         }
                     }
-                    .padding(.top, Space.s)
+                    .padding(.bottom, Space.xl)
                 }
             }
-            .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Tokens.card.color)
+        .environment(\.onCard, true)
         .task(id: email) { person = await store.person(email) }
     }
 

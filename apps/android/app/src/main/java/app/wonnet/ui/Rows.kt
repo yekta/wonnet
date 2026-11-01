@@ -67,10 +67,11 @@ fun ItemRow(
 }
 
 /**
- * A row that goes somewhere: a mailbox in the sidebar, Settings. `selected` is where the app is;
- * `count` is its unread, shown when above zero. Half of `Dims.rowGap` above and below keeps its
- * face off the next row's while the hit areas touch. Without `onClick` it is the face alone, for
- * a list that takes the taps itself and says when it is pressed.
+ * A row that goes somewhere: a mailbox in the sidebar, Settings, a person's thread. `selected` is
+ * where the app is; `count` is its unread, shown when above zero. Half of `Dims.rowGap` above and
+ * below keeps its face off the next row's while the hit areas touch. `inset` is the space at both
+ * its ends, for words that line up with a page's. Without `onClick` it is the face alone, for a
+ * list that takes the taps itself and says when it is pressed.
  */
 @Composable
 fun NavRow(
@@ -81,16 +82,19 @@ fun NavRow(
     count: Int = 0,
     selected: Boolean = false,
     indent: Dp = 0.dp,
+    inset: Dp? = null,
     verticalPadding: Dp = 0.dp,
     hovered: Boolean = false,
     onClick: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    val onCard = LocalOnCard.current
+
     @Composable
     fun Face(lit: Boolean) {
         val fill = when {
-            selected -> Tokens.backgroundAccentStronger.color
-            lit -> Tokens.backgroundAccent.color
+            selected -> (if (onCard) Tokens.cardLargerAccentStronger else Tokens.backgroundAccentStronger).color
+            lit -> (if (onCard) Tokens.cardLargerAccent else Tokens.backgroundAccent).color
             else -> Color.Transparent
         }
         Row(
@@ -100,15 +104,13 @@ fun NavRow(
                 .background(fill)
                 .padding(vertical = verticalPadding)
                 .height(Dims.rowHeight)
-                .padding(start = 18.dp + indent, end = Space.l),
+                .padding(start = (inset ?: 18.dp) + indent, end = inset ?: Space.l),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) {
-                when {
-                    dot != null -> Box(Modifier.size(8.dp).background(dot, CircleShape))
-                    symbol != null -> Icon(symbol, 15f, Tokens.foreground.color)
-                }
+            when {
+                dot != null -> Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(8.dp).background(dot, CircleShape)) }
+                symbol != null -> Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { Icon(symbol, 15f, Tokens.foreground.color) }
             }
             Text(title, if (selected) TextStyle.LabelStrong else TextStyle.Label, Modifier.weight(1f), color = Tokens.foreground.color, maxLines = 1)
             if (count > 0) Text("$count", TextStyle.Caption)
