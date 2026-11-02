@@ -155,14 +155,16 @@ impl Updater {
         .detach();
     }
 
-    fn found(&mut self, found: Option<String>, asked: bool, cx: &mut Context<Self>) {
-        let Some(version) = found else {
-            if asked {
-                self.set(UpdateState::Failed("GitHub couldn't be reached.".into()), cx);
+    fn found(&mut self, found: Latest, asked: bool, cx: &mut Context<Self>) {
+        let version = match found {
+            Latest::Unreachable if asked => {
+                return self.set(UpdateState::Failed("GitHub couldn't be reached.".into()), cx);
             }
-            return;
+            Latest::Unreachable => return,
+            Latest::Missing => None,
+            Latest::Version(version) => Some(version),
         };
-        if !is_older(VERSION, &version) {
+        let Some(version) = version.filter(|version| is_older(VERSION, version)) else {
             if !asked {
                 return;
             }
@@ -177,7 +179,7 @@ impl Updater {
             })
             .detach();
             return;
-        }
+        };
         self.set(UpdateState::Available(version), cx);
     }
 
@@ -235,22 +237,30 @@ fn client() -> Option<reqwest::blocking::Client> {
 /// The argument the installed version starts with, to wait for the old one to quit.
 pub const AFTER_UPDATE: &str = "--after-update";
 
+enum Latest {
+    Unreachable,
+    /// The newest release has no file for this system, or no signature for it.
+    Missing,
+    Version(String),
+}
+
 /// The newest release's version, when its file for this system and the file's signature are
 /// already up.
-fn latest() -> Option<String> {
-    let client = client()?;
+fn latest() -> Latest {
+    let Some(client) = client() else { return Latest::Unreachable };
     let releases = releases();
-    let response = client.head(format!("{releases}/latest")).send().ok()?;
-    let tag = response.url().path_segments()?.next_back()?.to_string();
-    let version = tag.strip_prefix('v')?.to_string();
-    let asset = asset()?;
+    let Ok(response) = client.head(format!("{releases}/latest")).send() else { return Latest::Unreachable };
+    let tag = response.url().path_segments().and_then(|mut segments| segments.next_back()).unwrap_or_default();
+    let (Some(version), Some(asset)) = (tag.strip_prefix('v'), asset()) else { return Latest::Missing };
     for file in [asset.to_string(), format!("{asset}.sig")] {
-        let uploaded = client.head(format!("{releases}/download/v{version}/{file}")).send().ok()?;
+        let Ok(uploaded) = client.head(format!("{releases}/download/v{version}/{file}")).send() else {
+            return Latest::Unreachable;
+        };
         if !uploaded.status().is_success() {
-            return None;
+            return Latest::Missing;
         }
     }
-    Some(version)
+    Latest::Version(version.to_string())
 }
 
 fn download_and_replace(

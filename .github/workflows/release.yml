@@ -193,8 +193,11 @@ jobs:
     container: archlinux:latest
     timeout-minutes: 60
     steps:
+      # The checkout belongs to the runner's user, not the container's root.
       - name: Git
-        run: pacman -Syu --noconfirm --needed git
+        run: |
+          pacman -Syu --noconfirm --needed git
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - uses: actions/checkout@v4
         with:
