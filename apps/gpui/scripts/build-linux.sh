@@ -15,6 +15,7 @@ cd "$(dirname "$0")/.."
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' ../../Cargo.toml | head -1)"
 
 echo "▸ Building Wonnet $VERSION for Linux $ARCH"
+scripts/build-wpe.sh
 scripts/patch-crates.sh
 cargo build --release
 
@@ -39,21 +40,21 @@ X-AppImage-Version=$VERSION
 DESKTOP
 cp "$APPDIR/wonnet.desktop" "$APPDIR/usr/share/applications/wonnet.desktop"
 
-echo "▸ Bundling WebKitGTK"
-# WebKitGTK, GTK and what they need come along; what every desktop has comes from the system:
-# glibc, the graphics drivers, X11's core, fonts, sound and TLS (whose certificates differ by
+echo "▸ Bundling WPE WebKit"
+# WPE WebKit and what it needs come along; what every desktop has comes from the system: glibc,
+# the graphics drivers, X11's core, fonts, sound and TLS (whose certificates differ by
 # distribution), as linuxdeploy's excludelist has it.
 SYSTEM='^(ld-linux.*|libc|libm|libdl|libpthread|librt|libresolv|libutil|libanl|libmvec|libnss_.*|libstdc\+\+|libgcc_s|libGL.*|libEGL|libOpenGL|libglapi|libgbm|libdrm.*|libvulkan|libwayland-.*|libX11|libX11-xcb|libxcb.*|libXau|libXdmcp|libasound|libjack|libpipewire-.*|libfontconfig|libfreetype|libharfbuzz|libfribidi|libthai|libexpat|libz|libuuid|libcom_err|libgpg-error|libgmp|libp11-kit|libgnutls|libICE|libSM|libusb-1\.0)\.so'
 TRIPLE="$ARCH-linux-gnu"
 LIB="$APPDIR/usr/lib"
-HELPERS="$LIB/$TRIPLE/webkit2gtk-4.1"
+HELPERS="$LIB/wpe-webkit-2.0"
 MODULES="$LIB/$TRIPLE/gio/modules"
-mkdir -p "$HELPERS/injected-bundle" "$MODULES"
-cp "/usr/lib/$TRIPLE/webkit2gtk-4.1/WebKitWebProcess" "/usr/lib/$TRIPLE/webkit2gtk-4.1/WebKitNetworkProcess" "$HELPERS/"
-cp "/usr/lib/$TRIPLE/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so" "$HELPERS/injected-bundle/"
+mkdir -p "$MODULES"
+# WPE looks for its helpers in wpe-webkit-2.0 beside its library (patches/wpewebkit.patch).
+cp -r build/wpe/lib/wpe-webkit-2.0 "$HELPERS"
 # GIO's TLS, for the pictures pages load over https.
 cp "/usr/lib/$TRIPLE/gio/modules/libgiognutls.so" "$MODULES/"
-for file in "$APPDIR/usr/bin/wonnet" "$HELPERS"/WebKit* "$HELPERS/injected-bundle"/*.so "$MODULES"/*.so; do
+for file in "$APPDIR/usr/bin/wonnet" "$HELPERS"/WPE* "$HELPERS/injected-bundle"/*.so "$MODULES"/*.so; do
     ldd "$file" | awk '/=> \// { print $3 }' | while read -r library; do
         name="$(basename "$library")"
         if echo "$name" | grep -Eq "$SYSTEM" || [ -e "$LIB/$name" ]; then
@@ -66,13 +67,9 @@ patchelf --set-rpath '$ORIGIN/../lib' "$APPDIR/usr/bin/wonnet"
 for library in "$LIB"/*.so*; do
     patchelf --set-rpath '$ORIGIN' "$library"
 done
-patchelf --set-rpath '$ORIGIN/../..' "$HELPERS"/WebKit*
-patchelf --set-rpath '$ORIGIN/../../..' "$HELPERS/injected-bundle"/*.so "$MODULES"/*.so
-# WebKit looks for its helpers at a path compiled into it. Made relative ("/usr" becomes "././",
-# as Tauri does), they're found from AppRun's folder, usr. The build stops when a new WebKit no
-# longer has the path whole.
-sed -i "s|/usr/lib/$TRIPLE/webkit2gtk-4.1|././/lib/$TRIPLE/webkit2gtk-4.1|g" "$LIB/libwebkit2gtk-4.1.so.0"
-grep -q "././/lib/$TRIPLE/webkit2gtk-4.1" "$LIB/libwebkit2gtk-4.1.so.0"
+patchelf --set-rpath '$ORIGIN/..' "$HELPERS"/WPE*
+patchelf --set-rpath '$ORIGIN/../..' "$HELPERS/injected-bundle"/*.so
+patchelf --set-rpath '$ORIGIN/../../..' "$MODULES"/*.so
 chmod -R a+rX "$APPDIR"
 
 # GIO's module folder is compiled into it too, split up on x86_64, so AppRun names it. The app

@@ -23,7 +23,7 @@ env:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,16 @@ jobs:
           rustup update stable --no-self-update
           rustup default stable
           rustup component add rustfmt clippy
+
+      # Shared with the Release workflow. A new WPE takes a few hours to build.
+      - uses: actions/cache@v4
+        with:
+          path: apps/gpui/build/wpe
+          key: wpe-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/gpui/scripts/build-wpe.sh', 'apps/gpui/patches/wpewebkit.patch') }}
+
+      - name: WPE WebKit
+        timeout-minutes: 270
+        run: apps/gpui/scripts/build-wpe.sh
 
       - name: Patch the crates
         working-directory: apps/gpui
