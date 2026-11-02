@@ -226,6 +226,7 @@ pub struct IconButton {
     quiet: bool,
     strong: bool,
     pending: bool,
+    floating: bool,
     disabled: bool,
     on_card: bool,
     on_popover: bool,
@@ -245,6 +246,7 @@ impl IconButton {
             quiet: false,
             strong: false,
             pending: false,
+            floating: false,
             disabled: false,
             on_card: false,
             on_popover: false,
@@ -283,6 +285,12 @@ impl IconButton {
 
     pub fn pending(mut self, pending: bool) -> Self {
         self.pending = pending;
+        self
+    }
+
+    /// Over content that scrolls under it, so filled with the background.
+    pub fn floating(mut self) -> Self {
+        self.floating = true;
         self
     }
 
@@ -344,6 +352,7 @@ impl RenderOnce for IconButton {
             .rounded_full()
             .text_color(cx.color(tint))
             .when(self.circled, |face| face.border_1().border_color(cx.color(ring)))
+            .when(self.floating, |face| face.bg(cx.color(BACKGROUND)))
             .when(open, |face| face.bg(cx.color(hover_fill)).text_color(cx.color(hover_tint)))
             .when(live, |face| {
                 face.group_hover(group.clone(), |face| face.bg(cx.color(hover_fill)).text_color(cx.color(hover_tint)))
