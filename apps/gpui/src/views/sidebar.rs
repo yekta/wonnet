@@ -37,10 +37,23 @@ pub fn sidebar(store: Entity<Store>, cx: &App) -> impl IntoElement + use<> {
                 .border_r_1()
                 .border_color(cx.color(BORDER))
                 .occlude()
-                .child(super::topbar::window_bar(vec![close_button(&store).into_any_element()], cx))
+                .child(bar(&store, cx))
                 .child(rows(&store, cx))
                 .child(footer(&store, cx)),
         )
+}
+
+/// The menu button, where the window's bar has it; the window's buttons stay on that bar.
+fn bar(store: &Entity<Store>, cx: &App) -> impl IntoElement + use<> {
+    div()
+        .flex_none()
+        .h(px(size::BAR))
+        .flex()
+        .items_center()
+        .pl(px(super::topbar::LEADING))
+        .border_b_1()
+        .border_color(cx.color(BORDER))
+        .child(close_button(store))
 }
 
 fn close_button(store: &Entity<Store>) -> impl IntoElement + use<> {
