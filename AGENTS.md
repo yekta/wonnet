@@ -33,7 +33,8 @@ a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't 
 - The Mac, desktop and Android apps update themselves from the latest GitHub release, which
   `release.yml` makes on every push to main: `Wonnet.zip`, `Wonnet.apk`,
   `Wonnet-windows-x86_64.zip` and `Wonnet-linux-<arch>.AppImage`. Renaming an asset breaks the
-  updates of every copy already installed.
+  updates of every copy already installed, and Linux's install script
+  (`apps/marketing/public/linux`).
 - Android's push goes through Firebase, iOS's through APNs; both are sealed with the device's key.
   The APK must always be signed with the same key, or installed copies can no longer update. The
   desktop app installs only updates signed with `DESKTOP_UPDATE_KEY`, whose public half it holds.

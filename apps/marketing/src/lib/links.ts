@@ -23,8 +23,11 @@ export type Download = {
   arch?: "x86_64" | "arm64"
   title: string
   detail: string
-  url: string
-}
+} & (
+  | { url: string; command?: never }
+  /** Copied, to run in a terminal. */
+  | { command: string; url?: never }
+)
 
 /** Every app a release carries; the first of a system is the one it is offered. */
 export const DOWNLOADS: Download[] = [
@@ -42,17 +45,9 @@ export const DOWNLOADS: Download[] = [
   },
   {
     platform: "linux",
-    arch: "x86_64",
-    title: "Intel and AMD",
-    detail: "AppImage. It updates itself",
-    url: `${LATEST_RELEASE}/Wonnet-linux-x86_64.AppImage`,
-  },
-  {
-    platform: "linux",
-    arch: "arm64",
-    title: "ARM",
-    detail: "AppImage. It updates itself",
-    url: `${LATEST_RELEASE}/Wonnet-linux-aarch64.AppImage`,
+    title: "Copy the install command",
+    detail: "Intel, AMD and ARM. It updates itself",
+    command: "curl -fsSL https://wonnet.app/linux | sh",
   },
   {
     platform: "android",
