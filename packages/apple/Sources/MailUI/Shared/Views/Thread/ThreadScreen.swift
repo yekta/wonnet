@@ -4,12 +4,13 @@ import SwiftUI
 /// A thread: its subject, its labels, who is in it, and its messages stacked as cards; the
 /// earlier ones folded to a line, as Newton showed them, and a long run of them tucked into one
 /// line with their count, as Gmail does. It opens on the first unread message.
-/// On a wide Mac window a sender clicked is shown beside it. On iOS the threads beside the open
-/// one are drawn too, ahead of a swipe to them; they leave the open one's place in the store alone.
+/// On a wide Mac window a sender clicked is shown beside it, and stays while their threads are
+/// opened from there. On iOS the threads beside the open one are drawn too, ahead of a swipe to
+/// them; they leave the open one's place in the store alone.
 struct ThreadScreen: View {
     @Environment(MailStore.self) private var store
     let conversation: Conversation
-    /// A sender clicked, shown in the pane beside the thread.
+    /// A sender clicked, shown in the pane beside the thread; it outlives the thread.
     @State private var paneEmail: String?
     @State private var sheetEmail: String?
     @State private var preview: URL?
@@ -39,13 +40,14 @@ struct ThreadScreen: View {
             }
         }
         .background(Tokens.background.color)
+        .onChange(of: conversation.id) { showsTucked = false }
         .quickLookPreview($preview)
         .fileMover(isPresented: Binding(get: { !saving.isEmpty }, set: { if !$0 { saving = [] } }), files: saving) { result in
             guard case .failure(let error) = result else { return }
             store.show(error.localizedDescription)
         }
         .sheet(isPresented: Binding(get: { sheetEmail != nil }, set: { if !$0 { sheetEmail = nil } })) {
-            Sheet(title: "Contact", background: Tokens.card) {
+            Sheet(title: "Contact") {
                 PersonView(email: sheetEmail ?? "", closeSheet: { sheetEmail = nil }) { thread in
                     sheetEmail = nil
                     #if os(macOS)
@@ -57,7 +59,6 @@ struct ThreadScreen: View {
             }
             .environment(store)
         }
-        .id(conversation.id)
     }
 
     private func showsPane(width: CGFloat) -> Bool {
@@ -118,6 +119,7 @@ struct ThreadScreen: View {
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(anchor(id), anchor: .top) }
             }
         }
+        .id(id)
     }
 
     private var page: some View {

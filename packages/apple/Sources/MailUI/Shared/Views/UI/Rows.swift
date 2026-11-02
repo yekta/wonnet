@@ -38,7 +38,8 @@ extension ItemRow where Trailing == EmptyView {
 /// A row that goes somewhere: a mailbox in the sidebar, Settings, a person's thread. `selected`
 /// is where the app is. `count` is its unread, shown when above zero. Half of `Theme.rowGap`
 /// above and below keeps its face off the next row's while the hit areas touch. `inset` is the
-/// space at both its ends, for words that line up with a page's. Without an `action` it is the
+/// space at both its ends, for words that line up with a page's. A name is cut in its middle, a
+/// subject at its end (`truncation`). Without an `action` it is the
 /// face alone, for a list that takes the clicks itself and says when it is hovered.
 struct NavRow<Trailing: View>: View {
     let title: String
@@ -48,6 +49,7 @@ struct NavRow<Trailing: View>: View {
     var selected = false
     var indent: CGFloat = 0
     var inset: CGFloat?
+    var truncation: Text.TruncationMode = .middle
     var verticalPadding: CGFloat = 0
     let action: (() -> Void)?
     @ViewBuilder var trailing: Trailing
@@ -63,7 +65,7 @@ struct NavRow<Trailing: View>: View {
     private var face: some View {
         Face(
             title: title, symbol: symbol, dot: dot, count: count, selected: selected, indent: indent,
-            inset: inset, verticalPadding: verticalPadding, trailing: trailing
+            inset: inset, truncation: truncation, verticalPadding: verticalPadding, trailing: trailing
         )
     }
 
@@ -75,10 +77,10 @@ struct NavRow<Trailing: View>: View {
         let selected: Bool
         let indent: CGFloat
         let inset: CGFloat?
+        let truncation: Text.TruncationMode
         let verticalPadding: CGFloat
         let trailing: Trailing
         @Environment(\.hovered) private var hovered
-        @Environment(\.onCard) private var onCard
 
         var body: some View {
             HStack(spacing: Space.m) {
@@ -87,7 +89,7 @@ struct NavRow<Trailing: View>: View {
                 } else if let symbol {
                     Image(symbol, size: 15).frame(width: 18)
                 }
-                Text(title).textStyle(selected && Platform.strongSelection ? .labelStrong : .label, color: Tokens.foreground.color).lineLimit(1).truncationMode(.middle)
+                Text(title).textStyle(selected && Platform.strongSelection ? .labelStrong : .label, color: Tokens.foreground.color).lineLimit(1).truncationMode(truncation)
                 Spacer()
                 if count > 0 {
                     Text("\(count)").textStyle(.caption)
@@ -99,15 +101,9 @@ struct NavRow<Trailing: View>: View {
             .padding(.trailing, inset ?? Space.l)
             .frame(height: Theme.rowHeight * Platform.scale)
             .padding(.vertical, verticalPadding * Platform.scale)
-            .background(fill)
+            .background(selected ? Tokens.backgroundAccentStronger.color : hovered ? Tokens.backgroundAccent.color : .clear)
             .padding(.vertical, Theme.rowGap / 2)
             .contentShape(Rectangle())
-        }
-
-        private var fill: Color {
-            if selected { return (onCard ? Theme.cardAccentStronger : Tokens.backgroundAccentStronger).color }
-            if hovered { return (onCard ? Theme.cardAccent : Tokens.backgroundAccent).color }
-            return .clear
         }
     }
 }

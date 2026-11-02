@@ -9,40 +9,52 @@ struct PersonView: View {
     var closeSheet: (() -> Void)?
     var openThread: ((String) -> Void)?
     @State private var person: Person?
+    /// The email `person` was read for.
+    @State private var loaded: String?
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: Space.l) {
-                    Avatar(initials: person?.initials ?? String(email.prefix(1)).uppercased(), email: email, size: 52)
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(name).textStyle(.heading)
-                        Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
-                    }
-                    ActionButton(title: "New message", symbol: .squarePen, variant: .outline, action: write)
-                }
-                .padding(Space.xl)
-                if let threads = person?.threads, !threads.isEmpty {
-                    SectionHeading(title: "Recent")
-                        .padding(.horizontal, Space.xl)
-                        .padding(.top, Space.xxs)
-                        .padding(.bottom, Space.m - Theme.rowGap / 2)
-                    VStack(spacing: 0) {
-                        ForEach(threads) { row in
-                            NavRow(title: row.subject.isEmpty ? "(no subject)" : row.subject, inset: Space.xl) { openThread?(row.id) } trailing: {
-                                Text(row.date).textStyle(.caption)
-                            }
-                            .disabled(openThread == nil)
-                        }
-                    }
-                    .padding(.bottom, Space.xl)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Nothing until they are read, rather than a frame of the email in their name's place.
+            if loaded == email { page }
         }
-        .background(Tokens.card.color)
-        .environment(\.onCard, true)
-        .task(id: email) { person = await store.person(email) }
+        .background(Tokens.background.color)
+        .task(id: email) {
+            person = await store.person(email)
+            loaded = email
+        }
+    }
+
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Space.l) {
+                Avatar(initials: person?.initials ?? String(email.prefix(1)).uppercased(), email: email, size: 52)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(name).textStyle(.heading)
+                    Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
+                }
+                ActionButton(title: "New message", symbol: .squarePen, variant: .outline, action: write)
+            }
+            .padding(Space.xl)
+            if let threads = person?.threads, !threads.isEmpty {
+                SectionHeading(title: "Recent")
+                    .padding(.horizontal, Space.xl)
+                    .padding(.top, Space.xxs)
+                    .padding(.bottom, Space.m - Theme.rowGap / 2)
+                VStack(spacing: 0) {
+                    ForEach(threads) { row in
+                        NavRow(
+                            title: row.subject.isEmpty ? "(no subject)" : row.subject, selected: row.id == store.conversation?.id,
+                            inset: Space.xl, truncation: .tail
+                        ) { openThread?(row.id) } trailing: {
+                            Text(row.date).textStyle(.caption)
+                        }
+                        .disabled(openThread == nil)
+                    }
+                }
+                .padding(.bottom, Space.xl)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func write() {

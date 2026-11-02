@@ -84,7 +84,6 @@ impl ThreadPane {
             self.shows_tucked = false;
             self.bodies.clear();
             self.positions.borrow_mut().clear();
-            self.pane = None;
             self.scroll.set_offset(point(px(0.), px(0.)));
             self.pending_scroll = match (store.thread_offset, store.focused_message.clone()) {
                 (Some(offset), _) => Some(PendingScroll::Offset(offset as f32)),

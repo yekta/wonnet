@@ -14,20 +14,24 @@ pub struct PersonView {
     store: Entity<Store>,
     pub email: String,
     person: Option<Person>,
+    /// Nothing is drawn until the person is read, rather than a frame of their email as their name.
+    loaded: bool,
 }
 
 impl PersonView {
     pub fn new(store: Entity<Store>, email: String, cx: &mut Context<Self>) -> Self {
+        cx.observe(&store, |_, _, cx| cx.notify()).detach();
         let answer = store.read(cx).core.call::<Person>(Command::Person { email: email.clone() });
         cx.spawn(async move |this, cx| {
             let person = answer.await.ok();
             let _ = this.update(cx, |this, cx| {
                 this.person = person;
+                this.loaded = true;
                 cx.notify();
             });
         })
         .detach();
-        Self { store, email, person: None }
+        Self { store, email, person: None, loaded: false }
     }
 
     fn name(&self) -> String {
@@ -40,6 +44,10 @@ impl PersonView {
 
 impl Render for PersonView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let page = div().id("person").size_full().overflow_y_scroll().bg(cx.color(BACKGROUND));
+        if !self.loaded {
+            return page.into_any_element();
+        }
         let initials = self.person.as_ref().map(|person| person.initials.clone()).unwrap_or_else(|| {
             self.email.chars().next().map(|first| first.to_uppercase().collect()).unwrap_or_default()
         });
@@ -49,6 +57,7 @@ impl Render for PersonView {
             email: self.email.clone(),
         };
         let threads = self.person.as_ref().map(|person| person.threads.clone()).unwrap_or_default();
+        let open_thread = self.store.read(cx).conversation.as_ref().map(|open| open.id.clone());
         let rows = threads.into_iter().map(|row| {
             let open = self.store.clone();
             let id = row.id.clone();
@@ -56,7 +65,7 @@ impl Render for PersonView {
             NavRow::new(SharedString::from(format!("person-{}", row.id)), subject)
                 .inset(space::XL)
                 .detail(row.date.clone())
-                .on_card()
+                .selected(open_thread.as_deref() == Some(row.id.as_str()))
                 .on_click(move |_, _, cx| {
                     open.update(cx, |store, cx| {
                         store.contact = None;
@@ -107,11 +116,6 @@ impl Render for PersonView {
                 )
                 .children(rows)
         });
-        div()
-            .id("person")
-            .size_full()
-            .overflow_y_scroll()
-            .bg(cx.color(CARD))
-            .child(div().flex().flex_col().pb(px(space::XL)).child(header).children(recent))
+        page.child(div().flex().flex_col().pb(px(space::XL)).child(header).children(recent)).into_any_element()
     }
 }

@@ -599,7 +599,7 @@ impl MailWindow {
                 "contact",
                 "Contact",
                 ui::SheetSize::Small,
-                CARD,
+                BACKGROUND,
                 Vec::new(),
                 person.clone(),
                 shut.clone(),

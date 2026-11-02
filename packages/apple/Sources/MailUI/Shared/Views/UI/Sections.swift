@@ -55,8 +55,7 @@ private struct OnCardKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// Whether the view is on a card (the one that fills the page, a person's) where chips and rows
-    /// fill with its accents.
+    /// Whether the view is on the card that fills the page, where a chip fills with its accents.
     var onCard: Bool {
         get { self[OnCardKey.self] }
         set { self[OnCardKey.self] = newValue }
