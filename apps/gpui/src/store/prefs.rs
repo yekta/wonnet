@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use super::{Confirmation, Store};
 use crate::keys::{self, KeyCommand, KeyScope};
-use crate::models::{AccountView, ActReply, Mailbox};
+use crate::models::{AccountView, ActReply, IdReply, Mailbox};
 use crate::ui::Symbol;
 
 pub const SIDEBAR_KEY: &str = "sidebar";
@@ -528,6 +528,23 @@ impl Store {
         }
         let command = Command::ApplyRule { rule: rule.rule.clone() };
         self.ask_or_show(command, cx, |this, reply: ActReply, cx| this.report(reply, cx));
+    }
+
+    /// Makes the label, then saves the rule with it.
+    pub fn save_rule_with_new_label(
+        &mut self,
+        rule: CustomRule,
+        account: String,
+        name: String,
+        existing: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let command = Command::CreateLabel { account, name };
+        self.ask_or_show(command, cx, move |this, made: IdReply, cx| {
+            let mut rule = rule;
+            rule.rule.label = Some(made.id);
+            this.save_rule(&rule, existing, cx);
+        });
     }
 
     pub fn remove_rule(&mut self, rule: &CustomRule, cx: &mut Context<Self>) {

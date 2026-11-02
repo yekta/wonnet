@@ -138,7 +138,27 @@ fun MailStore.newRule(): CustomRule {
     return CustomRule(UUID.randomUUID().toString().lowercase(), emptyList(), emptyList(), emptyList(), null, skipInbox = false, markRead = false, order)
 }
 
-fun MailStore.saveRule(rule: CustomRule) = setPreference(rule.key, rule.value)
+/** A label to make in an account, for a rule to put on its mail. */
+data class NewLabel(val account: String, val name: String)
+
+/**
+ * Writes the rule, first making the label it asks for, and applies it to the mail already here
+ * when asked. False, with the error shown, when the label can't be made: the rule isn't written.
+ */
+suspend fun MailStore.saveRule(rule: CustomRule, apply: Boolean, newLabel: NewLabel?): Boolean {
+    val made = newLabel?.let {
+        try {
+            bridge.call("create_label", mapOf("account" to it.account, "name" to it.name.trim())).string("id")
+        } catch (error: CoreError) {
+            show(error.message)
+            return false
+        }
+    }
+    val written = rule.copy(label = made ?: rule.label)
+    setPreference(written.key, written.value)
+    if (apply) applyRule(written)
+    return true
+}
 
 fun MailStore.removeRule(rule: CustomRule) = setPreference(rule.key, null)
 

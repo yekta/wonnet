@@ -25,6 +25,11 @@ use crate::ui::{self, ActionButton, IconButton, Lead, MenuEntry, NavRow, SheetSi
 use crate::updater::{self, UpdateState, Updater};
 
 /// A sheet of the settings: adding an account, a split, a snippet.
+struct NewLabel {
+    name: Entity<InputState>,
+    account: String,
+}
+
 enum Sheet {
     AddAccount(Entity<OnboardingView>),
     Split {
@@ -41,6 +46,8 @@ enum Sheet {
         /// Also apply it to the mail already here, as it is saved.
         existing: bool,
         new: bool,
+        /// A label to make for it, as it is saved.
+        making: Option<NewLabel>,
     },
     Snippet {
         snippet: Snippet,
@@ -1011,8 +1018,66 @@ impl SettingsView {
             })
             .detach();
         }
-        self.sheet = Some(Sheet::Rule { rule, from, to, subject, existing: new, new });
+        self.sheet = Some(Sheet::Rule { rule, from, to, subject, existing: new, new, making: None });
         cx.notify();
+    }
+
+    fn make_label(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(account) = self.store.read(cx).accounts().first().map(|account| account.id.clone()) else { return };
+        let name = cx.new(|cx| InputState::new(window, cx).placeholder("dux-shell"));
+        name.update(cx, |field, cx| field.focus(window, cx));
+        cx.subscribe(&name, |this, _, event: &InputEvent, cx| match event {
+            InputEvent::Change => cx.notify(),
+            InputEvent::PressEnter { .. } => this.save_sheet(cx),
+            _ => {}
+        })
+        .detach();
+        if let Some(Sheet::Rule { rule, making, .. }) = &mut self.sheet {
+            rule.rule.label = None;
+            *making = Some(NewLabel { name, account });
+        }
+        cx.notify();
+    }
+
+    /// The new label's name, and with several accounts, the account it is made in.
+    fn new_label_fields(&self, making: &NewLabel, cx: &mut Context<Self>) -> gpui::Div {
+        let accounts = self.store.read(cx).accounts();
+        let chosen = making.account.clone();
+        let this = cx.entity();
+        let account_menu = (accounts.len() > 1).then(|| {
+            let title = accounts.iter().find(|account| account.id == chosen).map(|account| account.title.clone());
+            ActionButton::new("rule-label-account", title.unwrap_or_default()).chevron().menu(move |_, _| {
+                accounts
+                    .iter()
+                    .map(|account| {
+                        let (this, id) = (this.clone(), account.id.clone());
+                        MenuEntry::item(account.title.clone(), move |_, cx| {
+                            this.update(cx, |this, cx| {
+                                if let Some(Sheet::Rule { making: Some(making), .. }) = &mut this.sheet {
+                                    making.account = id.clone();
+                                }
+                                cx.notify();
+                            })
+                        })
+                        .checked(account.id == chosen)
+                    })
+                    .collect()
+            })
+        });
+        div()
+            .flex()
+            .items_end()
+            .gap(px(space::M))
+            .child(div().flex_1().child(ui::input_field("rule-label-name", Some("Label name"), &making.name, cx)))
+            .children(account_menu.map(|menu| div().ml(px(-size::BUTTON_GAP / 2.)).child(menu)))
+    }
+
+    /// Whether the rule being written can be saved: with a label to make, once it has a name.
+    fn rule_ready(rule: &CustomRule, making: &Option<NewLabel>, cx: &App) -> bool {
+        let Some(making) = making else { return rule.complete() };
+        let mut labelled = rule.clone();
+        labelled.rule.label = Some(String::new());
+        labelled.complete() && !making.name.read(cx).value().trim().is_empty()
     }
 
     /// The rule being written as its fields have it.
@@ -1033,13 +1098,20 @@ impl SettingsView {
     /// Saves the split, the rule or the snippet being written, when it is whole, and closes its sheet.
     fn save_sheet(&mut self, cx: &mut Context<Self>) {
         match &self.sheet {
-            Some(Sheet::Rule { rule, from, to, subject, existing, .. }) => {
+            Some(Sheet::Rule { rule, from, to, subject, existing, making, .. }) => {
                 let rule = Self::written_rule(rule, from, to, subject, cx);
-                if !rule.complete() {
+                if !Self::rule_ready(&rule, making, cx) {
                     return;
                 }
                 let existing = *existing;
-                self.store.update(cx, |store, cx| store.save_rule(&rule, existing, cx));
+                match making {
+                    Some(making) => {
+                        let (account, name) = (making.account.clone(), making.name.read(cx).value().trim().to_string());
+                        self.store
+                            .update(cx, |store, cx| store.save_rule_with_new_label(rule, account, name, existing, cx));
+                    }
+                    None => self.store.update(cx, |store, cx| store.save_rule(&rule, existing, cx)),
+                }
             }
             Some(Sheet::Split { split, name, from, .. }) => {
                 let mut split = split.clone();
@@ -1530,14 +1602,22 @@ impl SettingsView {
                 let labels = self.store.read(cx).split_labels();
                 let pick = this.clone();
                 let label_menu = (!labels.is_empty()).then(|| {
-                    label_choice("split-label", "With the label", split.label.clone(), labels, cx, move |label, cx| {
-                        pick.update(cx, |this, cx| {
-                            if let Some(Sheet::Split { split, .. }) = &mut this.sheet {
-                                split.label = label;
-                            }
-                            cx.notify();
-                        })
-                    })
+                    label_choice(
+                        "split-label",
+                        "With the label",
+                        split.label.clone(),
+                        labels,
+                        None,
+                        cx,
+                        move |label, cx| {
+                            pick.update(cx, |this, cx| {
+                                if let Some(Sheet::Split { split, .. }) = &mut this.sheet {
+                                    split.label = label;
+                                }
+                                cx.notify();
+                            })
+                        },
+                    )
                 });
                 let save = this.clone();
                 let disabled = name.read(cx).value().trim().is_empty();
@@ -1572,19 +1652,30 @@ impl SettingsView {
                 )
                 .into_any_element()
             }
-            Sheet::Rule { rule, from, to, subject, existing, new } => {
+            Sheet::Rule { rule, from, to, subject, existing, new, making } => {
                 let labels = self.store.read(cx).split_labels();
                 let pick = this.clone();
-                let label_menu = (!labels.is_empty()).then(|| {
-                    label_choice("rule-label", "Label it", rule.rule.label.clone(), labels, cx, move |label, cx| {
+                let make = this.clone();
+                let make: Rc<dyn Fn(&mut Window, &mut App)> =
+                    Rc::new(move |window, cx| make.update(cx, |this, cx| this.make_label(window, cx)));
+                let label_menu = label_choice(
+                    "rule-label",
+                    "Label it",
+                    rule.rule.label.clone(),
+                    labels,
+                    Some((make, making.is_some())),
+                    cx,
+                    move |label, cx| {
                         pick.update(cx, |this, cx| {
-                            if let Some(Sheet::Rule { rule, .. }) = &mut this.sheet {
+                            if let Some(Sheet::Rule { rule, making, .. }) = &mut this.sheet {
                                 rule.rule.label = label;
+                                *making = None;
                             }
                             cx.notify();
                         })
-                    })
-                });
+                    },
+                );
+                let new_label = making.as_ref().map(|making| self.new_label_fields(making, cx));
                 let toggle = |id: &'static str, title: &'static str, on: bool, change: fn(&mut Sheet, bool)| {
                     let this = this.clone();
                     div().ml(px(-space::L)).child(ui::settings_row(
@@ -1625,7 +1716,7 @@ impl SettingsView {
                     })
                 });
                 let save = this.clone();
-                let disabled = !Self::written_rule(rule, from, to, subject, cx).complete();
+                let disabled = !Self::rule_ready(&Self::written_rule(rule, from, to, subject, cx), making, cx);
                 let title = if *new { "New rule" } else { "Edit rule" };
                 let save_button = ActionButton::new("rule-save", "Save")
                     .variant(Variant::Primary)
@@ -1652,7 +1743,8 @@ impl SettingsView {
                             None,
                             cx,
                         ))
-                        .children(label_menu)
+                        .child(label_menu)
+                        .children(new_label)
                         .child(skip)
                         .child(read)
                         .children(apply),
@@ -1809,14 +1901,21 @@ fn label_choice(
     heading: &'static str,
     chosen: Option<String>,
     labels: Vec<(String, String)>,
+    // "New label", and whether it is chosen.
+    make: Option<(Rc<dyn Fn(&mut Window, &mut App)>, bool)>,
     cx: &App,
     pick: impl Fn(Option<String>, &mut App) + 'static,
 ) -> gpui::Div {
-    let chosen_name = chosen
-        .as_ref()
-        .and_then(|id| labels.iter().find(|(label, _)| label == id))
-        .map(|(_, name)| name.clone())
-        .unwrap_or_else(|| "None".into());
+    let making = make.as_ref().is_some_and(|(_, chosen)| *chosen);
+    let chosen_name = match making {
+        true => "New label".to_string(),
+        false => chosen
+            .as_ref()
+            .and_then(|id| labels.iter().find(|(label, _)| label == id))
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| "None".into()),
+    };
+    let chosen = chosen.filter(|_| !making);
     let pick = Rc::new(pick);
     div()
         .flex()
@@ -1829,10 +1928,14 @@ fn label_choice(
                     let pick = pick.clone();
                     move |_: &mut Window, cx: &mut App| pick(label.clone(), cx)
                 };
-                let mut entries = vec![MenuEntry::item("None", set(None)).checked(chosen.is_none())];
+                let mut entries = vec![MenuEntry::item("None", set(None)).checked(chosen.is_none() && !making)];
                 entries.extend(labels.iter().map(|(id, name)| {
                     MenuEntry::item(name.clone(), set(Some(id.clone()))).checked(chosen.as_ref() == Some(id))
                 }));
+                if let Some((make, _)) = &make {
+                    let make = make.clone();
+                    entries.push(MenuEntry::item("New label", move |window, cx| make(window, cx)).checked(making));
+                }
                 entries
             },
         )))
