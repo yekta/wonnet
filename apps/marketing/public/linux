@@ -1,0 +1,68 @@
+#!/bin/sh
+# Installs Wonnet for this user: curl -fsSL https://wonnet.app/linux | sh
+set -eu
+
+DOWNLOAD_URL="${WONNET_DOWNLOAD_URL:-https://github.com/yekta/wonnet/releases/latest/download}"
+APP="$HOME/.local/bin/wonnet"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+fail() {
+    echo "wonnet: $1" >&2
+    exit 1
+}
+
+download() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fSL --progress-bar "$1" -o "$2"
+        return
+    fi
+    command -v wget >/dev/null 2>&1 || fail "curl or wget is needed"
+    wget -qO "$2" "$1"
+}
+
+main() {
+    case "$(uname -s)-$(uname -m)" in
+        Linux-x86_64 | Linux-amd64) asset=Wonnet-linux-x86_64.AppImage ;;
+        Linux-aarch64 | Linux-arm64) asset=Wonnet-linux-aarch64.AppImage ;;
+        Darwin-*) fail "on a Mac, download the Mac app from https://wonnet.app" ;;
+        *) fail "unsupported machine: $(uname -s) $(uname -m)" ;;
+    esac
+
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+
+    echo "Downloading Wonnet…"
+    download "$DOWNLOAD_URL/$asset" "$tmp/wonnet" || fail "the download failed"
+    chmod +x "$tmp/wonnet"
+    (cd "$tmp" && ./wonnet --appimage-extract wonnet.png >/dev/null 2>&1) || true
+
+    mkdir -p "$(dirname "$APP")"
+    cp "$tmp/wonnet" "$APP.new"
+    chmod 755 "$APP.new"
+    mv -f "$APP.new" "$APP"
+
+    if [ -f "$tmp/squashfs-root/wonnet.png" ]; then
+        mkdir -p "$DATA/icons/hicolor/256x256/apps"
+        cp "$tmp/squashfs-root/wonnet.png" "$DATA/icons/hicolor/256x256/apps/wonnet.png"
+    fi
+
+    mkdir -p "$DATA/applications"
+    cat > "$DATA/applications/wonnet.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Wonnet
+Comment=Email that feels instant
+Exec="$APP" %u
+Icon=wonnet
+Terminal=false
+Categories=Network;Email;
+StartupWMClass=wonnet
+DESKTOP
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$DATA/applications" >/dev/null 2>&1 || true
+    fi
+
+    echo "Wonnet is installed. Open it from your apps, or run $APP. It updates itself."
+}
+
+main "$@"
