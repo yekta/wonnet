@@ -191,7 +191,12 @@ impl ThreadList {
         let hover_actions = !state.selecting;
         let entity = cx.entity();
 
-        let face_fill = if state.checked { Some(cx.tint(PRIMARY, opacity::COLOR_TINT)) } else { None };
+        let lit = if state.current { BACKGROUND_ACCENT_LARGER_STRONGEST } else { BACKGROUND_ACCENT_LARGER };
+        let face_fill = match (state.checked, state.current) {
+            (true, _) => Some(cx.tint(PRIMARY, opacity::COLOR_TINT)),
+            (false, true) => Some(cx.color(lit)),
+            (false, false) => None,
+        };
         let subject = if row.subject.is_empty() { "(no subject)".to_string() } else { row.subject.clone() };
         let snippet = row.snippet.replace('\n', " ");
         let subject_end = subject.len();
@@ -209,8 +214,8 @@ impl ThreadList {
             .text_color(cx.color(MUTED_STRONGER_FOREGROUND))
             .child(StyledText::new(words).with_highlights([(0..subject_end, subject_style)]));
         let actions = actions(&row, &group, index, &entity, cx);
-        let fade_from = cx.color(BACKGROUND_ACCENT_LARGER).opacity(0.);
-        let fade_to = cx.color(BACKGROUND_ACCENT_LARGER);
+        let fade_from = cx.color(lit).opacity(0.);
+        let fade_to = cx.color(lit);
         let open_row = row.clone();
         let menu_row = row.clone();
         let menu_entity = entity.clone();
@@ -224,20 +229,7 @@ impl ThreadList {
             .items_center()
             .rounded(px(radius::SM))
             .when_some(face_fill, |face, fill| face.bg(fill))
-            .when(!state.checked, |face| {
-                face.group_hover(group.clone(), |face| face.bg(cx.color(BACKGROUND_ACCENT_LARGER)))
-            })
-            .when(state.current, |face| {
-                face.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .rounded(px(radius::SM))
-                        .border_1()
-                        .border_dashed()
-                        .border_color(cx.color(BACKGROUND_ACCENT_STRONGER)),
-                )
-            })
+            .when(face_fill.is_none(), |face| face.group_hover(group.clone(), |face| face.bg(cx.color(lit))))
             .child(
                 div()
                     .absolute()
