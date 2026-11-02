@@ -187,17 +187,15 @@ jobs:
           path: apps/gpui/build/Wonnet-windows-x86_64.zip
           retention-days: 1
 
+  # On Arch, which packages the WPE WebKit the app links.
   linux:
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-24.04
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 330
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    timeout-minutes: 60
     steps:
+      - name: Git
+        run: pacman -Syu --noconfirm --needed git
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -207,34 +205,22 @@ jobs:
 
       - name: Toolchain
         run: |
-          sudo apt-get update
-          sudo apt-get install -y $(cat apps/gpui/scripts/linux-packages.txt)
-          rustup update stable --no-self-update
+          pacman -S --noconfirm --needed $(cat apps/gpui/scripts/linux-packages.txt)
           rustup default stable
-
-      # Shared with the Desktop workflow's pull requests. A new WPE takes a few hours to build.
-      - uses: actions/cache@v4
-        with:
-          path: apps/gpui/build/wpe
-          key: wpe-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/gpui/scripts/build-wpe.sh', 'apps/gpui/patches/wpewebkit.patch') }}
-
-      - name: WPE WebKit
-        timeout-minutes: 270
-        run: apps/gpui/scripts/build-wpe.sh
 
       # Shared with the Desktop workflow's pull requests.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/gpui
-          shared-key: desktop-linux-${{ matrix.arch }}
+          shared-key: desktop-linux
 
       - name: Build the app
-        run: apps/gpui/scripts/build-linux.sh ${{ matrix.arch }}
+        run: apps/gpui/scripts/build-linux.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: release-linux-${{ matrix.arch }}
-          path: apps/gpui/build/Wonnet-linux-${{ matrix.arch }}.AppImage
+          name: release-linux
+          path: apps/gpui/build/Wonnet-linux-x86_64.AppImage
           retention-days: 1
 
   # One release with every app that built. Without the Mac app there is none, as before.

@@ -46,7 +46,7 @@ export const DOWNLOADS: Download[] = [
   {
     platform: "linux",
     title: "Copy the install command",
-    detail: "Intel, AMD and ARM. It updates itself",
+    detail: "Intel and AMD, with WPE WebKit installed. It updates itself",
     command: "curl -fsSL https://wonnet.app/linux | sh",
   },
   {

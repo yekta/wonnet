@@ -32,7 +32,7 @@ a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't 
   feature or a look lands in every app in the same change.
 - The Mac, desktop and Android apps update themselves from the latest GitHub release, which
   `release.yml` makes on every push to main: `Wonnet.zip`, `Wonnet.apk`,
-  `Wonnet-windows-x86_64.zip` and `Wonnet-linux-<arch>.AppImage`. Renaming an asset breaks the
+  `Wonnet-windows-x86_64.zip` and `Wonnet-linux-x86_64.AppImage`. Renaming an asset breaks the
   updates of every copy already installed, and Linux's install script
   (`apps/marketing/public/linux`).
 - Android's push goes through Firebase, iOS's through APNs; both are sealed with the device's key.
@@ -40,11 +40,9 @@ a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't 
   desktop app installs only updates signed with `DESKTOP_UPDATE_KEY`, whose public half it holds.
 - The desktop app draws mail with a web engine. On Windows it's WebView2, laid over the window.
   On Linux it's WPE WebKit, which paints the page off the screen, on the CPU, and the app draws
-  what it paints like the rest of the window, on Wayland and X11 alike. Ubuntu packages no WPE,
-  so `scripts/build-wpe.sh` builds it into `apps/gpui/build/wpe` (an hour or more, once for each
-  version; CI caches it) and the AppImage carries it (`build-linux.sh`), so nothing needs
-  installing; what every desktop has (glibc, graphics drivers, fonts, GnuTLS) it takes from the
-  system.
+  what it paints like the rest of the window, on Wayland and X11 alike. WPE comes from the
+  system and isn't in the AppImage: users install it (`wpewebkit` on Arch), and CI builds Linux
+  in an Arch container. Ubuntu and Fedora package no WPE. There is no Linux build for ARM.
 - The desktop app builds on GPUI and wgpu with patches of ours, so that Linux redraws and presents
   only what changed in a frame: `apps/gpui/patches` holds a `.patch` for each crate, and
   `scripts/patch-crates.sh` unpacks the crates with them into `patched/`, which
@@ -94,7 +92,7 @@ Needs Rust stable, Docker (for Postgres and Stalwart), Node 24 and pnpm. The App
 Mac with Xcode; the iOS app also XcodeGen and `rustup target add aarch64-apple-ios
 aarch64-apple-ios-sim`. The Android app needs JDK 21, the Android SDK and NDK, `cargo-ndk` and
 `rustup target add aarch64-linux-android x86_64-linux-android`. The desktop app builds on any of
-the three systems; on Linux it needs the packages `.github/workflows/desktop.yml` installs.
+the three systems; on Linux it needs the Arch packages of `apps/gpui/scripts/linux-packages.txt`.
 
     docker compose up -d                          # Postgres on 5441, Stalwart on 8441
     cargo run -p mail-server -- seed              # demo@example.com with a few hundred messages
@@ -105,7 +103,6 @@ the three systems; on Linux it needs the packages `.github/workflows/desktop.yml
     cd apps/ios && xcodegen generate && open Mail.xcodeproj
     cd apps/android && ./gradlew installDebug    # the Android app, on a running emulator or phone
     adb shell am start -n app.wonnet.wonnet/app.wonnet.MainActivity --ez demo true  # Android with made-up mail
-    apps/gpui/scripts/build-wpe.sh                               # once on Linux, for the desktop app
     apps/gpui/scripts/patch-crates.sh && cargo run --manifest-path apps/gpui/Cargo.toml -- --demo  # the desktop app with made-up mail
 
 Checks (`cargo test` needs the compose services; the Stalwart test runs when `STALWART_URL` is set):

@@ -33,25 +33,14 @@ fn main() {
     }
 }
 
-/// Compiles `src/wpe/page.c` and links WPE WebKit from build/wpe, where the app finds it again
-/// when it runs from the build. The AppImage points it at its own copy.
+/// Compiles `src/wpe/page.c` and links the system's WPE WebKit.
 fn wpe() {
     println!("cargo:rerun-if-changed=src/wpe/page.c");
-    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
-    let built =
-        std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default()).join("build/wpe/lib/pkgconfig");
-    let search = std::env::var("PKG_CONFIG_PATH")
-        .map_or_else(|_| built.display().to_string(), |path| format!("{}:{path}", built.display()));
-    // SAFETY: the build script runs on one thread.
-    unsafe { std::env::set_var("PKG_CONFIG_PATH", search) };
     let mut build = cc::Build::new();
     for package in ["wpe-webkit-2.0", "wpe-platform-2.0"] {
         let library = pkg_config::probe_library(package)
-            .unwrap_or_else(|error| panic!("{package} wasn't found; build it with scripts/build-wpe.sh: {error}"));
+            .unwrap_or_else(|error| panic!("{package} wasn't found; install WPE WebKit (wpewebkit on Arch): {error}"));
         build.includes(&library.include_paths);
-        for path in &library.link_paths {
-            println!("cargo:rustc-link-arg-bins=-Wl,-rpath,{}", path.display());
-        }
     }
     build.file("src/wpe/page.c").warnings(false).compile("wonnet_wpe");
 }
