@@ -1,9 +1,9 @@
 //! The mailboxes of every account together, then each account with its colour, then settings,
-//! sliding over the page from the left. The mailboxes are dragged into the order wanted, and so
+//! sliding over the page from the left, or kept open beside it. The mailboxes are dragged into the order wanted, and so
 //! are the accounts; both orders are synced.
 
 use gpui::prelude::*;
-use gpui::{App, Entity, MouseButton, SharedString, Window, div, px};
+use gpui::{AnyElement, App, Div, Entity, MouseButton, SharedString, Window, div, px};
 
 use crate::models::Mailbox;
 use crate::store::{SettingsSection, Store};
@@ -25,22 +25,32 @@ pub fn sidebar(store: Entity<Store>, cx: &App) -> impl IntoElement + use<> {
             },
         ))
         .child(
-            div()
+            panel(&store, Some(bar(&store, cx).into_any_element()), cx)
                 .absolute()
                 .top_0()
                 .bottom_0()
                 .left_0()
-                .w(px(size::SIDEBAR_WIDTH))
-                .flex()
-                .flex_col()
-                .bg(cx.color(BACKGROUND))
-                .border_r_1()
-                .border_color(cx.color(BORDER))
-                .occlude()
-                .child(bar(&store, cx))
-                .child(rows(&store, cx))
-                .child(footer(&store, cx)),
+                .occlude(),
         )
+}
+
+/// Kept open beside the page, under the window's bar.
+pub fn beside(store: Entity<Store>, cx: &App) -> impl IntoElement + use<> {
+    panel(&store, None, cx).h_full()
+}
+
+fn panel(store: &Entity<Store>, top: Option<AnyElement>, cx: &App) -> Div {
+    div()
+        .w(px(size::SIDEBAR_WIDTH))
+        .flex_none()
+        .flex()
+        .flex_col()
+        .bg(cx.color(BACKGROUND))
+        .border_r_1()
+        .border_color(cx.color(BORDER))
+        .children(top)
+        .child(rows(store, cx))
+        .child(footer(store, cx))
 }
 
 /// The menu button, where the window's bar has it; the window's buttons stay on that bar.
@@ -72,7 +82,7 @@ fn pick(store: &Entity<Store>, mailbox: &str) -> impl Fn(&gpui::ClickEvent, &mut
     move |_, _, cx| {
         store.update(cx, |store, cx| {
             store.select_mailbox(&mailbox, cx);
-            store.sidebar_open = false;
+            store.sidebar_open = store.sidebar_beside();
         })
     }
 }

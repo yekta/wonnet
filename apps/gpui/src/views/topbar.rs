@@ -124,7 +124,7 @@ pub fn top_bar(
             })
             .into_any_element(),
     ];
-    if open.is_some() && !state.sidebar_open {
+    if open.is_some() && !state.sidebar_over() {
         let back = store.clone();
         leading.push(
             IconButton::new("back", Symbol::ArrowLeft, "Back (Esc)")

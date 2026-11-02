@@ -263,6 +263,21 @@ impl SettingsView {
                 .collect()
         });
         let server_symbol = if store.connection == "offline" { Symbol::WifiOff } else { Symbol::Server };
+        let keep_sidebar = store.local.keep_sidebar;
+        let keep_store = self.store.clone();
+        let keep = ui::switch(
+            "keep-sidebar",
+            keep_sidebar,
+            move |on, _, cx| {
+                keep_store.update(cx, |store, cx| {
+                    store.local.keep_sidebar = on;
+                    store.local.save();
+                    store.sidebar_open = on;
+                    cx.notify();
+                })
+            },
+            cx,
+        );
         vec![
             self.mark(
                 "appearance",
@@ -273,6 +288,17 @@ impl SettingsView {
                         ui::settings_row(
                             ui::settings_label("Theme", None, Lead::None, false, cx),
                             vec![theme.into_any_element()],
+                        )
+                        .into_any_element(),
+                        ui::settings_row(
+                            ui::settings_label(
+                                "Keep the sidebar open",
+                                Some("Beside the mail, which makes room for it, instead of over it.".into()),
+                                Lead::None,
+                                false,
+                                cx,
+                            ),
+                            vec![keep.into_any_element()],
                         )
                         .into_any_element(),
                     ],

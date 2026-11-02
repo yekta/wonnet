@@ -173,7 +173,7 @@ impl SettingsEntry {
     pub fn all() -> Vec<SettingsEntry> {
         use SettingsSection::*;
         vec![
-            Self::new("appearance", "Theme", General, "appearance light dark system mode"),
+            Self::new("appearance", "Theme", General, "appearance light dark system mode sidebar keep open beside"),
             Self::new("updates", "Updates", General, "version check for updates release about"),
             Self::new("server", "Server", General, "connection connected offline sync"),
             Self::new("accounts", "Accounts", Accounts, "add remove gmail jmap fastmail colour color notifications"),
@@ -331,7 +331,7 @@ impl Store {
     pub fn open_settings(&mut self, section: SettingsSection, target: Option<String>, cx: &mut Context<Self>) {
         self.settings = Some(section);
         self.settings_target = target;
-        self.sidebar_open = false;
+        self.sidebar_open &= self.local.keep_sidebar;
         self.load_preferences(cx);
         cx.notify();
     }

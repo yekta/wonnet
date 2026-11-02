@@ -412,6 +412,22 @@ impl Store {
 
     // MARK: Where the app is
 
+    /// The sidebar is open over the mail.
+    pub fn sidebar_over(&self) -> bool {
+        self.sidebar_open && !self.local.keep_sidebar
+    }
+
+    /// The sidebar is open beside the mail.
+    pub fn sidebar_beside(&self) -> bool {
+        self.sidebar_open && self.local.keep_sidebar
+    }
+
+    /// The width the list and the thread get: the window's, less a sidebar beside them.
+    pub fn page_width(&self, window: &gpui::Window) -> f32 {
+        let width: f32 = window.bounds().size.width.into();
+        if self.sidebar_beside() { width - crate::theme::size::SIDEBAR_WIDTH } else { width }
+    }
+
     pub fn ui_state(&self) -> UiState {
         UiState {
             mailbox: self.mailbox.clone(),

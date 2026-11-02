@@ -193,6 +193,11 @@ private struct GeneralSettings: View {
             } trailing: {
                 ChoiceMenu(options: Appearance.allCases, selection: $store.appearance, title: \.name)
             }
+            SettingsRow {
+                SettingsLabel(title: "Keep the sidebar open", detail: "Beside the mail, which makes room for it, instead of over it.")
+            } trailing: {
+                Switch(title: "Keep the sidebar open", isOn: $store.keepSidebar)
+            }
         }
         SettingsGroup(id: "updates", title: "Updates", detail: "New versions are downloaded and installed on their own; a restart finishes them.") {
             VersionRow()
