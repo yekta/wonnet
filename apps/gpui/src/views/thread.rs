@@ -781,7 +781,7 @@ impl Render for ThreadPane {
                 .border_color(cx.color(BORDER))
                 .child(pane)
                 .child(div().absolute().top(px(space::M)).right(px(space::M)).child(
-                    IconButton::new("pane-close", Symbol::X, "Close").plain().on_click(move |_, _, cx| {
+                    IconButton::new("pane-close", Symbol::X, "Close").plain().floating().on_click(move |_, _, cx| {
                         this.update(cx, |this, cx| {
                             this.pane = None;
                             cx.notify();

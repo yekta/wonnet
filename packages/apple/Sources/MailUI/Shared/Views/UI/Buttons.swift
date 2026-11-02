@@ -273,11 +273,15 @@ struct IconButton: View {
     var quiet = false
     var strong = false
     var pending = false
+    var floating = false
     let action: () -> Void
 
     var body: some View {
         Button(action: { if !pending { action() } }) {
-            IconCircle(symbol: symbol, size: size, active: active, circled: circled, quiet: quiet, strong: strong, pending: pending)
+            IconCircle(
+                symbol: symbol, size: size, active: active, circled: circled, quiet: quiet, strong: strong, pending: pending,
+                floating: floating
+            )
         }
         .buttonStyle(.press)
         .controlFace(size.height)
@@ -320,6 +324,8 @@ struct IconCircle: View {
     var quiet = false
     var strong = false
     var pending = false
+    /// Over content that scrolls under it, so filled with the background.
+    var floating = false
     @Environment(\.hovered) private var hovered
     @Environment(\.onCard) private var onCard
     @Environment(\.onPopover) private var onPopover
@@ -327,10 +333,15 @@ struct IconCircle: View {
     var body: some View {
         ButtonIcon(symbol: symbol, pending: pending, size: size.icon, tint: tint)
             .frame(width: size.height * Platform.scale, height: size.height * Platform.scale)
-            .background(Circle().fill(hovered ? (onPopover ? Tokens.popoverAccentStronger : Tokens.backgroundAccent).color : .clear))
+            .background(Circle().fill(fill))
             .overlay(Circle().strokeBorder(circled ? (onCard ? Theme.cardRule : Tokens.border).color : .clear, lineWidth: Theme.hairline))
             .padding(.horizontal, Theme.buttonGap / 2)
             .contentShape(Rectangle())
+    }
+
+    private var fill: Color {
+        if hovered { return (onPopover ? Tokens.popoverAccentStronger : Tokens.backgroundAccent).color }
+        return floating ? Tokens.background.color : .clear
     }
 
     private var tint: Color {

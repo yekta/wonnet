@@ -27,7 +27,7 @@ struct ThreadScreen: View {
                     Rule(vertical: true)
                     PersonView(email: email, openThread: store.open)
                         .overlay(alignment: .topTrailing) {
-                            IconButton(symbol: .x, help: "Close", circled: false) { paneEmail = nil }.padding(Space.m)
+                            IconButton(symbol: .x, help: "Close", circled: false, floating: true) { paneEmail = nil }.padding(Space.m)
                         }
                         .frame(width: 280)
                 }
