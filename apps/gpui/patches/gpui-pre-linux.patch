@@ -52,11 +52,37 @@ index 8d92234..a69b1ac 100644
          }
  
          if renderer.needs_redraw() {
+diff --git a/src/linux/x11/client.rs b/src/linux/x11/client.rs
+index e21f019..d6f9938 100644
+--- a/src/linux/x11/client.rs
++++ b/src/linux/x11/client.rs
+@@ -802,6 +802,7 @@ impl X11Client {
+                     .get(&x_window)
+                     .and_then(|window| window.is_mapped.then(|| window.window.clone()));
+                 if let Some(window) = window {
++                    window.expose();
+                     window.refresh(RequestFrameOptions {
+                         require_presentation: true,
+                         force_render: false,
 diff --git a/src/linux/x11/window.rs b/src/linux/x11/window.rs
-index f6ee76a..c0bafee 100644
+index f6ee76a..455a6fe 100644
 --- a/src/linux/x11/window.rs
 +++ b/src/linux/x11/window.rs
-@@ -1749,6 +1749,19 @@ impl PlatformWindow for X11Window {
+@@ -1181,6 +1181,13 @@ impl X11WindowStatePtr {
+         }
+     }
+ 
++    /// An exposed part of the window holds no pixels of ours until a frame presents it.
++    pub fn expose(&self) {
++        if let Some(renderer) = self.state.borrow_mut().renderer.as_mut() {
++            renderer.damage_all();
++        }
++    }
++
+     pub fn refresh(&self, mut request_frame_options: RequestFrameOptions) {
+         let callback = self.callbacks.borrow_mut().request_frame.take();
+         if let Some(mut fun) = callback {
+@@ -1749,6 +1756,19 @@ impl PlatformWindow for X11Window {
      }
  
      fn draw(&self, scene: &Scene) {
@@ -76,7 +102,7 @@ index f6ee76a..c0bafee 100644
          let mut inner = self.0.state.borrow_mut();
          let inner = &mut *inner;
          let Some(renderer) = &mut inner.renderer else {
-@@ -1775,7 +1788,7 @@ impl PlatformWindow for X11Window {
+@@ -1775,7 +1795,7 @@ impl PlatformWindow for X11Window {
              return;
          }
  

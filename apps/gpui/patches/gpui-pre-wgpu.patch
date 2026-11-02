@@ -9,7 +9,7 @@ index 29a79af..2e29870 100644
 -pub use wgpu_renderer::{GpuContext, WgpuRenderer, WgpuSurfaceConfig};
 +pub use wgpu_renderer::{DrawOutcome, GpuContext, WgpuRenderer, WgpuSurfaceConfig};
 diff --git a/src/wgpu_renderer.rs b/src/wgpu_renderer.rs
-index f6611df..48ed79e 100644
+index f6611df..74283b3 100644
 --- a/src/wgpu_renderer.rs
 +++ b/src/wgpu_renderer.rs
 @@ -5,7 +5,7 @@ use bytemuck::{Pod, Zeroable};
@@ -167,12 +167,17 @@ index f6611df..48ed79e 100644
          let format = self.surface_config.format;
  
          let Some(core) = self.core_mut() else {
-@@ -1115,7 +1195,23 @@ impl WgpuRenderer {
+@@ -1115,7 +1195,28 @@ impl WgpuRenderer {
          self.max_texture_size
      }
  
 +    pub fn damage_enabled(&self) -> bool {
 +        self.damage_enabled
++    }
++
++    /// Has the next frame redraw and present everything, for when the window lost its pixels.
++    pub fn damage_all(&mut self) {
++        self.pending_damage = SceneDamage::Full;
 +    }
 +
      pub fn draw(&mut self, scene: &Scene) -> bool {
@@ -191,7 +196,7 @@ index f6611df..48ed79e 100644
          #[cfg(target_family = "wasm")]
          if self.device_lost() {
              if matches!(self.state, RendererState::Ready { .. }) {
-@@ -1124,7 +1220,7 @@ impl WgpuRenderer {
+@@ -1124,7 +1225,7 @@ impl WgpuRenderer {
                  );
                  self.unconfigure_surface();
              }
@@ -200,7 +205,7 @@ index f6611df..48ed79e 100644
          }
  
          // Bail out early if the surface has been unconfigured (e.g. during
-@@ -1132,7 +1228,7 @@ impl WgpuRenderer {
+@@ -1132,7 +1233,7 @@ impl WgpuRenderer {
          // a texture from an unconfigured surface can block indefinitely on
          // some drivers (Adreno).
          let RendererState::Ready { surface, core } = &mut self.state else {
@@ -209,7 +214,7 @@ index f6611df..48ed79e 100644
          };
  
          if let Some(error) = self.last_surface_error.take().or_else(|| {
-@@ -1153,30 +1249,47 @@ impl WgpuRenderer {
+@@ -1153,30 +1254,47 @@ impl WgpuRenderer {
                  self.atlas.clear();
                  self.needs_redraw = true;
                  self.failed_frame_count = 0;
@@ -262,7 +267,7 @@ index f6611df..48ed79e 100644
              }
          };
  
-@@ -1191,19 +1304,48 @@ impl WgpuRenderer {
+@@ -1191,19 +1309,48 @@ impl WgpuRenderer {
              .create_view(&wgpu::TextureViewDescriptor::default());
          let premultiplied_alpha =
              self.surface_config.alpha_mode == wgpu::CompositeAlphaMode::PreMultiplied;
@@ -323,7 +328,7 @@ index f6611df..48ed79e 100644
      }
  }
  
-@@ -1348,6 +1490,7 @@ impl WgpuRendererCore {
+@@ -1348,6 +1495,7 @@ impl WgpuRendererCore {
                  path_intermediate_view: None,
                  path_msaa_texture: None,
                  path_msaa_view: None,
@@ -331,7 +336,7 @@ index f6611df..48ed79e 100644
              },
              atlas,
              path_globals_offset,
-@@ -1409,6 +1552,127 @@ impl WgpuRendererCore {
+@@ -1409,6 +1557,127 @@ impl WgpuRendererCore {
          resources.path_msaa_view = path_msaa_view;
      }
  
@@ -459,7 +464,7 @@ index f6611df..48ed79e 100644
      fn render_frame(
          &mut self,
          scene: &Scene,
-@@ -1416,6 +1680,7 @@ impl WgpuRendererCore {
+@@ -1416,6 +1685,7 @@ impl WgpuRendererCore {
          size: Size<DevicePixels>,
          premultiplied_alpha: bool,
          clear_color: wgpu::Color,
@@ -467,7 +472,7 @@ index f6611df..48ed79e 100644
      ) -> Result<wgpu::SubmissionIndex> {
          anyhow::ensure!(
              size.width.0 > 0 && size.height.0 > 0,
-@@ -1463,7 +1728,7 @@ impl WgpuRendererCore {
+@@ -1463,7 +1733,7 @@ impl WgpuRendererCore {
              bytemuck::bytes_of(&gamma_params),
          );
  
@@ -476,7 +481,7 @@ index f6611df..48ed79e 100644
              .inspect_err(|_| {
                  // Queue writes are staged before encoding; flush them even if the frame fails.
                  self.resources.queue.submit(std::iter::empty());
-@@ -1475,6 +1740,7 @@ impl WgpuRendererCore {
+@@ -1475,6 +1745,7 @@ impl WgpuRendererCore {
          scene: &Scene,
          frame_view: &wgpu::TextureView,
          clear_color: wgpu::Color,
@@ -484,7 +489,7 @@ index f6611df..48ed79e 100644
      ) -> Result<wgpu::SubmissionIndex> {
          let mut instance_offset = 0;
          let instance_bindings = self
-@@ -1515,6 +1781,9 @@ impl WgpuRendererCore {
+@@ -1515,6 +1786,9 @@ impl WgpuRendererCore {
                  depth_stencil_attachment: None,
                  ..Default::default()
              });
@@ -494,7 +499,7 @@ index f6611df..48ed79e 100644
  
              for batch in scene.batches() {
                  match batch {
-@@ -1557,6 +1826,9 @@ impl WgpuRendererCore {
+@@ -1557,6 +1831,9 @@ impl WgpuRendererCore {
                              depth_stencil_attachment: None,
                              ..Default::default()
                          });
@@ -504,7 +509,7 @@ index f6611df..48ed79e 100644
  
                          if rasterized {
                              self.draw_paths_from_intermediate(
-@@ -2401,7 +2673,7 @@ impl WgpuHeadlessRenderer {
+@@ -2401,7 +2678,7 @@ impl WgpuHeadlessRenderer {
              .view
              .clone();
          self.core
