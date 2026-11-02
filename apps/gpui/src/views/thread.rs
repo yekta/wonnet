@@ -654,9 +654,8 @@ impl Render for ThreadPane {
         if moved && self.pending_scroll.is_none() && self.shown.as_ref() == Some(&open.id) {
             self.store.update(cx, |store, _| store.note_thread_scroll(offset));
         }
-        let width: f32 = window.bounds().size.width.into();
-        let wide = width >= size::PANE_FROM;
         let store = self.store.read(cx);
+        let wide = store.page_width(window) >= size::PANE_FROM;
         let (tucked, starts) = self.tucked(&open, store);
         let last = open.messages.last().map(|message| message.id.clone());
         let mut children: Vec<gpui::AnyElement> = vec![self.header(&open, cx).into_any_element()];

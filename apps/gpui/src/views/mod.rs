@@ -540,7 +540,7 @@ impl MailWindow {
 
     fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let store = self.store.read(cx);
-        if store.sidebar_open {
+        if store.sidebar_over() {
             self.store.update(cx, |store, cx| {
                 store.sidebar_open = false;
                 cx.notify();
@@ -662,7 +662,7 @@ impl MailWindow {
             || self.gallery.is_some()
             || store.confirmation.is_some()
             || store.contact.is_some()
-            || store.sidebar_open
+            || store.sidebar_over()
             || ui::menu_open(cx);
         let bottom = if store.toast.is_some() || self.updater.read(cx).banner_shown() { px(110.) } else { px(0.) };
         body::Occlusion { all, bottom }
@@ -935,21 +935,32 @@ impl Render for MailWindow {
 }
 
 impl MailWindow {
-    /// The list, the thread over it, the bar on top, and the sidebar over them all.
+    /// The list, the thread over it, the bar on top, and the sidebar over them all or beside them.
     fn mail(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let store = self.store.read(cx);
         let open = store.conversation.is_some();
-        let sidebar_open = store.sidebar_open;
+        let (over, beside) = (store.sidebar_over(), store.sidebar_beside());
         let bar = topbar::top_bar(self, window, cx);
         let page = if open { self.thread.clone().into_any_element() } else { self.list.clone().into_any_element() };
         let store = self.store.clone();
+        let page = div().flex_1().min_h_0().child(page);
+        let page = match beside {
+            true => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .child(sidebar::beside(store.clone(), cx))
+                .child(page.min_w_0().h_full())
+                .into_any_element(),
+            false => page.into_any_element(),
+        };
         div()
             .relative()
             .size_full()
             .flex()
             .flex_col()
             .child(bar)
-            .child(div().flex_1().min_h_0().child(page))
-            .when(sidebar_open, |page| page.child(sidebar::sidebar(store, cx)))
+            .child(page)
+            .when(over, |page| page.child(sidebar::sidebar(store, cx)))
     }
 }

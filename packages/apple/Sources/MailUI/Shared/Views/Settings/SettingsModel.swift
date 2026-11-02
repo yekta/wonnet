@@ -5,7 +5,7 @@ extension MailStore {
     func openSettings(_ section: SettingsSection = .general, target: String? = nil) {
         settings = section
         settingsTarget = target
-        sidebarOpen = false
+        sidebarOpen = sidebarOpen && keepSidebar
         Task { await loadPreferences() }
     }
 

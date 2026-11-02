@@ -119,6 +119,14 @@ public final class MailStore {
     var imagesShown: Set<String> = []
     /// The mailboxes over the page (Mac).
     var sidebarOpen = false
+    /// The sidebar stays open beside the page, which makes room for it, instead of over it (Mac).
+    /// Turning it on shows it.
+    var keepSidebar = UserDefaults.standard.bool(forKey: "keepSidebar") {
+        didSet {
+            UserDefaults.standard.set(keepSidebar, forKey: "keepSidebar")
+            sidebarOpen = keepSidebar
+        }
+    }
     /// How far the list and the open thread are scrolled, as their views report it; a view made
     /// anew goes back to it. A thread not scrolled yet has no offset: it opens on its message.
     @ObservationIgnored var listOffset: CGFloat = 0

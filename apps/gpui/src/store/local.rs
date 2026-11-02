@@ -1,4 +1,5 @@
-//! The settings kept on this device only: the theme, the undo delay, the settings' sidebar.
+//! The settings kept on this device only: the theme, the undo delay, the settings' sidebar and
+//! whether the mailboxes' sidebar is kept open.
 
 use std::path::PathBuf;
 
@@ -32,6 +33,8 @@ pub struct LocalSettings {
     /// How long a message waits after Send, in seconds, to be taken back.
     pub undo_delay: u64,
     pub settings_sidebar: f32,
+    /// The sidebar stays open beside the mail, which makes room for it, instead of over it.
+    pub keep_sidebar: bool,
     #[serde(skip)]
     path: Option<PathBuf>,
 }
@@ -42,6 +45,7 @@ impl Default for LocalSettings {
             appearance: Appearance::System,
             undo_delay: 5,
             settings_sidebar: crate::theme::size::SIDEBAR_WIDTH,
+            keep_sidebar: false,
             path: None,
         }
     }

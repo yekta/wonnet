@@ -190,7 +190,7 @@ final class KeyCoordinator {
     }
 
     private func escape() -> Bool {
-        if let sidebarOpen, sidebarOpen.wrappedValue {
+        if let sidebarOpen, sidebarOpen.wrappedValue, !store.keepSidebar {
             withAnimation(Theme.sidebarSlide) { sidebarOpen.wrappedValue = false }
         } else if store.conversation != nil {
             store.close()

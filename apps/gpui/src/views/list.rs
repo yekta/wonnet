@@ -141,7 +141,7 @@ impl ThreadList {
         let selecting = !store.selection.is_empty();
         let circles = store.select_circles();
         let loading = store.loading_more && store.search_rows.is_none();
-        let width: f32 = window.bounds().size.width.into();
+        let width = store.page_width(window);
         let column = (width - 48. - 2. * size::SELECT_GUTTER).clamp(0., size::CARD_WIDTH);
         let select_help = store.key_help("Select", "select");
         let shown: Vec<Option<(ThreadRow, RowState)>> = range

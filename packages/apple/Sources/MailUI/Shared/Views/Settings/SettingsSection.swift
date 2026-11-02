@@ -47,7 +47,7 @@ struct SettingsEntry: Identifiable, Hashable {
     let keywords: String
 
     static let all: [SettingsEntry] = [
-        SettingsEntry(id: "appearance", title: "Theme", section: .general, keywords: "appearance light dark system mode"),
+        SettingsEntry(id: "appearance", title: "Theme", section: .general, keywords: "appearance light dark system mode sidebar keep open beside"),
         SettingsEntry(id: "updates", title: "Updates", section: .general, keywords: "version check for updates release about"),
         SettingsEntry(id: "server", title: "Server", section: .general, keywords: "connection connected offline sync"),
         SettingsEntry(id: "accounts", title: "Accounts", section: .accounts, keywords: "add remove gmail outlook microsoft hotmail jmap fastmail colour color notifications"),

@@ -90,10 +90,13 @@ private struct MacPages: View {
         } else {
             ZStack(alignment: .leading) {
                 // The mail stays under the settings, so going back finds it as it was left.
-                content
-                    .opacity(store.settings == nil ? 1 : 0)
-                    .allowsHitTesting(store.settings == nil)
-                if store.settings == nil { sidebar }
+                HStack(spacing: 0) {
+                    if store.settings == nil, store.keepSidebar, store.sidebarOpen { panel }
+                    content
+                }
+                .opacity(store.settings == nil ? 1 : 0)
+                .allowsHitTesting(store.settings == nil)
+                if store.settings == nil, !store.keepSidebar { sidebar }
                 if let section = store.settings { SettingsRoute(section: section) }
             }
             .overlay(alignment: .bottom) {
@@ -125,10 +128,10 @@ private struct MacPages: View {
             Color.clear.frame(height: Theme.barHeight)
             SidebarView(
                 showSettings: {
-                    showSidebar(false)
+                    if !store.keepSidebar { showSidebar(false) }
                     store.openSettings()
                 },
-                picked: { _ in showSidebar(false) }
+                picked: { _ in if !store.keepSidebar { showSidebar(false) } }
             )
         }
         .frame(width: Theme.sidebarWidth)
@@ -244,7 +247,7 @@ struct MacTopBar: View {
                         IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)
                             .background(ToolbarEdge { pastMenu = $0 })
                         // Over the open sidebar, only the menu, which closes it.
-                        if store.conversation != nil, !store.sidebarOpen {
+                        if store.conversation != nil, !store.sidebarOpen || store.keepSidebar {
                             IconButton(symbol: .arrowLeft, help: "Back (Esc)") { store.close() }
                         }
                     }
