@@ -402,8 +402,8 @@ impl MailWindow {
             if plain {
                 return false;
             }
-            const EVERYWHERE: [&str; 7] =
-                ["compose", "settings", "print", "palette", "keybindings", "unsubscribe", "zero"];
+            const EVERYWHERE: [&str; 8] =
+                ["compose", "settings", "print", "palette", "keybindings", "unsubscribe", "zero", "readAll"];
             let scope = if store.conversation.is_some() { KeyScope::Thread } else { KeyScope::List };
             let Some(command) = store.command_for(stroke, scope) else { return false };
             if !EVERYWHERE.contains(&command.id.as_str()) && !command.id.starts_with("go.account.") {
@@ -530,6 +530,7 @@ impl MailWindow {
             "unreadOnly" => store.update(cx, |store, cx| store.toggle_filter(Filter::Unread, cx)),
             "starredOnly" => store.update(cx, |store, cx| store.toggle_filter(Filter::Starred, cx)),
             "zero" => store.update(cx, |store, cx| store.archive_all(cx)),
+            "readAll" => store.update(cx, |store, cx| store.read_all(cx)),
             "settings" => store.update(cx, |store, cx| store.open_settings(SettingsSection::General, None, cx)),
             "keybindings" => store.update(cx, |store, cx| store.open_settings(SettingsSection::Keybindings, None, cx)),
             _ => return false,

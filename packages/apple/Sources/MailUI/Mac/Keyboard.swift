@@ -27,6 +27,7 @@ struct MacCommands: Commands {
             Button("Unsubscribe") { store.run(.unsubscribe) }.shortcut("unsubscribe", store)
                 .disabled(store.sheetOpen || store.current == nil && store.selection.isEmpty)
             Button("Get Me To Zero") { store.archiveAll() }.shortcut("zero", store).disabled(store.sheetOpen || store.searchRows != nil || store.rows.isEmpty)
+            Button("Mark All Read") { store.readAll() }.shortcut("readAll", store).disabled(store.sheetOpen || store.searchRows != nil || store.rows.isEmpty)
         }
         CommandMenu("Go") {
             Button("All Inboxes") { store.select(mailbox: "inbox") }.shortcut("go.account.0", store).disabled(store.sheetOpen)
@@ -176,6 +177,7 @@ final class KeyCoordinator {
         case "unreadOnly": store.toggleFilter(.unread)
         case "starredOnly": store.toggleFilter(.starred)
         case "zero": store.archiveAll()
+        case "readAll": store.readAll()
         case "settings": store.openSettings()
         case "keybindings": store.openSettings(.keybindings)
         default: return false

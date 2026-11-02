@@ -255,6 +255,32 @@ impl Store {
         cx.notify();
     }
 
+    /// Marks every unread thread in the mailbox on screen read, after asking.
+    pub fn read_all(&mut self, cx: &mut Context<Self>) {
+        if self.search_rows.is_some() {
+            return;
+        }
+        let (mailbox, filter) = (self.mailbox.clone(), self.filter);
+        let what = match filter {
+            Some(Filter::Unread) => "every unread thread",
+            Some(Filter::Starred) => "every starred thread",
+            None => "everything",
+        };
+        self.confirmation = Some(Confirmation {
+            title: format!("Mark {what} in {} read?", self.shown_name()),
+            message: "Every unread thread shown here is marked read.".into(),
+            action: "Mark all read".into(),
+            cancel: "Cancel",
+            safe: true,
+            perform: Rc::new(move |this, cx| {
+                this.clear_selection(cx);
+                let command = Command::ReadAll { mailbox: mailbox.clone(), filter };
+                this.ask_or_show(command, cx, |this, reply: ActReply, cx| this.report(reply, cx));
+            }),
+        });
+        cx.notify();
+    }
+
     /// The list's name as shown: a split's own name, else the mailbox's.
     pub fn shown_name(&self) -> String {
         if self.splits.is_empty() {

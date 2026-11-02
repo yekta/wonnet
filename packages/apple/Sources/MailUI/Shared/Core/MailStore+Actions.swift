@@ -235,6 +235,31 @@ extension MailStore {
         }
     }
 
+    /// Marks every unread thread in the mailbox on screen read, after asking.
+    func readAll() {
+        guard searchRows == nil else { return }
+        var fields: [String: Any] = ["mailbox": mailbox]
+        if let filter { fields["filter"] = filter.rawValue }
+        let what = switch filter {
+        case .unread: "every unread thread"
+        case .starred: "every starred thread"
+        case nil: "everything"
+        }
+        confirmation = Confirmation(
+            title: "Mark \(what) in \(shownName) read?", message: "Every unread thread shown here is marked read.", action: "Mark all read"
+        ) { [weak self] in
+            guard let self else { return }
+            clearSelection()
+            Task {
+                do {
+                    self.report(try await self.bridge.call("read_all", fields, as: ActReply.self))
+                } catch {
+                    self.show(error.localizedDescription)
+                }
+            }
+        }
+    }
+
     /// The list's name as shown: a split's own name ("Important"), else the mailbox's.
     var shownName: String {
         guard !splits.isEmpty else { return mailboxName }

@@ -514,6 +514,13 @@ fn general_items(store: &Entity<Store>, cx: &App) -> Vec<Item> {
             state.key_label("zero"),
             |store, cx| store.archive_all(cx),
         ));
+        items.push(run(
+            "readAll",
+            "Mark All Read: everything here",
+            Symbol::MailOpen,
+            state.key_label("readAll"),
+            |store, cx| store.read_all(cx),
+        ));
     }
     if state.can_empty() {
         let title = format!("Empty {}", state.mailbox_name());

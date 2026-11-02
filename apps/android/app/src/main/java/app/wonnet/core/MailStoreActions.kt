@@ -182,6 +182,27 @@ fun MailStore.archiveAll() {
     }
 }
 
+/** Marks every unread thread in the mailbox on screen read, after asking. */
+fun MailStore.readAll() {
+    if (searchRows != null) return
+    val fields = mapOf("mailbox" to mailbox, "filter" to filter?.id)
+    val what = when (filter) {
+        Filter.Unread -> "every unread thread"
+        Filter.Starred -> "every starred thread"
+        null -> "everything"
+    }
+    confirmation = Confirmation("Mark $what in $shownName read?", "Every unread thread shown here is marked read.", "Mark all read") {
+        clearSelection()
+        scope.launch {
+            try {
+                report(bridge.call("read_all", fields) { ActReply.read(it.objectOrEmpty) })
+            } catch (error: CoreError) {
+                show(error.message)
+            }
+        }
+    }
+}
+
 /** The list's name as shown: a split's own name ("Important"), else the mailbox's. */
 val MailStore.shownName: String
     get() {

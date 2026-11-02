@@ -18,7 +18,7 @@ use mail_protocol::api::{
 use mail_protocol::wire::{ClientMessage, ServerMessage};
 use mail_protocol::{
     ACCOUNT_COLORS, ACCOUNT_NAME_MAX, Account, Address, Draft, DraftAttachment, Label, Message, MessageState, Op,
-    PROTOCOL_VERSION, Preference, SavedDraft, role,
+    PROTOCOL_VERSION, Preference, Rule, SavedDraft, role,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -503,6 +503,8 @@ impl Core {
             Command::ArchiveAll { mailbox, before, filter, keep } => {
                 to_value(self.archive_all(&mailbox, before, filter, &keep))
             }
+            Command::ReadAll { mailbox, filter } => to_value(self.read_all(&mailbox, filter)),
+            Command::ApplyRule { rule } => to_value(self.apply_rule(&rule)),
             Command::EmptyMailbox { mailbox } => to_value(self.empty_mailbox(&mailbox)),
             Command::CreateLabel { account, name } => self.create_label(account, &name),
             Command::ParseTime { text } => Ok(json!({ "choices": times::parse(&text, &Local::now()) })),
@@ -1307,6 +1309,72 @@ impl Core {
         let action = self.actions;
         self.backlog.extend(ops.map(|op| Step::Mutate { action, op }));
         Ok(ActReply { message: Some("Archived.".into()), undo, url: None })
+    }
+
+    fn read_all(&mut self, mailbox: &str, filter: Option<Filter>) -> Result<ActReply> {
+        let ids = self.store.unread_messages(mailbox, filter)?;
+        if ids.is_empty() {
+            return Ok(ActReply::default());
+        }
+        let back = undo::in_chunks(Op::SetUnread { ids: ids.clone(), unread: true });
+        self.mutate_in_steps(undo::in_chunks(Op::SetUnread { ids, unread: false }), back)?;
+        Ok(ActReply { message: Some("Marked read.".into()), undo: true, url: None })
+    }
+
+    fn apply_rule(&mut self, rule: &Rule) -> Result<ActReply> {
+        let found = self.store.rule_messages(rule)?;
+        let mut labelled = Vec::new();
+        let mut archived = Vec::new();
+        let mut read = Vec::new();
+        let mut count = 0;
+        for (id, state) in found {
+            let labels = rule.label.as_ref().is_some_and(|label| !state.has(label));
+            let archives = rule.skip_inbox && state.has(role::INBOX);
+            let reads = rule.mark_read && state.unread;
+            if labels {
+                labelled.push(id.clone());
+            }
+            if archives {
+                archived.push(id.clone());
+            }
+            if reads {
+                read.push(id);
+            }
+            count += usize::from(labels || archives || reads);
+        }
+        if count == 0 {
+            return Ok(ActReply { message: Some("Nothing here matches.".into()), undo: false, url: None });
+        }
+        let mut ops = Vec::new();
+        let mut back = Vec::new();
+        if let Some(label) = rule.label.clone().filter(|_| !labelled.is_empty()) {
+            ops.extend(undo::in_chunks(Op::AddLabel { ids: labelled.clone(), label: label.clone() }));
+            back.extend(undo::in_chunks(Op::RemoveLabel { ids: labelled, label }));
+        }
+        if !archived.is_empty() {
+            ops.extend(undo::in_chunks(Op::Archive { ids: archived.clone() }));
+            back.extend(undo::in_chunks(Op::AddLabel { ids: archived, label: role::INBOX.into() }));
+        }
+        if !read.is_empty() {
+            ops.extend(undo::in_chunks(Op::SetUnread { ids: read.clone(), unread: false }));
+            back.extend(undo::in_chunks(Op::SetUnread { ids: read, unread: true }));
+        }
+        self.mutate_in_steps(ops, back)?;
+        let noun = if count == 1 { "message" } else { "messages" };
+        Ok(ActReply { message: Some(format!("Applied to {count} {noun}.")), undo: true, url: None })
+    }
+
+    /// Applies the first op at once and the rest between the app's next commands, as one action
+    /// `back` undoes.
+    fn mutate_in_steps(&mut self, ops: Vec<Op>, back: Vec<Op>) -> Result<()> {
+        let mut ops = ops.into_iter();
+        if let Some(first) = ops.next() {
+            self.mutate(first)?;
+        }
+        self.remember_undo(back);
+        let action = self.actions;
+        self.backlog.extend(ops.map(|op| Step::Mutate { action, op }));
+        Ok(())
     }
 
     fn empty_mailbox(&mut self, mailbox: &str) -> Result<ActReply> {

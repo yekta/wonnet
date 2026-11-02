@@ -447,6 +447,7 @@ private struct InboxSettings: View {
         .sheet(item: $editing) { split in
             SplitSheet(split: split).environment(store)
         }
+        RuleRows()
         SettingsGroup(id: "tabs", title: "Tabs", detail: "The mailboxes kept over the list. Drag a tab to move it; right-click it to remove it.") {
             TabRows()
         }
@@ -550,6 +551,77 @@ private struct SplitSheet: View {
         split.name = split.name.trimmingCharacters(in: .whitespaces)
         split.from = CustomSplit.senders(senders)
         store.saveSplit(split)
+        dismiss()
+    }
+}
+
+/// The rules, each opening its editor, and the way to add one.
+private struct RuleRows: View {
+    @Environment(MailStore.self) private var store
+    /// The rule being written, new or not.
+    @State private var editing: RuleDraft?
+
+    var body: some View {
+        let rules = store.customRules
+        SettingsGroup(id: "rules", title: "Rules", detail: "Mail that matches is labelled, kept out of the inbox or marked read as it arrives. Drag one to move it.") {
+            MovableList(
+                items: rules, scrolls: false, group: { _ in "rules" }, clicked: { editing = store.draft(of: $0) }, moved: store.moveRule,
+                menu: { rule in
+                    [RowMenuItem(title: "Edit") { editing = store.draft(of: rule) }, RowMenuItem(title: "Remove", destructive: true) { store.removeRule(rule) }]
+                }
+            ) { rule in
+                MovableRow {
+                    SettingsLabel(title: store.summary(of: rule), symbol: .zap)
+                } trailing: {
+                    Image(.chevronRight, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                }
+            }
+            SettingsRow {
+                ActionButton(title: "Add rule", symbol: .plus, variant: .outline) { editing = store.newRule() }
+            }
+        }
+        .sheet(item: $editing) { draft in
+            RuleSheet(draft: draft).environment(store)
+        }
+    }
+}
+
+private struct RuleSheet: View {
+    @Environment(MailStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State var draft: RuleDraft
+
+    var body: some View {
+        let labels = store.splitLabels
+        Sheet(title: draft.isNew ? "New rule" : "Edit rule", size: .large, background: Tokens.background) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.m) {
+                    InputField(label: "From", text: $draft.from, placeholder: "ann@example.com, @example.com", autofocus: true)
+                    InputField(label: "To", text: $draft.to, placeholder: "team@example.com")
+                    InputField(label: "Subject contains", text: $draft.subject, placeholder: "[project], invoice")
+                    Notice(text: "Addresses, or @ and a domain for everyone there; To also looks at Cc. Mail matches when it meets every field filled in.")
+                    if !labels.isEmpty {
+                        Dropdown(label: "Label", options: labels.map(\.id), selection: $draft.rule.label, none: "None") { id in
+                            labels.first { $0.id == id }?.name ?? id
+                        }
+                    }
+                    ToggleRow(title: "Skip the inbox", isOn: $draft.rule.skipInbox)
+                    ToggleRow(title: "Mark as read", isOn: $draft.rule.markRead)
+                    if draft.isNew {
+                        ToggleRow(title: "Also apply to mail already here", isOn: $draft.applying)
+                    }
+                }
+                .padding(Space.xl)
+            }
+        } trailing: {
+            ActionButton(title: "Save", variant: .primary, action: save)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!draft.canSave)
+        }
+    }
+
+    private func save() {
+        store.saveRule(draft)
         dismiss()
     }
 }

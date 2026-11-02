@@ -834,3 +834,48 @@ fn only_threads_still_unread_in_an_inbox_keep_their_notifications() {
     set(&mut store, "split_inbox", json!(true));
     assert_eq!(store.unread_in_inbox(&threads).unwrap(), ["a:t1"], "with the inbox split too");
 }
+
+#[test]
+fn marks_read_the_unread_messages_of_the_threads_a_mailbox_shows() {
+    let mut store = store();
+    let mut read = message("m2", "t1", "Ann", 2);
+    read.unread = false;
+    let mut archived = message("m3", "t2", "Bob", 3);
+    archived.labels = vec![];
+    apply(&mut store, &[account()], &[message("m1", "t1", "Ann", 1), read, archived, message("m4", "t3", "Cy", 4)], 1);
+
+    assert_eq!(store.unread_messages("inbox", None).unwrap(), ["m4", "m1"]);
+    assert_eq!(store.unread_messages("a/inbox", None).unwrap(), ["m4", "m1"]);
+    assert!(store.unread_messages("a/inbox", Some(Filter::Starred)).unwrap().is_empty());
+    assert_eq!(store.unread_messages("archive", None).unwrap(), ["m3"]);
+}
+
+#[test]
+fn a_rule_holds_for_others_mail_outside_sent_drafts_spam_and_trash() {
+    let mut store = store();
+    let label = Label { id: "dux".into(), account_id: "a".into(), name: "dux-shell".into(), deleted: false, rev: 1 };
+    let mut pr = message("m1", "t1", "Notifications", 1);
+    pr.from = Address::new(None, "notifications@github.com");
+    pr.recipients.to = vec![Address::new(None, "dux-shell@noreply.github.com")];
+    let mut spam = pr.clone();
+    spam.id = "m2".into();
+    spam.labels = vec!["spam".into()];
+    let mut other = message("m3", "t2", "Ann", 3);
+    other.recipients.to = vec![Address::new(None, "me@example.com")];
+    let mut sent = mine("m4", "t3", "dux-shell@noreply.github.com", 4);
+    sent.labels = vec!["inbox".into()];
+    let batch = Batch {
+        accounts: &[account()],
+        labels: &[label],
+        messages: &[pr, spam, other, sent],
+        cursor: Some(1),
+        ..Default::default()
+    };
+    store.apply_changes(batch).unwrap();
+
+    let rule = Rule { to: vec!["dux-shell@noreply.github.com".into()], skip_inbox: true, ..Default::default() };
+    let found: Vec<String> = store.rule_messages(&rule).unwrap().into_iter().map(|(id, _)| id).collect();
+    assert_eq!(found, ["m1"]);
+    let elsewhere = Rule { label: Some("gone".into()), ..rule };
+    assert!(store.rule_messages(&elsewhere).unwrap().is_empty(), "a label the store doesn't have holds nowhere");
+}
