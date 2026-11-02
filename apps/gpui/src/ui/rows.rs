@@ -47,7 +47,6 @@ pub struct NavRow {
     vertical: f32,
     inset: Option<f32>,
     detail: Option<SharedString>,
-    on_card: bool,
     trailing: Vec<AnyElement>,
     on_click: Option<OnClick>,
     menu: Option<RowMenu>,
@@ -88,7 +87,6 @@ impl NavRow {
             vertical: 0.,
             inset: None,
             detail: None,
-            on_card: false,
             trailing: Vec::new(),
             on_click: None,
             menu: None,
@@ -137,12 +135,6 @@ impl NavRow {
         self
     }
 
-    /// On a card it hovers in the card's accent.
-    pub fn on_card(mut self) -> Self {
-        self.on_card = true;
-        self
-    }
-
     pub fn trailing(mut self, element: impl IntoElement) -> Self {
         self.trailing.push(element.into_any_element());
         self
@@ -172,7 +164,6 @@ impl NavRow {
 impl RenderOnce for NavRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let fill = if self.selected { Some(cx.color(BACKGROUND_ACCENT_STRONGER)) } else { None };
-        let hover = cx.color(if self.on_card { CARD_ACCENT } else { BACKGROUND_ACCENT });
         let lead = match &self.lead {
             Lead::Dot(color) => Some(div().size(px(8.)).rounded_full().bg(cx.color(*color)).into_any_element()),
             Lead::Symbol(symbol) => Some(icon(*symbol, 15.).into_any_element()),
@@ -192,7 +183,7 @@ impl RenderOnce for NavRow {
             .pr(px(trailing))
             .text_color(cx.color(FOREGROUND))
             .when_some(fill, |face, fill| face.bg(fill))
-            .when(!self.selected, |face| face.hover(|face| face.bg(hover)))
+            .when(!self.selected, |face| face.hover(|face| face.bg(cx.color(BACKGROUND_ACCENT))))
             .when_some(lead, |face, lead| face.child(div().w(px(18.)).flex().justify_center().child(lead)))
             .child(line_in(self.title.clone(), TextStyle::Label, FOREGROUND, cx).flex_1())
             .when(self.count > 0, |face| face.child(line(self.count.to_string(), TextStyle::Caption, cx).flex_none()))

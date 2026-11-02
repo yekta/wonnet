@@ -291,7 +291,7 @@ private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boole
         }
     }
     personEmail?.let { email ->
-        Sheet("Contact", { personEmail = null }, background = Tokens.card) {
+        Sheet("Contact", { personEmail = null }) {
             PersonView(store, email, closeSheet = { personEmail = null }) { thread ->
                 personEmail = null
                 store.show(thread)

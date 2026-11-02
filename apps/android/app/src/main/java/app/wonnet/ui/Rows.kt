@@ -88,13 +88,11 @@ fun NavRow(
     onClick: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    val onCard = LocalOnCard.current
-
     @Composable
     fun Face(lit: Boolean) {
         val fill = when {
-            selected -> (if (onCard) Tokens.cardLargerAccentStronger else Tokens.backgroundAccentStronger).color
-            lit -> (if (onCard) Tokens.cardLargerAccent else Tokens.backgroundAccent).color
+            selected -> Tokens.backgroundAccentStronger.color
+            lit -> Tokens.backgroundAccent.color
             else -> Color.Transparent
         }
         Row(

@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -45,7 +44,6 @@ import app.wonnet.ui.ActionButton
 import app.wonnet.ui.Avatar
 import app.wonnet.ui.ChoiceList
 import app.wonnet.ui.ChoiceRow
-import app.wonnet.ui.LocalOnCard
 import app.wonnet.ui.NavRow
 import app.wonnet.ui.SectionHeading
 import app.wonnet.ui.SearchField
@@ -197,32 +195,36 @@ fun LabelPicker(store: MailStore, labeling: Labeling) {
  */
 @Composable
 fun PersonView(store: MailStore, email: String, closeSheet: () -> Unit, openThread: (String) -> Unit) {
-    var person by remember { mutableStateOf<Person?>(null) }
-    LaunchedEffect(email) { person = store.person(email) }
+    var person by remember(email) { mutableStateOf<Person?>(null) }
+    var loaded by remember(email) { mutableStateOf(false) }
+    LaunchedEffect(email) {
+        person = store.person(email)
+        loaded = true
+    }
+    // Nothing until they are read, rather than a frame of the email in their name's place.
+    if (!loaded) return
     val name = person?.name?.takeIf { it.isNotEmpty() } ?: email
-    CompositionLocalProvider(LocalOnCard provides true) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-            Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.l)) {
-                Avatar(person?.initials ?: email.take(1).uppercase(), email, 52f)
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    Text(name, TextStyle.Heading)
-                    SelectionContainer { Text(email, TextStyle.Label, color = Tokens.mutedStrongerForeground.color) }
-                }
-                ActionButton("New message", symbol = Symbol.SquarePen) {
-                    closeSheet()
-                    store.write(Address(person?.name?.takeIf { it.isNotEmpty() }, email))
-                }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+            Avatar(person?.initials ?: email.take(1).uppercase(), email, 52f)
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                Text(name, TextStyle.Heading)
+                SelectionContainer { Text(email, TextStyle.Label, color = Tokens.mutedStrongerForeground.color) }
             }
-            val threads = person?.threads ?: emptyList()
-            if (threads.isEmpty()) return@Column
-            SectionHeading("Recent", Modifier.padding(start = Space.xl, end = Space.xl, top = Space.xxs, bottom = Space.m - Dims.rowGap / 2))
-            for (row in threads) {
-                NavRow(row.subject.ifEmpty { "(no subject)" }, inset = Space.xl, onClick = { openThread(row.id) }) {
-                    Text(row.date, TextStyle.Caption)
-                }
+            ActionButton("New message", symbol = Symbol.SquarePen) {
+                closeSheet()
+                store.write(Address(person?.name?.takeIf { it.isNotEmpty() }, email))
             }
-            Spacer(Modifier.height(Space.xl))
         }
+        val threads = person?.threads ?: emptyList()
+        if (threads.isEmpty()) return@Column
+        SectionHeading("Recent", Modifier.padding(start = Space.xl, end = Space.xl, top = Space.xxs, bottom = Space.m - Dims.rowGap / 2))
+        for (row in threads) {
+            NavRow(row.subject.ifEmpty { "(no subject)" }, selected = row.id == store.conversation?.id, inset = Space.xl, onClick = { openThread(row.id) }) {
+                Text(row.date, TextStyle.Caption)
+            }
+        }
+        Spacer(Modifier.height(Space.xl))
     }
 }
 
