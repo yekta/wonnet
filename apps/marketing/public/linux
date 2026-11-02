@@ -23,10 +23,14 @@ download() {
 main() {
     case "$(uname -s)-$(uname -m)" in
         Linux-x86_64 | Linux-amd64) asset=Wonnet-linux-x86_64.AppImage ;;
-        Linux-aarch64 | Linux-arm64) asset=Wonnet-linux-aarch64.AppImage ;;
+        Linux-aarch64 | Linux-arm64) fail "there is no build for ARM" ;;
         Darwin-*) fail "on a Mac, download the Mac app from https://wonnet.app" ;;
         *) fail "unsupported machine: $(uname -s) $(uname -m)" ;;
     esac
+
+    if ! ldconfig -p 2>/dev/null | grep -q libWPEWebKit-2.0.so; then
+        fail "WPE WebKit is needed. On Arch: sudo pacman -S wpewebkit"
+    fi
 
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT

@@ -84,8 +84,7 @@ pub fn open_file(path: &str) -> Result<(), String> {
     open(path).map_err(|error| format!("{path} couldn't be opened: {error}"))
 }
 
-/// Opens a link or a file in the app the system has for it, without the AppImage's GIO modules,
-/// which AppRun points the app's own GIO at.
+/// Opens a link or a file in the app the system has for it.
 pub fn open(target: impl AsRef<std::ffi::OsStr>) -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
     {
@@ -94,7 +93,7 @@ pub fn open(target: impl AsRef<std::ffi::OsStr>) -> std::io::Result<()> {
 
         let mut failed = None;
         for mut command in open::commands(target) {
-            command.env_remove("GIO_MODULE_DIR").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+            command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
             match command.process_group(0).spawn() {
                 Ok(mut child) => {
                     std::thread::spawn(move || child.wait());

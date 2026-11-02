@@ -110,7 +110,7 @@ apps/gpui/scripts/patch-crates.sh && cargo run --release --manifest-path apps/gp
 
 Gradle builds the core for the Android app itself. `MAIL_SERVER_URL` set while building points the Android and desktop apps at another server too. Push to Android needs a Firebase project: put its `google-services.json` in `apps/android/app`.
 
-The Android app from a release (`Wonnet.apk`) and the Windows and Linux app (`Wonnet-windows-x86_64.zip`, `Wonnet-linux-<arch>.AppImage`) update themselves the same way the Mac app does. Linux updates only when it runs as the AppImage. The AppImage carries the WebKitGTK it shows mail with, so it needs nothing installed. `curl -fsSL https://wonnet.app/linux | sh` (`apps/marketing/public/linux`) puts the AppImage at `~/.local/bin/wonnet` and adds Wonnet to the desktop's apps.
+The Android app from a release (`Wonnet.apk`) and the Windows and Linux app (`Wonnet-windows-x86_64.zip`, `Wonnet-linux-x86_64.AppImage`) update themselves the same way the Mac app does. Linux updates only when it runs as the AppImage. It shows mail with the system's WPE WebKit, which needs installing (`sudo pacman -S wpewebkit` on Arch). There is no Linux build for ARM. `curl -fsSL https://wonnet.app/linux | sh` (`apps/marketing/public/linux`) puts the AppImage at `~/.local/bin/wonnet` and adds Wonnet to the desktop's apps.
 
 To look at the apps without a server or an account, start them with `--demo`: they show made-up mail, kept apart from your own and made fresh at every start. On the Mac, `open apps/macos/build/Wonnet.app --args --demo`; on iOS, add `--demo` to the scheme's arguments in Xcode; on Windows and Linux, `wonnet --demo`; on Android, `adb shell am start -n app.wonnet.wonnet/app.wonnet.MainActivity --ez demo true`.
 

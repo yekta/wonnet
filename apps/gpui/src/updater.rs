@@ -73,7 +73,6 @@ fn asset() -> Option<&'static str> {
     }
     match (cfg!(target_os = "linux"), std::env::consts::ARCH) {
         (true, "x86_64") => Some("Wonnet-linux-x86_64.AppImage"),
-        (true, "aarch64") => Some("Wonnet-linux-aarch64.AppImage"),
         _ => None,
     }
 }

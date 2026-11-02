@@ -21,17 +21,20 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
+  # On Arch, which packages the WPE WebKit the app links.
   linux:
     runs-on: ubuntu-24.04
+    container: archlinux:latest
     timeout-minutes: 45
     steps:
+      - name: Git
+        run: pacman -Syu --noconfirm --needed git
+
       - uses: actions/checkout@v4
 
       - name: Toolchain
         run: |
-          sudo apt-get update
-          sudo apt-get install -y $(cat apps/gpui/scripts/linux-packages.txt)
-          rustup update stable --no-self-update
+          pacman -S --noconfirm --needed $(cat apps/gpui/scripts/linux-packages.txt)
           rustup default stable
           rustup component add rustfmt clippy
 
