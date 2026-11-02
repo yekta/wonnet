@@ -3,12 +3,14 @@
 
 pub mod api;
 pub mod ops;
+pub mod rules;
 #[cfg(feature = "tls")]
 pub mod tls;
 pub mod types;
 pub mod wire;
 
 pub use ops::{MessageState, Op};
+pub use rules::Rule;
 pub use types::*;
 
 /// Bump when an old client or server could no longer understand the other.

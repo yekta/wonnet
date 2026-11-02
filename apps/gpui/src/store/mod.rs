@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 
 pub use commands::ThreadCommand;
 pub use local::{Appearance, LocalSettings};
-pub use prefs::{CustomSplit, SettingsEntry, SettingsSection, Snippet, label_id, uuid};
+pub use prefs::{CustomRule, CustomSplit, SettingsEntry, SettingsSection, Snippet, label_id, uuid};
 
 use crate::core::Core;
 use crate::models::*;

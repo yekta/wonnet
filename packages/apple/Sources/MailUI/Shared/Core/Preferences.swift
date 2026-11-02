@@ -55,6 +55,61 @@ struct CustomSplit: Identifiable, Hashable {
     }
 }
 
+/// A rule the user made, `rule:<id>`: mail meeting every condition it has, any entry of one, is
+/// labelled, kept out of the inbox or marked read. The server applies it to new mail.
+struct CustomRule: Identifiable, Hashable {
+    let id: String
+    /// Addresses, and domains written `@x.com`.
+    var from: [String]
+    /// As `from`, matched against To and Cc.
+    var to: [String]
+    /// Words the subject contains, case aside.
+    var subject: [String]
+    /// A label's id: the rule then holds for its account only.
+    var label: String?
+    var skipInbox: Bool
+    var markRead: Bool
+    var order: Int
+
+    var key: String { "rule:\(id)" }
+
+    var hasCondition: Bool { !from.isEmpty || !to.isEmpty || !subject.isEmpty }
+
+    var value: JSONValue {
+        .object([
+            "from": .array(from.map { .string($0) }), "to": .array(to.map { .string($0) }), "subject": .array(subject.map { .string($0) }),
+            "label": label.map { .string($0) } ?? .null, "skip_inbox": .bool(skipInbox), "mark_read": .bool(markRead),
+            "order": .number(Double(order)),
+        ])
+    }
+
+    static func all(in preferences: [String: JSONValue]) -> [CustomRule] {
+        preferences.compactMap { key, value -> CustomRule? in
+            guard key.hasPrefix("rule:"), case .object = value else { return nil }
+            var order = 0
+            if case .number(let number) = value["order"] { order = Int(number) }
+            return CustomRule(
+                id: String(key.dropFirst("rule:".count)), from: strings(value["from"]), to: strings(value["to"]),
+                subject: strings(value["subject"]), label: value["label"]?.string, skipInbox: value["skip_inbox"]?.bool ?? false,
+                markRead: value["mark_read"]?.bool ?? false, order: order
+            )
+        }
+        .sorted { ($0.order, $0.id) < ($1.order, $1.id) }
+    }
+
+    private static func strings(_ value: JSONValue?) -> [String] {
+        guard case .array(let values) = value else { return [] }
+        return values.compactMap(\.string)
+    }
+
+    /// The subject's words as they are typed: split on commas or lines, so a phrase stays whole.
+    static func words(_ text: String) -> [String] {
+        text.split(whereSeparator: { ",\n".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+}
+
 extension Address {
     /// Whether mail can be sent to it.
     var isValid: Bool {

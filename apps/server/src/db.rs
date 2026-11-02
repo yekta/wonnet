@@ -614,6 +614,8 @@ pub struct Written {
     pub id: Uuid,
     pub thread_id: String,
     pub from_email: String,
+    pub recipients: Json<Recipients>,
+    pub subject: String,
     pub labels: Vec<String>,
     pub unread: bool,
     pub starred: bool,
@@ -657,7 +659,7 @@ const UPSERT_MESSAGES: &str = "INSERT INTO messages (id, user_id, account_id, pr
              OR messages.thread_id <> excluded.thread_id
              OR messages.date <> excluded.date OR messages.bulk <> excluded.bulk
              OR messages.unsubscribe IS DISTINCT FROM excluded.unsubscribe)
-     RETURNING id, thread_id, from_email, labels, unread, starred, (xmax = 0) AS inserted";
+     RETURNING id, thread_id, from_email, recipients, subject, labels, unread, starred, (xmax = 0) AS inserted";
 
 /// Writes what the provider says, a batch per statement. A message with changes the provider
 /// doesn't have yet is left alone, so its stale state doesn't flicker over them; one that didn't

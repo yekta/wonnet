@@ -102,3 +102,59 @@ async fn a_reply_ends_the_snooze_of_its_thread(db: PgPool) {
     assert!(!snoozed(&db, "first").await);
     assert_eq!(labels_of(&db, "reply").await, ["inbox"]);
 }
+
+#[sqlx::test]
+async fn the_users_rules_label_new_mail_take_it_out_of_the_inbox_and_mark_it_read(db: PgPool) {
+    let server = Server::start(db.clone()).await;
+    let (user, account) = account(&db).await;
+    let label = Uuid::new_v4();
+    db::create_label(&db, &account, label, "dux-shell").await.unwrap();
+    let (_, other) = account_of(&db, user, "other@example.com").await;
+    let elsewhere = Uuid::new_v4();
+    db::create_label(&db, &other, elsewhere, "Elsewhere").await.unwrap();
+
+    let rules = [
+        json!({ "from": ["@github.com"], "to": ["dux-shell@noreply.github.com"], "label": label.to_string(),
+                "skip_inbox": true, "mark_read": true }),
+        json!({ "subject": ["receipt"], "mark_read": true }),
+        // Another account's label: the rule doesn't hold here.
+        json!({ "from": ["@github.com"], "label": elsewhere.to_string(), "skip_inbox": true }),
+    ];
+    for (index, rule) in rules.into_iter().enumerate() {
+        let op = Op::SetPreference { key: format!("rule:{index}"), value: Some(rule) };
+        ops::apply(&server.state, user, &format!("rule-{index}"), op).await.unwrap();
+    }
+
+    let mut pr = mail("pr", "t1", "notifications@github.com");
+    pr.recipients.to = vec![Address::new(None, "dux-shell@noreply.github.com")];
+    let mut receipt = mail("receipt", "t2", "shop@example.com");
+    receipt.subject = "Your Receipt".into();
+    let mut sent = mail("sent", "t3", "me@example.com");
+    sent.subject = "receipt".into();
+    let new = [pr, receipt, sent, mail("other-github", "t4", "notifications@github.com")];
+    db::upsert_messages(&db, &account, &new).await.unwrap();
+
+    let state = |provider_id: &'static str| {
+        let db = db.clone();
+        async move {
+            sqlx::query_as::<_, (Vec<String>, bool)>("SELECT labels, unread FROM messages WHERE provider_id = $1")
+                .bind(provider_id)
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    assert_eq!(state("pr").await, (vec![label.to_string()], false));
+    assert_eq!(state("receipt").await, (vec!["inbox".to_string()], false));
+    assert_eq!(state("sent").await, (vec!["inbox".to_string()], true), "the user's own mail is left alone");
+    assert_eq!(state("other-github").await, (vec!["inbox".to_string()], true));
+    let queued: Vec<String> =
+        sqlx::query_scalar("SELECT op->>'kind' FROM provider_ops ORDER BY id").fetch_all(&db).await.unwrap();
+    assert_eq!(queued, ["add_label", "archive", "set_unread", "set_unread"]);
+}
+
+async fn account_of(db: &PgPool, user: Uuid, address: &str) -> (Uuid, AccountRow) {
+    let account = NewAccount { user_id: user, provider: Provider::Jmap, address, login: address, credentials: vec![] };
+    let account_id = db::upsert_account(db, account).await.unwrap();
+    (user, db::account(db, account_id).await.unwrap().unwrap())
+}

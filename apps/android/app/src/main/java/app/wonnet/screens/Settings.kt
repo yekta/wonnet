@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import app.wonnet.BuildConfig
 import app.wonnet.core.AccountView
 import app.wonnet.core.Appearance
+import app.wonnet.core.CustomRule
 import app.wonnet.core.CustomSplit
 import app.wonnet.core.MailStore
 import app.wonnet.core.Mailbox
@@ -65,21 +66,27 @@ import app.wonnet.core.Snippet
 import app.wonnet.core.SwipePreference
 import app.wonnet.core.ThreadCommand
 import app.wonnet.core.blockedSenders
+import app.wonnet.core.applyRule
 import app.wonnet.core.confirmRemoving
 import app.wonnet.core.confirmSigningOut
+import app.wonnet.core.customRules
 import app.wonnet.core.customSplits
 import app.wonnet.core.flag
 import app.wonnet.core.mailboxesForTabs
+import app.wonnet.core.moveRule
 import app.wonnet.core.moveSplit
 import app.wonnet.core.moveSwipeCommand
 import app.wonnet.core.moveTab
+import app.wonnet.core.newRule
 import app.wonnet.core.newSplit
 import app.wonnet.core.notifies
 import app.wonnet.core.openSettings
 import app.wonnet.core.ownSignature
 import app.wonnet.core.providedSignature
 import app.wonnet.core.providerName
+import app.wonnet.core.removeRule
 import app.wonnet.core.removeSplit
+import app.wonnet.core.saveRule
 import app.wonnet.core.saveSnippet
 import app.wonnet.core.saveSplit
 import app.wonnet.core.setFlag
@@ -136,6 +143,10 @@ private sealed interface Page {
 
     data class Split(val split: CustomSplit, val isNew: Boolean) : Page {
         override val title get() = if (isNew) "New Split" else "Edit Split"
+    }
+
+    data class RuleEdit(val rule: CustomRule, val isNew: Boolean) : Page {
+        override val title get() = if (isNew) "New Rule" else "Edit Rule"
     }
 
     data class SnippetEdit(val snippet: Snippet, val isNew: Boolean) : Page {
@@ -270,6 +281,10 @@ private fun PageView(store: MailStore, pages: List<Page>, back: (() -> Unit)?, p
                     AddAccountFlow(store)
                 }
                 is Page.Split -> SplitPage(store, page.split, page.isNew, back ?: close) { action, enabled ->
+                    save = action
+                    canSave = enabled
+                }
+                is Page.RuleEdit -> RulePage(store, page.rule, page.isNew, back ?: close) { action, enabled ->
                     save = action
                     canSave = enabled
                 }
@@ -427,6 +442,16 @@ private fun InboxPage(store: MailStore, anchor: (String) -> Modifier, push: (Pag
         if (splits.isNotEmpty()) RowRule()
         SettingsRow("Add Split", leading = { Tile(Symbol.Plus, Tokens.primary.color) }, action = true) { push(Page.Split(store.newSplit(), true)) }
     }
+    val rules = store.customRules
+    Group("Rules", "Mail that matches is labelled, kept out of the inbox or marked read as it arrives.", anchor("rules")) {
+        MovableList(rules, { it.id }, clicked = { push(Page.RuleEdit(it, false)) }, moved = { rule, index -> store.moveRule(rule, index) }) { rule, hovered ->
+            SwipeToRemove(rule.id, "Remove", { store.removeRule(rule) }) {
+                SettingsRow(store.summary(rule), leading = { Tile(Symbol.Zap) }, chevron = true, wrap = true, hovered = hovered)
+            }
+        }
+        if (rules.isNotEmpty()) RowRule()
+        SettingsRow("Add Rule", leading = { Tile(Symbol.Plus, Tokens.primary.color) }, action = true) { push(Page.RuleEdit(store.newRule(), true)) }
+    }
     val tabs = store.savedTabs
     Group("Tabs", "The mailboxes along the bottom. Hold a tab and drag it to move it; swipe it to remove it.", anchor("tabs")) {
         MovableList(tabs, { it.id }, clicked = {}, moved = { tab, index -> store.moveTab(tab, index) }) { tab, hovered ->
@@ -528,6 +553,60 @@ private fun SplitPage(store: MailStore, start: CustomSplit, isNew: Boolean, back
                 store.removeSplit(start)
                 back()
             }
+        }
+    }
+}
+
+/** A rule being written: what it looks for, what it does, and for a new one whether it also does it to the mail already here. */
+@Composable
+private fun RulePage(store: MailStore, start: CustomRule, isNew: Boolean, back: () -> Unit, saving: (() -> Unit, Boolean) -> Unit) {
+    var from by remember { mutableStateOf(start.from.joinToString(", ")) }
+    var to by remember { mutableStateOf(start.to.joinToString(", ")) }
+    var subject by remember { mutableStateOf(start.subject.joinToString(", ")) }
+    var label by remember { mutableStateOf(start.label) }
+    var skipInbox by remember { mutableStateOf(start.skipInbox) }
+    var markRead by remember { mutableStateOf(start.markRead) }
+    var applyNow by remember { mutableStateOf(true) }
+    val labels = store.splitLabels
+    val rule = start.copy(
+        from = CustomSplit.senders(from), to = CustomSplit.senders(to), subject = CustomRule.words(subject), label = label, skipInbox = skipInbox,
+        markRead = markRead,
+    )
+    LaunchedEffect(rule, applyNow) {
+        saving({
+            store.saveRule(rule)
+            if (isNew && applyNow) store.applyRule(rule)
+            back()
+        }, rule.hasCondition && rule.doesSomething)
+    }
+    Group("From", "Addresses, or @ and a domain for everyone there.") {
+        Box(Modifier.padding(Space.s)) { InputField(from, { from = it }, placeholder = "ann@example.com, @example.com", lines = 2, autofocus = isNew, keyboard = KeyboardType.Email) }
+    }
+    Group("To", "To or Cc, as From.") {
+        Box(Modifier.padding(Space.s)) { InputField(to, { to = it }, placeholder = "team@example.com", lines = 2, keyboard = KeyboardType.Email) }
+    }
+    Group("Subject Contains", "Words the subject has, split by commas.") {
+        Box(Modifier.padding(Space.s)) { InputField(subject, { subject = it }, placeholder = "[project], invoice") }
+    }
+    Group(footer = "Mail that meets every condition, any entry of one, is acted on.") {
+        if (labels.isNotEmpty()) {
+            SettingsRow("Label", trailing = {
+                ChoiceMenu(listOf<String?>(null) + labels.map { it.first }, label, { id -> labels.firstOrNull { it.first == id }?.second ?: "None" }, ControlSize.Small) { label = it }
+            })
+            RowRule()
+        }
+        SettingsRow("Skip the Inbox", trailing = { Toggle(skipInbox, { skipInbox = it }) })
+        RowRule()
+        SettingsRow("Mark as Read", trailing = { Toggle(markRead, { markRead = it }) })
+    }
+    if (isNew) {
+        Group { SettingsRow("Also Apply to Mail Already Here", trailing = { Toggle(applyNow, { applyNow = it }) }) }
+        return
+    }
+    Group {
+        SettingsRow("Remove Rule", destructive = true) {
+            store.removeRule(start)
+            back()
         }
     }
 }

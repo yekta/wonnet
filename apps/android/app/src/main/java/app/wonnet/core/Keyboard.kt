@@ -72,6 +72,7 @@ data class KeyCommand(val id: String, val scope: KeyScope = KeyScope.Everywhere,
             key("go.account.0", "ctrl+0"),
         ) + (1..9).map { key("go.account.$it", "ctrl+$it") } + listOf(
             key("zero", scope = KeyScope.List),
+            key("readAll", scope = KeyScope.List),
             key("settings", "mod+,"),
         )
     }
@@ -179,6 +180,7 @@ class KeyHandler(private val store: MailStore, private val focusSearch: () -> Un
             "unreadOnly" -> store.toggleFilter(Filter.Unread)
             "starredOnly" -> store.toggleFilter(Filter.Starred)
             "zero" -> store.archiveAll()
+            "readAll" -> store.readAll()
             "settings" -> store.openSettings()
             else -> return false
         }

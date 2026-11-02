@@ -17,6 +17,7 @@ import app.wonnet.core.emptyMailbox
 import app.wonnet.core.keys
 import app.wonnet.core.labels
 import app.wonnet.core.openSettings
+import app.wonnet.core.readAll
 import app.wonnet.core.remindsInsteadOfSnoozing
 import app.wonnet.core.run
 import app.wonnet.core.selectAll
@@ -102,7 +103,10 @@ object Palette {
         add(PaletteItem("check-mail", "Check for new mail", Symbol.RefreshCw) { store.scope.launch { store.checkMail() } })
         add(PaletteItem("unread", if (store.filter == Filter.Unread) "Show everything" else "Unread only", Symbol.ListFilter, key(store, "unreadOnly")) { store.toggleFilter(Filter.Unread) })
         add(PaletteItem("starred", if (store.filter == Filter.Starred) "Show everything" else "Starred only", Symbol.Star, key(store, "starredOnly")) { store.toggleFilter(Filter.Starred) })
-        if (store.searchRows == null && store.rows.isNotEmpty()) add(PaletteItem("zero", "Get Me To Zero: archive everything here", Symbol.Archive) { store.archiveAll() })
+        if (store.searchRows == null && store.rows.isNotEmpty()) {
+            add(PaletteItem("zero", "Get Me To Zero: archive everything here", Symbol.Archive) { store.archiveAll() })
+            add(PaletteItem("read-all", "Mark All Read: everything here", Symbol.CheckCheck) { store.readAll() })
+        }
         if (store.canEmpty) add(PaletteItem("empty", "Empty ${store.mailboxName}", Symbol.Trash) { store.emptyMailbox() })
         if (store.conversation == null && store.visibleRows.isNotEmpty()) add(PaletteItem("select-all", "Select all", Symbol.SquareCheck, key(store, "selectAll")) { store.selectAll() })
         if (store.selection.isNotEmpty()) add(PaletteItem("select-none", "Clear the selection", Symbol.X, "Esc") { store.clearSelection() })

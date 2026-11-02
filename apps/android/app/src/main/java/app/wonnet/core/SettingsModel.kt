@@ -25,6 +25,7 @@ data class SettingsEntry(val id: String, val title: String, val section: Setting
             SettingsEntry("signatures", "Signatures", SettingsSection.Accounts, "sign off footer"),
             SettingsEntry("sign-out", "Sign out", SettingsSection.Accounts, "log out leave"),
             SettingsEntry("split-inbox", "Split Inbox", SettingsSection.Inbox, "important other newsletters notifications splits"),
+            SettingsEntry("rules", "Rules", SettingsSection.Inbox, "filters rules automatic label skip inbox mark read"),
             SettingsEntry("tabs", "Tabs", SettingsSection.Inbox, "mailboxes along the bottom order"),
             SettingsEntry("swipe", "Swipe Left", SettingsSection.Inbox, "swipe actions gestures archive snooze read unread"),
             SettingsEntry("mail", "Dark mode for mail", SettingsSection.Reading, "designed newsletters colours remote images pictures privacy tracking"),
@@ -128,6 +129,56 @@ fun MailStore.summary(split: CustomSplit): String {
     val parts = split.from.toMutableList()
     split.label?.let { label -> splitLabels.firstOrNull { it.first == label }?.let { parts += "label ${it.second}" } }
     return if (parts.isEmpty()) "Nothing yet" else parts.joinToString(", ")
+}
+
+val MailStore.customRules: List<CustomRule> get() = CustomRule.all(preferences)
+
+fun MailStore.newRule(): CustomRule {
+    val order = (customRules.maxOfOrNull { it.order } ?: -1) + 1
+    return CustomRule(UUID.randomUUID().toString().lowercase(), emptyList(), emptyList(), emptyList(), null, skipInbox = false, markRead = false, order)
+}
+
+fun MailStore.saveRule(rule: CustomRule) = setPreference(rule.key, rule.value)
+
+fun MailStore.removeRule(rule: CustomRule) = setPreference(rule.key, null)
+
+/** Puts the rule at `index` among the others. */
+fun MailStore.moveRule(rule: CustomRule, index: Int) {
+    val reordered = customRules.filter { it.id != rule.id }.toMutableList()
+    reordered.add(index.coerceIn(0, reordered.size), rule)
+    for ((order, each) in reordered.withIndex()) {
+        if (each.order == order) continue
+        val moved = each.copy(order = order)
+        setPreference(moved.key, moved.value)
+    }
+}
+
+/** Does what the rule does to the mail already here, and says how much it did. */
+fun MailStore.applyRule(rule: CustomRule) {
+    scope.launch {
+        try {
+            report(bridge.call("apply_rule", mapOf("rule" to rule.value)) { ActReply.read(it.objectOrEmpty) })
+        } catch (error: CoreError) {
+            show(error.message)
+        }
+    }
+}
+
+/** What the rule looks for, then what it does: "From @github.com, to dux@example.com → dux, skip inbox". */
+fun MailStore.summary(rule: CustomRule): String {
+    val conditions = listOfNotNull(
+        rule.from.takeIf { it.isNotEmpty() }?.let { "from ${it.joinToString(" or ")}" },
+        rule.to.takeIf { it.isNotEmpty() }?.let { "to ${it.joinToString(" or ")}" },
+        rule.subject.takeIf { it.isNotEmpty() }?.let { "subject has ${it.joinToString(" or ")}" },
+    )
+    val actions = listOfNotNull(
+        rule.label?.let { label -> splitLabels.firstOrNull { it.first == label }?.second },
+        "skip inbox".takeIf { rule.skipInbox },
+        "mark read".takeIf { rule.markRead },
+    )
+    val looks = conditions.joinToString(", ").replaceFirstChar { it.uppercase() }.ifEmpty { "Nothing yet" }
+    if (actions.isEmpty()) return looks
+    return "$looks → ${actions.joinToString(", ")}"
 }
 
 /** Puts the tab at `index` among the others. */

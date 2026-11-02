@@ -18,6 +18,9 @@
 //! - `snippet:<id>`: `{"name": "Thanks", "text": "Thanks {first_name}!"}`.
 //! - `blocked:<address or @domain>`: `true`. The server trashes new mail from it.
 //! - `muted:<thread>`: `true`. The server archives new mail in it.
+//! - `rule:<id>`: `{"from": ["@github.com"], "to": [], "subject": ["[dux-shell]"], "label":
+//!   "<label id>" | null, "skip_inbox": true, "mark_read": false, "order": 0}`. The server applies
+//!   it to new mail (`mail_protocol::Rule`); `ApplyRule` applies it to the mail already here.
 //! - `notify:<account id>`: `false` stops notifications for that account.
 //! - `remote_images`: `false` leaves the images a message loads from the web out until the user
 //!   asks for them, so the sender doesn't learn the mail was opened. By default they are shown.
@@ -27,7 +30,7 @@
 use std::collections::BTreeMap;
 
 use mail_protocol::api::Platform;
-use mail_protocol::{Address, Attachment, Draft, Identity};
+use mail_protocol::{Address, Attachment, Draft, Identity, Rule};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -247,7 +250,7 @@ pub enum Command {
         #[serde(default)]
         label: Option<String>,
     },
-    /// Takes back the last `Act` or `ArchiveAll` that answered `undo: true`. `{message}`, or an
+    /// Takes back the last `Act`, `ArchiveAll`, `ReadAll` or `ApplyRule` that answered `undo: true`. `{message}`, or an
     /// error when there is nothing to undo.
     Undo,
     /// Archives every thread a mailbox shows (older than `before`, when given; only the unread or
@@ -262,6 +265,17 @@ pub enum Command {
         /// As `Threads`'s.
         #[serde(default)]
         keep: Vec<String>,
+    },
+    /// Marks every unread message in the threads a mailbox shows read (only its starred ones with
+    /// that filter). A split's id marks that split only. An `ActReply`.
+    ReadAll {
+        mailbox: String,
+        #[serde(default)]
+        filter: Option<Filter>,
+    },
+    /// Does what a rule does to new mail to the mail already here. An `ActReply`.
+    ApplyRule {
+        rule: Rule,
     },
     /// Deletes every message in Trash or Spam for good: `trash`, `spam`, or an account's. It
     /// can't be undone. An `ActReply`.

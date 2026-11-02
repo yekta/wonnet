@@ -40,6 +40,47 @@ data class CustomSplit(val id: String, val name: String, val from: List<String>,
     }
 }
 
+/**
+ * A rule the user made, `rule:<id>`: mail meeting every condition it has (any entry of one) is
+ * labelled, kept out of the inbox or marked read. With a label it holds for that label's account only.
+ */
+data class CustomRule(
+    val id: String,
+    val from: List<String>,
+    val to: List<String>,
+    val subject: List<String>,
+    val label: String?,
+    val skipInbox: Boolean,
+    val markRead: Boolean,
+    val order: Int,
+) {
+    val key: String get() = "rule:$id"
+    val value: JsonElement
+        get() = jsonOf(
+            mapOf(
+                "from" to from, "to" to to, "subject" to subject, "label" to label, "skip_inbox" to skipInbox, "mark_read" to markRead,
+                "order" to order,
+            ),
+        )
+
+    val hasCondition: Boolean get() = from.isNotEmpty() || to.isNotEmpty() || subject.isNotEmpty()
+    val doesSomething: Boolean get() = label != null || skipInbox || markRead
+
+    companion object {
+        fun all(preferences: Map<String, JsonElement>): List<CustomRule> = preferences.mapNotNull { (key, value) ->
+            if (!key.startsWith("rule:")) return@mapNotNull null
+            val fields = value as? JsonObject ?: return@mapNotNull null
+            CustomRule(
+                key.removePrefix("rule:"), fields.strings("from"), fields.strings("to"), fields.strings("subject"), fields.optionalString("label"),
+                fields.bool("skip_inbox"), fields.bool("mark_read"), fields.int("order"),
+            )
+        }.sortedWith(compareBy<CustomRule> { it.order }.thenBy { it.id })
+
+        /** The subject's words as they are typed, split on commas. */
+        fun words(text: String): List<String> = text.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+    }
+}
+
 /** A list of ids kept as a preference. */
 private fun ids(preferences: Map<String, JsonElement>, key: String): List<String>? =
     (preferences[key] as? JsonArray)?.mapNotNull { it.text }

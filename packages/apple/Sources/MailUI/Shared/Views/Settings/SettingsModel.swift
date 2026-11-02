@@ -125,6 +125,63 @@ extension MailStore {
         return parts.isEmpty ? "Nothing yet" : parts.joined(separator: ", ")
     }
 
+    var customRules: [CustomRule] { CustomRule.all(in: preferences) }
+
+    func newRule() -> RuleDraft {
+        let order = (customRules.map(\.order).max() ?? -1) + 1
+        let rule = CustomRule(id: UUID().uuidString.lowercased(), from: [], to: [], subject: [], label: nil, skipInbox: false, markRead: false, order: order)
+        return RuleDraft(rule, isNew: true)
+    }
+
+    func draft(of rule: CustomRule) -> RuleDraft {
+        RuleDraft(rule, isNew: false)
+    }
+
+    /// Saves the rule, and applies it to the mail already here if asked.
+    func saveRule(_ draft: RuleDraft) {
+        let rule = draft.written
+        setPreference(rule.key, rule.value)
+        guard draft.applying else { return }
+        Task {
+            do {
+                report(try await bridge.call("apply_rule", ["rule": rule.value.any], as: ActReply.self))
+            } catch {
+                show(error.localizedDescription)
+            }
+        }
+    }
+
+    func removeRule(_ rule: CustomRule) {
+        setPreference(rule.key, nil)
+    }
+
+    /// Puts the rule at `index` among the others.
+    func moveRule(_ rule: CustomRule, to index: Int) {
+        var reordered = customRules.filter { $0.id != rule.id }
+        reordered.insert(rule, at: min(index, reordered.count))
+        for (order, rule) in reordered.enumerated() where rule.order != order {
+            var moved = rule
+            moved.order = order
+            setPreference(moved.key, moved.value)
+        }
+    }
+
+    /// "From @github.com, to dux-shell@noreply.github.com → dux-shell, skip inbox".
+    func summary(of rule: CustomRule) -> String {
+        var conditions: [String] = []
+        if !rule.from.isEmpty { conditions.append("from \(rule.from.joined(separator: " or "))") }
+        if !rule.to.isEmpty { conditions.append("to \(rule.to.joined(separator: " or "))") }
+        if !rule.subject.isEmpty { conditions.append("subject has \(rule.subject.joined(separator: " or "))") }
+        var actions: [String] = []
+        if let label = rule.label, let name = splitLabels.first(where: { $0.id == label })?.name { actions.append(name) }
+        if rule.skipInbox { actions.append("skip inbox") }
+        if rule.markRead { actions.append("mark read") }
+        let joined = conditions.joined(separator: ", ")
+        let looks = joined.isEmpty ? "Nothing yet" : joined.prefix(1).uppercased() + String(joined.dropFirst())
+        guard !actions.isEmpty else { return looks }
+        return "\(looks) → \(actions.joined(separator: ", "))"
+    }
+
     /// Puts the tab at `index` among the others.
     func moveTab(_ tab: Mailbox, to index: Int) {
         var ids = savedTabs.map(\.id).filter { $0 != tab.id }
@@ -202,5 +259,41 @@ extension CustomSplit {
     /// The senders as they are typed: addresses and `@domains`, split on commas, spaces or lines.
     static func senders(_ text: String) -> [String] {
         text.split(whereSeparator: { ", ;\n".contains($0) }).map { $0.lowercased() }
+    }
+}
+
+/// A rule as its editor holds it, its conditions as typed.
+struct RuleDraft: Identifiable {
+    var rule: CustomRule
+    let isNew: Bool
+    var from: String
+    var to: String
+    var subject: String
+    /// Also does what it does to the mail already here, once saved.
+    var applying: Bool
+
+    var id: String { rule.id }
+
+    init(_ rule: CustomRule, isNew: Bool) {
+        self.rule = rule
+        self.isNew = isNew
+        from = rule.from.joined(separator: ", ")
+        to = rule.to.joined(separator: ", ")
+        subject = rule.subject.joined(separator: ", ")
+        applying = isNew
+    }
+
+    var written: CustomRule {
+        var rule = rule
+        rule.from = CustomSplit.senders(from)
+        rule.to = CustomSplit.senders(to)
+        rule.subject = CustomRule.words(subject)
+        return rule
+    }
+
+    /// A rule is kept once it matches something and does something.
+    var canSave: Bool {
+        let rule = written
+        return rule.hasCondition && (rule.label != nil || rule.skipInbox || rule.markRead)
     }
 }

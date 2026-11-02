@@ -81,6 +81,7 @@ struct KeyCommand: Identifiable, Hashable {
         KeyCommand(id: "go.account.\(number)", title: "Account \(number)'s inbox", group: "Going to", defaults: ["ctrl+\(number)"])
     } + [
         KeyCommand(id: "zero", title: "Get Me To Zero", group: "Wonnet", scope: .list, defaults: []),
+        KeyCommand(id: "readAll", title: "Mark All Read", group: "Wonnet", scope: .list, defaults: []),
         KeyCommand(id: "settings", title: "Settings", group: "Wonnet", defaults: ["mod+,"]),
         KeyCommand(id: "keybindings", title: "Keybindings", group: "Wonnet", defaults: ["shift+/", "mod+/"]),
     ]

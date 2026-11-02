@@ -110,6 +110,7 @@ pub fn all() -> Vec<KeyCommand> {
         });
     }
     all.push(command("zero", "Get Me To Zero", GROUPS[5], List, &[]));
+    all.push(command("readAll", "Mark All Read", GROUPS[5], List, &[]));
     all.push(command("settings", "Settings", GROUPS[5], Everywhere, &["mod+,"]));
     all.push(command("keybindings", "Keybindings", GROUPS[5], Everywhere, &["shift+/", "mod+/"]));
     all

@@ -54,6 +54,7 @@ struct SettingsEntry: Identifiable, Hashable {
         SettingsEntry(id: "signatures", title: "Signatures", section: .accounts, keywords: "sign off footer"),
         SettingsEntry(id: "sign-out", title: "Sign out", section: .accounts, keywords: "log out leave"),
         SettingsEntry(id: "split-inbox", title: "Split Inbox", section: .inbox, keywords: "important other newsletters notifications splits"),
+        SettingsEntry(id: "rules", title: "Rules", section: .inbox, keywords: "filters rules automatic label skip inbox mark read"),
         SettingsEntry(id: "tabs", title: "Tabs", section: .inbox, keywords: "mailboxes over the list order"),
         SettingsEntry(id: "mail", title: "Dark mode for mail", section: .reading, keywords: "designed newsletters colours remote images pictures privacy tracking"),
         SettingsEntry(id: "blocked", title: "Blocked senders", section: .reading, keywords: "block unblock trash spam"),

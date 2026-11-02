@@ -364,6 +364,7 @@ private struct InboxPage: View {
                 SettingsActionLabel(title: "Add Split", symbol: .plus)
             }
         }
+        RulesSection()
         let tabs = store.savedTabs
         SettingsListSection("Tabs", footer: "The mailboxes along the bottom. Hold a tab and drag it to move it; swipe it to remove it.") {
             ForEach(tabs) { tab in
@@ -386,6 +387,41 @@ private struct InboxPage: View {
         }
         .id("tabs")
         SwipeSection()
+    }
+}
+
+/// The rules, each pushing its editor, and the way to add one.
+private struct RulesSection: View {
+    @Environment(MailStore.self) private var store
+
+    var body: some View {
+        let rules = store.customRules
+        SettingsListSection(
+            "Rules", footer: "Mail that matches is labelled, kept out of the inbox or marked read as it arrives. Hold a rule and drag it to move it; swipe it to remove it."
+        ) {
+            ForEach(rules) { rule in
+                NavigationLink {
+                    RulePage(draft: store.draft(of: rule))
+                } label: {
+                    Label {
+                        Text(store.summary(of: rule)).foregroundStyle(Tokens.foreground.color).lineLimit(2)
+                    } icon: {
+                        SettingsTile(symbol: .zap)
+                    }
+                }
+            }
+            .onMove { from, to in
+                guard let index = from.first else { return }
+                store.moveRule(rules[index], to: to > index ? to - 1 : to)
+            }
+            .onDelete { rows in rows.forEach { store.removeRule(rules[$0]) } }
+            NavigationLink {
+                RulePage(draft: store.newRule())
+            } label: {
+                SettingsActionLabel(title: "Add Rule", symbol: .plus)
+            }
+        }
+        .id("rules")
     }
 }
 
@@ -560,6 +596,71 @@ private struct SplitPage: View {
             }
         }
         .onAppear { senders = split.from.joined(separator: ", ") }
+    }
+}
+
+/// A rule being written: what mail it looks for, and what it does to it.
+private struct RulePage: View {
+    @Environment(MailStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State var draft: RuleDraft
+
+    var body: some View {
+        let labels = store.splitLabels
+        SettingsList {
+            SettingsListSection("From", footer: "Addresses, or @ and a domain for everyone there.") {
+                addressField("ann@example.com, @example.com", text: $draft.from)
+            }
+            SettingsListSection("To", footer: "Looks at To and Cc.") {
+                addressField("team@example.com", text: $draft.to)
+            }
+            SettingsListSection("Subject Contains", footer: "Mail matches when it meets every field filled in.") {
+                TextField("[project], invoice", text: $draft.subject, axis: .vertical)
+                    .autocorrectionDisabled()
+            }
+            SettingsListSection("Then") {
+                if !labels.isEmpty {
+                    Picker("Label", selection: $draft.rule.label) {
+                        Text("None").tag(String?.none)
+                        ForEach(labels, id: \.id) { label in Text(label.name).tag(Optional(label.id)) }
+                    }
+                }
+                Toggle("Skip the Inbox", isOn: $draft.rule.skipInbox)
+                Toggle("Mark as Read", isOn: $draft.rule.markRead)
+            }
+            if draft.isNew {
+                SettingsListSection(footer: "What matches now is done at once, and can be undone.") {
+                    Toggle("Also Apply to Mail Already Here", isOn: $draft.applying)
+                }
+            } else {
+                Section {
+                    Button("Remove Rule", role: .destructive) {
+                        store.removeRule(draft.rule)
+                        dismiss()
+                    }
+                    .foregroundStyle(Tokens.destructive.color)
+                }
+            }
+        }
+        .navigationTitle(draft.isNew ? "New Rule" : "Edit Rule")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    store.saveRule(draft)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!draft.canSave)
+            }
+        }
+    }
+
+    private func addressField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text, axis: .vertical)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .keyboardType(.emailAddress)
     }
 }
 

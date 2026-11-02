@@ -17,7 +17,9 @@ use super::Recording;
 use super::onboarding::OnboardingView;
 use crate::keys::{self, KeyCommand};
 use crate::models::AccountView;
-use crate::store::{Appearance, CustomSplit, LocalSettings, SettingsEntry, SettingsSection, Snippet, Store};
+use crate::store::{
+    Appearance, CustomRule, CustomSplit, LocalSettings, SettingsEntry, SettingsSection, Snippet, Store,
+};
 use crate::theme::*;
 use crate::ui::{self, ActionButton, IconButton, Lead, MenuEntry, NavRow, SheetSize, Symbol, Variant};
 use crate::updater::{self, UpdateState, Updater};
@@ -25,8 +27,27 @@ use crate::updater::{self, UpdateState, Updater};
 /// A sheet of the settings: adding an account, a split, a snippet.
 enum Sheet {
     AddAccount(Entity<OnboardingView>),
-    Split { split: CustomSplit, name: Entity<InputState>, from: Entity<InputState>, new: bool },
-    Snippet { snippet: Snippet, name: Entity<InputState>, text: Entity<TextareaState>, new: bool },
+    Split {
+        split: CustomSplit,
+        name: Entity<InputState>,
+        from: Entity<InputState>,
+        new: bool,
+    },
+    Rule {
+        rule: CustomRule,
+        from: Entity<InputState>,
+        to: Entity<InputState>,
+        subject: Entity<InputState>,
+        /// Also apply it to the mail already here, as it is saved.
+        existing: bool,
+        new: bool,
+    },
+    Snippet {
+        snippet: Snippet,
+        name: Entity<InputState>,
+        text: Entity<TextareaState>,
+        new: bool,
+    },
 }
 
 pub struct SettingsView {
@@ -777,8 +798,10 @@ impl SettingsView {
         );
         let circles = store.flag("select_circles", true);
         let circle_toggle = self.store.clone();
+        let rule_rows = self.rule_rows(cx);
         vec![
             self.mark("split-inbox", ui::settings_group("Split Inbox", Some("Your splits come after Important. Drag one to move it."), split_rows, cx)).into_any_element(),
+            self.mark("rules", ui::settings_group("Rules", Some("Mail that matches is labelled, kept out of the inbox or marked read as it arrives. Drag one to move it."), rule_rows, cx)).into_any_element(),
             self.mark("tabs", ui::settings_group("Tabs", Some("The mailboxes kept over the list. Drag a tab to move it; right-click it to remove it."), self.tab_rows(cx), cx)).into_any_element(),
             self.mark(
                 "selecting",
@@ -899,9 +922,125 @@ impl SettingsView {
         cx.notify();
     }
 
-    /// Saves the split or the snippet being written, when it has a name, and closes its sheet.
+    fn rule_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let store = self.store.read(cx);
+        let this = cx.entity();
+        let mut rows = Vec::new();
+        for rule in store.custom_rules() {
+            let edit = this.clone();
+            let menu = self.store.clone();
+            let menu_edit = this.clone();
+            let chosen = rule.clone();
+            let menu_rule = rule.clone();
+            let order = self.store.clone();
+            let target = rule.clone();
+            rows.push(
+                movable_row(
+                    SharedString::from(format!("rule-{}", rule.id)),
+                    "rules",
+                    ui::settings_label(store.rule_summary(&rule.rule), None, Lead::Symbol(Symbol::Zap), false, cx)
+                        .into_any_element(),
+                    Some(
+                        ui::icon(Symbol::ChevronRight, 12.)
+                            .text_color(cx.color(MUTED_STRONGER_FOREGROUND))
+                            .into_any_element(),
+                    ),
+                    Rc::new(move |window, cx| {
+                        edit.update(cx, |this, cx| this.edit_rule(chosen.clone(), false, window, cx))
+                    }),
+                    Rc::new(move |_, _| {
+                        let (remove, edit, rule) = (menu.clone(), menu_edit.clone(), menu_rule.clone());
+                        let edited = rule.clone();
+                        vec![
+                            MenuEntry::item("Edit", move |window, cx| {
+                                edit.update(cx, |this, cx| this.edit_rule(edited.clone(), false, window, cx))
+                            }),
+                            MenuEntry::item("Remove", move |_, cx| {
+                                remove.update(cx, |store, cx| store.remove_rule(&rule, cx))
+                            })
+                            .destructive(),
+                        ]
+                    }),
+                    Rc::new(move |dragged, after, _, cx| {
+                        let dragged = dragged.trim_start_matches("rule-").to_string();
+                        order.update(cx, |store, cx| {
+                            let all = store.custom_rules();
+                            let Some(moved) = all.iter().find(|rule| rule.id == dragged).cloned() else { return };
+                            let ids = all.iter().map(|rule| rule.id.clone()).collect();
+                            let ids = ui::reordered(ids, &dragged, &target.id, after);
+                            let index = ids.iter().position(|id| *id == dragged).unwrap_or(0);
+                            store.move_custom_rule(&moved, index, cx);
+                        });
+                    }),
+                    cx,
+                )
+                .into_any_element(),
+            );
+        }
+        let add = this.clone();
+        rows.push(
+            ui::settings_row(
+                div().ml(px(-space::L + space::S - size::BUTTON_GAP / 2.)).child(
+                    ActionButton::new("add-rule", "Add rule").symbol(Symbol::Plus).on_click(move |_, window, cx| {
+                        add.update(cx, |this, cx| {
+                            let rule = this.store.read(cx).new_rule();
+                            this.edit_rule(rule, true, window, cx);
+                        })
+                    }),
+                ),
+                Vec::new(),
+            )
+            .into_any_element(),
+        );
+        rows
+    }
+
+    fn edit_rule(&mut self, rule: CustomRule, new: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let field = |placeholder: &'static str, value: String, window: &mut Window, cx: &mut Context<Self>| {
+            cx.new(|cx| InputState::new(window, cx).placeholder(placeholder).default_value(value))
+        };
+        let from = field("notifications@github.com, @github.com", rule.rule.from.join(", "), window, cx);
+        let to = field("dux-shell@noreply.github.com", rule.rule.to.join(", "), window, cx);
+        let subject = field("[dux-shell], invoice", rule.rule.subject.join(", "), window, cx);
+        from.update(cx, |field, cx| field.focus(window, cx));
+        for field in [&from, &to, &subject] {
+            cx.subscribe(field, |this, _, event: &InputEvent, cx| match event {
+                InputEvent::Change => cx.notify(),
+                InputEvent::PressEnter { .. } => this.save_sheet(cx),
+                _ => {}
+            })
+            .detach();
+        }
+        self.sheet = Some(Sheet::Rule { rule, from, to, subject, existing: new, new });
+        cx.notify();
+    }
+
+    /// The rule being written as its fields have it.
+    fn written_rule(
+        rule: &CustomRule,
+        from: &Entity<InputState>,
+        to: &Entity<InputState>,
+        subject: &Entity<InputState>,
+        cx: &App,
+    ) -> CustomRule {
+        let mut rule = rule.clone();
+        rule.rule.from = CustomSplit::senders(from.read(cx).value().as_ref());
+        rule.rule.to = CustomSplit::senders(to.read(cx).value().as_ref());
+        rule.rule.subject = CustomRule::words(subject.read(cx).value().as_ref());
+        rule
+    }
+
+    /// Saves the split, the rule or the snippet being written, when it is whole, and closes its sheet.
     fn save_sheet(&mut self, cx: &mut Context<Self>) {
         match &self.sheet {
+            Some(Sheet::Rule { rule, from, to, subject, existing, .. }) => {
+                let rule = Self::written_rule(rule, from, to, subject, cx);
+                if !rule.complete() {
+                    return;
+                }
+                let existing = *existing;
+                self.store.update(cx, |store, cx| store.save_rule(&rule, existing, cx));
+            }
             Some(Sheet::Split { split, name, from, .. }) => {
                 let mut split = split.clone();
                 split.name = name.read(cx).value().trim().to_string();
@@ -1389,46 +1528,16 @@ impl SettingsView {
             .into_any_element(),
             Sheet::Split { split, name, from, new } => {
                 let labels = self.store.read(cx).split_labels();
-                let chosen = split.label.clone();
-                let chosen_name = chosen
-                    .as_ref()
-                    .and_then(|id| labels.iter().find(|(label, _)| label == id))
-                    .map(|(_, name)| name.clone())
-                    .unwrap_or_else(|| "None".into());
-                let pick_label = this.clone();
+                let pick = this.clone();
                 let label_menu = (!labels.is_empty()).then(|| {
-                    let labels = labels.clone();
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(space::XXS))
-                        .child(
-                            div()
-                                .text(TextStyle::Footnote, cx)
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .child("With the label"),
-                        )
-                        .child(div().ml(px(-size::BUTTON_GAP / 2.)).child(
-                            ActionButton::new("split-label", chosen_name).chevron().menu(move |_, _| {
-                                let set = |label: Option<String>| {
-                                    let this = pick_label.clone();
-                                    move |_: &mut Window, cx: &mut App| {
-                                        this.update(cx, |this, cx| {
-                                            if let Some(Sheet::Split { split, .. }) = &mut this.sheet {
-                                                split.label = label.clone();
-                                            }
-                                            cx.notify();
-                                        })
-                                    }
-                                };
-                                let mut entries = vec![MenuEntry::item("None", set(None)).checked(chosen.is_none())];
-                                entries.extend(labels.iter().map(|(id, name)| {
-                                    MenuEntry::item(name.clone(), set(Some(id.clone())))
-                                        .checked(chosen.as_ref() == Some(id))
-                                }));
-                                entries
-                            }),
-                        ))
+                    label_choice("split-label", "With the label", split.label.clone(), labels, cx, move |label, cx| {
+                        pick.update(cx, |this, cx| {
+                            if let Some(Sheet::Split { split, .. }) = &mut this.sheet {
+                                split.label = label;
+                            }
+                            cx.notify();
+                        })
+                    })
                 });
                 let save = this.clone();
                 let disabled = name.read(cx).value().trim().is_empty();
@@ -1458,6 +1567,95 @@ impl SettingsView {
                             cx,
                         ))
                         .children(label_menu),
+                    close.clone(),
+                    cx,
+                )
+                .into_any_element()
+            }
+            Sheet::Rule { rule, from, to, subject, existing, new } => {
+                let labels = self.store.read(cx).split_labels();
+                let pick = this.clone();
+                let label_menu = (!labels.is_empty()).then(|| {
+                    label_choice("rule-label", "Label it", rule.rule.label.clone(), labels, cx, move |label, cx| {
+                        pick.update(cx, |this, cx| {
+                            if let Some(Sheet::Rule { rule, .. }) = &mut this.sheet {
+                                rule.rule.label = label;
+                            }
+                            cx.notify();
+                        })
+                    })
+                });
+                let toggle = |id: &'static str, title: &'static str, on: bool, change: fn(&mut Sheet, bool)| {
+                    let this = this.clone();
+                    div().ml(px(-space::L)).child(ui::settings_row(
+                        ui::settings_label(title, None, Lead::None, false, cx),
+                        vec![
+                            ui::switch(
+                                id,
+                                on,
+                                move |on, _, cx| {
+                                    this.update(cx, |this, cx| {
+                                        if let Some(sheet) = &mut this.sheet {
+                                            change(sheet, on);
+                                        }
+                                        cx.notify();
+                                    })
+                                },
+                                cx,
+                            )
+                            .into_any_element(),
+                        ],
+                    ))
+                };
+                let skip = toggle("rule-skip-inbox", "Skip the inbox", rule.rule.skip_inbox, |sheet, on| {
+                    if let Sheet::Rule { rule, .. } = sheet {
+                        rule.rule.skip_inbox = on;
+                    }
+                });
+                let read = toggle("rule-mark-read", "Mark as read", rule.rule.mark_read, |sheet, on| {
+                    if let Sheet::Rule { rule, .. } = sheet {
+                        rule.rule.mark_read = on;
+                    }
+                });
+                let apply = new.then(|| {
+                    toggle("rule-existing", "Also apply to mail already here", *existing, |sheet, on| {
+                        if let Sheet::Rule { existing, .. } = sheet {
+                            *existing = on;
+                        }
+                    })
+                });
+                let save = this.clone();
+                let disabled = !Self::written_rule(rule, from, to, subject, cx).complete();
+                let title = if *new { "New rule" } else { "Edit rule" };
+                let save_button = ActionButton::new("rule-save", "Save")
+                    .variant(Variant::Primary)
+                    .disabled(disabled)
+                    .on_click(move |_, _, cx| save.update(cx, |this, cx| this.save_sheet(cx)));
+                ui::sheet(
+                    "rule-sheet",
+                    title,
+                    SheetSize::Large,
+                    BACKGROUND,
+                    vec![save_button.into_any_element()],
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(space::M))
+                        .p(px(space::XL))
+                        .child(ui::input_field("rule-from", Some("From"), from, cx))
+                        .child(ui::input_field("rule-to", Some("To or Cc"), to, cx))
+                        .child(ui::input_field("rule-subject", Some("Subject has"), subject, cx))
+                        .child(ui::notice(
+                            "Addresses, or @ and a domain for everyone there.",
+                            ui::Tone::Muted,
+                            None,
+                            None,
+                            cx,
+                        ))
+                        .children(label_menu)
+                        .child(skip)
+                        .child(read)
+                        .children(apply),
                     close.clone(),
                     cx,
                 )
@@ -1603,4 +1801,39 @@ impl Render for SettingsView {
             )
             .children(sheet)
     }
+}
+
+/// A menu of the accounts' labels, and None, under `heading`.
+fn label_choice(
+    id: &'static str,
+    heading: &'static str,
+    chosen: Option<String>,
+    labels: Vec<(String, String)>,
+    cx: &App,
+    pick: impl Fn(Option<String>, &mut App) + 'static,
+) -> gpui::Div {
+    let chosen_name = chosen
+        .as_ref()
+        .and_then(|id| labels.iter().find(|(label, _)| label == id))
+        .map(|(_, name)| name.clone())
+        .unwrap_or_else(|| "None".into());
+    let pick = Rc::new(pick);
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(space::XXS))
+        .child(div().text(TextStyle::Footnote, cx).font_weight(gpui::FontWeight::SEMIBOLD).child(heading))
+        .child(div().ml(px(-size::BUTTON_GAP / 2.)).child(ActionButton::new(id, chosen_name).chevron().menu(
+            move |_, _| {
+                let set = |label: Option<String>| {
+                    let pick = pick.clone();
+                    move |_: &mut Window, cx: &mut App| pick(label.clone(), cx)
+                };
+                let mut entries = vec![MenuEntry::item("None", set(None)).checked(chosen.is_none())];
+                entries.extend(labels.iter().map(|(id, name)| {
+                    MenuEntry::item(name.clone(), set(Some(id.clone()))).checked(chosen.as_ref() == Some(id))
+                }));
+                entries
+            },
+        )))
 }

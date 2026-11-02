@@ -109,6 +109,7 @@ struct CommandPalette: View {
         ]
         if store.searchRows == nil, !store.rows.isEmpty {
             items.append(PaletteItem(id: "zero", title: "Get Me To Zero: archive everything here", symbol: .archive, shortcut: store.keyLabel("zero"), afterClosing: true) { store.archiveAll() })
+            items.append(PaletteItem(id: "read-all", title: "Mark All Read: everything here", symbol: .checkCheck, shortcut: store.keyLabel("readAll"), afterClosing: true) { store.readAll() })
         }
         if store.canEmpty {
             items.append(PaletteItem(id: "empty", title: "Empty \(store.mailboxName)", symbol: .trash, afterClosing: true) { store.emptyMailbox() })

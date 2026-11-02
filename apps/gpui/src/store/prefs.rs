@@ -5,11 +5,14 @@
 use std::collections::BTreeMap;
 
 use gpui::Context;
+use mail_core::api::Command;
+use mail_protocol::Rule;
+use mail_protocol::rules::RULE_KEY;
 use serde_json::{Value, json};
 
 use super::{Confirmation, Store};
 use crate::keys::{self, KeyCommand, KeyScope};
-use crate::models::{AccountView, Mailbox};
+use crate::models::{AccountView, ActReply, Mailbox};
 use crate::ui::Symbol;
 
 pub const SIDEBAR_KEY: &str = "sidebar";
@@ -118,6 +121,43 @@ impl CustomSplit {
     }
 }
 
+/// A rule the user made, `rule:<id>`: what the server does to new mail that matches.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomRule {
+    pub id: String,
+    pub rule: Rule,
+}
+
+impl CustomRule {
+    pub fn key(&self) -> String {
+        format!("{RULE_KEY}{}", self.id)
+    }
+
+    pub fn all(preferences: &BTreeMap<String, Value>) -> Vec<CustomRule> {
+        let mut rules: Vec<CustomRule> = preferences
+            .iter()
+            .filter_map(|(key, value)| {
+                let id = key.strip_prefix(RULE_KEY)?;
+                let rule = serde_json::from_value::<Rule>(value.clone()).ok()?;
+                Some(CustomRule { id: id.into(), rule })
+            })
+            .collect();
+        rules.sort_by(|one, other| (one.rule.order, &one.id).cmp(&(other.rule.order, &other.id)));
+        rules
+    }
+
+    /// It takes some mail and does something to it.
+    pub fn complete(&self) -> bool {
+        let takes = !(self.rule.from.is_empty() && self.rule.to.is_empty() && self.rule.subject.is_empty());
+        takes && self.rule.does_something()
+    }
+
+    /// Words as they are typed: split on commas or lines, as a subject's words may hold spaces.
+    pub fn words(text: &str) -> Vec<String> {
+        text.split([',', '\n']).map(str::trim).filter(|part| !part.is_empty()).map(String::from).collect()
+    }
+}
+
 /// A page of the settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
@@ -180,6 +220,7 @@ impl SettingsEntry {
             Self::new("signatures", "Signatures", Accounts, "sign off footer"),
             Self::new("sign-out", "Sign out", Accounts, "log out leave"),
             Self::new("split-inbox", "Split Inbox", Inbox, "important other newsletters notifications splits"),
+            Self::new("rules", "Rules", Inbox, "filters rules automatic label skip inbox mark read"),
             Self::new("tabs", "Tabs", Inbox, "mailboxes over the list order"),
             Self::new("selecting", "Selecting", Inbox, "select circles hover bulk batch checkbox"),
             Self::new(
@@ -468,6 +509,74 @@ impl Store {
 
     pub fn snippets(&self) -> Vec<Snippet> {
         Snippet::all(&self.preferences)
+    }
+
+    pub fn custom_rules(&self) -> Vec<CustomRule> {
+        CustomRule::all(&self.preferences)
+    }
+
+    pub fn new_rule(&self) -> CustomRule {
+        let order = self.custom_rules().iter().map(|rule| rule.rule.order).max().unwrap_or(-1) + 1;
+        CustomRule { id: uuid(), rule: Rule { order, ..Rule::default() } }
+    }
+
+    /// Saves the rule, and does it to the mail already here when `existing`.
+    pub fn save_rule(&mut self, rule: &CustomRule, existing: bool, cx: &mut Context<Self>) {
+        self.set_preference(&rule.key(), serde_json::to_value(&rule.rule).ok(), cx);
+        if !existing {
+            return;
+        }
+        let command = Command::ApplyRule { rule: rule.rule.clone() };
+        self.ask_or_show(command, cx, |this, reply: ActReply, cx| this.report(reply, cx));
+    }
+
+    pub fn remove_rule(&mut self, rule: &CustomRule, cx: &mut Context<Self>) {
+        self.set_preference(&rule.key(), None, cx);
+    }
+
+    /// What a rule takes and does: "From @github.com, to dux@x.com → dux-shell, skip inbox".
+    pub fn rule_summary(&self, rule: &Rule) -> String {
+        let mut takes = Vec::new();
+        if !rule.from.is_empty() {
+            takes.push(format!("from {}", rule.from.join(" or ")));
+        }
+        if !rule.to.is_empty() {
+            takes.push(format!("to {}", rule.to.join(" or ")));
+        }
+        if !rule.subject.is_empty() {
+            takes.push(format!("subject has {}", rule.subject.join(" or ")));
+        }
+        let mut does = Vec::new();
+        if let Some(label) = &rule.label
+            && let Some((_, name)) = self.split_labels().into_iter().find(|(id, _)| id == label)
+        {
+            does.push(name);
+        }
+        if rule.skip_inbox {
+            does.push("skip inbox".into());
+        }
+        if rule.mark_read {
+            does.push("mark read".into());
+        }
+        let takes = takes.join(", ");
+        let mut takes_shown = takes.chars();
+        let looks = match takes_shown.next() {
+            Some(first) => first.to_uppercase().chain(takes_shown).collect(),
+            None => "Nothing yet".to_string(),
+        };
+        if does.is_empty() { looks } else { format!("{looks} → {}", does.join(", ")) }
+    }
+
+    pub fn move_custom_rule(&mut self, rule: &CustomRule, index: usize, cx: &mut Context<Self>) {
+        let mut reordered: Vec<CustomRule> =
+            self.custom_rules().into_iter().filter(|other| other.id != rule.id).collect();
+        reordered.insert(index.min(reordered.len()), rule.clone());
+        for (order, rule) in reordered.iter_mut().enumerate() {
+            if rule.rule.order != order as i64 {
+                rule.rule.order = order as i64;
+                self.save_rule(rule, false, cx);
+            }
+        }
     }
 
     pub fn save_snippet(&mut self, snippet: &Snippet, cx: &mut Context<Self>) {

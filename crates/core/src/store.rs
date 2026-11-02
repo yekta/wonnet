@@ -19,7 +19,7 @@ use anyhow::Result;
 use chrono::{DateTime, TimeZone};
 use mail_protocol::{
     Account, Address, Attachment, Body, Draft, Identity, Label, Message, MessageState, Op, Preference, Recipients,
-    SavedDraft, role,
+    Rule, SavedDraft, role,
 };
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params, params_from_iter};
@@ -1105,6 +1105,73 @@ impl Store {
         let rows =
             statement.query_map(params![label, account, before.unwrap_or(i64::MAX), unread], |row| row.get(0))?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// The ids of the unread messages in the threads a mailbox shows (only its starred ones with
+    /// that filter), newest first.
+    pub fn unread_messages(&self, mailbox: &str, filter: Option<Filter>) -> Result<Vec<String>> {
+        let Some((label, account)) = resolve(mailbox, splits_in(&self.db)?.is_some()) else { return Ok(Vec::new()) };
+        let (label, filter, _) = unread_of(label, filter, &[]);
+        let by_account = if account.is_some() { "AND l.account_id = ?2" } else { "AND ?2 IS NULL" };
+        let by_filter = filter_sql(filter);
+        let sql = format!(
+            "SELECT m.id FROM thread_labels l JOIN messages m ON m.thread = l.thread
+             WHERE l.label = ?1 {by_account} {by_filter} AND l.unread > 0 AND m.unread = 1
+             ORDER BY l.last_date DESC"
+        );
+        let mut statement = self.db.prepare_cached(&sql)?;
+        let rows = statement.query_map(params![label, account], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// The messages a rule holds for, with their states, newest first: not the user's own, nor in
+    /// Sent, Drafts, Spam or Trash, and with a label, only in the label's account.
+    pub fn rule_messages(&self, rule: &Rule) -> Result<Vec<(String, MessageState)>> {
+        let me = self.me();
+        let account: Option<String> = match &rule.label {
+            Some(label) => {
+                let query = "SELECT account_id FROM labels WHERE id = ?1";
+                let Some(account) = self.db.query_row(query, [label], |row| row.get(0)).optional()? else {
+                    return Ok(Vec::new());
+                };
+                Some(account)
+            }
+            None => None,
+        };
+        let mut statement = self.db.prepare(
+            "SELECT id, from_email, recipients, subject, labels, unread, starred, snoozed_until FROM messages
+             WHERE ?1 IS NULL OR account_id = ?1 ORDER BY date DESC",
+        )?;
+        let rows = statement.query_map([&account], |row| {
+            let recipients: String = row.get(2)?;
+            let labels: String = row.get(4)?;
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                serde_json::from_str::<Recipients>(&recipients).unwrap_or_default(),
+                row.get::<_, String>(3)?,
+                MessageState {
+                    labels: serde_json::from_str(&labels).unwrap_or_default(),
+                    unread: row.get(5)?,
+                    starred: row.get(6)?,
+                    snoozed_until: row.get(7)?,
+                },
+            ))
+        })?;
+        let left_alone = [role::SENT, role::DRAFTS, role::SPAM, role::TRASH];
+        let mut found = Vec::new();
+        for row in rows {
+            let (id, from, recipients, subject, state) = row?;
+            if me.contains(&from.to_lowercase()) || left_alone.iter().any(|role| state.has(role)) {
+                continue;
+            }
+            let to: Vec<&str> =
+                recipients.to.iter().chain(&recipients.cc).map(|address| address.email.as_str()).collect();
+            if rule.matches(&from, &to, &subject) {
+                found.push((id, state));
+            }
+        }
+        Ok(found)
     }
 
     /// Every message in Trash or Spam (an account's, or all of them), to delete for good.
