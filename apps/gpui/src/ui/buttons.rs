@@ -571,6 +571,7 @@ impl RenderOnce for SelectCircle {
             .px(px(size::BUTTON_GAP / 2.))
             .cursor_pointer()
             .tooltip(move |_, cx| Tooltip::view(help.clone(), cx))
+            .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
             .on_click(move |event, window, cx| on_click(event, window, cx))
             .child(div().size(px(size::REGULAR)).flex().items_center().justify_center().child(select_circle(
                 self.checked,
