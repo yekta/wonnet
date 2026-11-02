@@ -69,8 +69,33 @@ const SCRIPT: &str = r#"
 "#;
 
 /// The page in the app's scheme, whatever the system's: the core's CSS asks for
-/// `prefers-color-scheme`, which is answered here.
+/// `prefers-color-scheme`, which is answered here. It gets the app's font too.
 fn themed(html: &str, dark: bool) -> String {
     let answer = if dark { "all" } else { "not all" };
-    html.replace("@media (prefers-color-scheme: dark)", &format!("@media {answer}"))
+    let html = html.replace("@media (prefers-color-scheme: dark)", &format!("@media {answer}"));
+    html.replacen("</head>", &format!("<style>{}</style></head>", fonts()), 1)
+}
+
+/// The app's font under the names of a Mac's, which only a Mac has: the core's page and mail
+/// that ask for the system's font get the app's, as they get the system's on a Mac.
+fn fonts() -> &'static str {
+    static FONTS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    FONTS.get_or_init(|| {
+        use base64::Engine as _;
+        let faces = [
+            (400, include_bytes!("../../assets/fonts/NunitoSans-400.ttf").as_slice()),
+            (700, include_bytes!("../../assets/fonts/NunitoSans-700.ttf").as_slice()),
+        ]
+        .map(|(weight, font)| (weight, base64::engine::general_purpose::STANDARD.encode(font)));
+        let mut css = String::new();
+        // The usual system font list names -apple-system before BlinkMacSystemFont.
+        for name in ["Avenir", "-apple-system"] {
+            for (weight, data) in &faces {
+                css.push_str(&format!(
+                    "@font-face {{ font-family: \"{name}\"; font-weight: {weight}; src: url(data:font/ttf;base64,{data}); }}\n"
+                ));
+            }
+        }
+        css
+    })
 }
