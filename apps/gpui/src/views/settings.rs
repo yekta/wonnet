@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Bounds, Context, DragMoveEvent, Entity, MouseButton, Pixels, ScrollHandle, SharedString, Window,
-    canvas, div, point, px,
+    AnyElement, App, Bounds, Context, DragMoveEvent, Entity, Pixels, ScrollHandle, SharedString, Window, canvas, div,
+    point, px,
 };
 use gpui_component::input::{InputEvent, InputState, TextareaState};
 
@@ -272,24 +272,25 @@ impl SettingsView {
         let store = self.store.read(cx);
         let appearance = store.local.appearance;
         let theme_store = self.store.clone();
-        let theme = ActionButton::new("theme", appearance.name()).chevron().menu(move |_, _| {
-            Appearance::ALL
-                .into_iter()
-                .map(|choice| {
-                    let store = theme_store.clone();
-                    MenuEntry::item(choice.name(), move |window, cx| {
-                        store.update(cx, |store, cx| {
-                            store.local.appearance = choice;
-                            store.local.save();
-                            cx.notify();
-                        });
-                        let _ = window;
-                        cx.refresh_windows();
+        let theme =
+            ActionButton::new("theme", appearance.name()).chevron().surface(ui::Surface::Card).menu(move |_, _| {
+                Appearance::ALL
+                    .into_iter()
+                    .map(|choice| {
+                        let store = theme_store.clone();
+                        MenuEntry::item(choice.name(), move |window, cx| {
+                            store.update(cx, |store, cx| {
+                                store.local.appearance = choice;
+                                store.local.save();
+                                cx.notify();
+                            });
+                            let _ = window;
+                            cx.refresh_windows();
+                        })
+                        .checked(choice == appearance)
                     })
-                    .checked(choice == appearance)
-                })
-                .collect()
-        });
+                    .collect()
+            });
         let server_symbol = if store.connection == "offline" { Symbol::WifiOff } else { Symbol::Server };
         let keep_sidebar = store.local.keep_sidebar;
         let keep_store = self.store.clone();
@@ -403,7 +404,7 @@ impl SettingsView {
         };
         ui::settings_row(
             ui::settings_label(updater::label(updater::VERSION), status.map(SharedString::from), Lead::None, false, cx),
-            vec![button.into_any_element()],
+            vec![button.surface(ui::Surface::Card).into_any_element()],
         )
     }
 
@@ -483,6 +484,7 @@ impl SettingsView {
                                 ActionButton::new("sign-out", "Sign out")
                                     .symbol(Symbol::LogOut)
                                     .variant(Variant::Destructive)
+                                    .surface(ui::Surface::Card)
                                     .on_click(move |_, _, cx| {
                                         sign_out.update(cx, |store, cx| store.confirm_signing_out(cx))
                                     })
@@ -507,6 +509,7 @@ impl SettingsView {
         let more =
             IconButton::new(SharedString::from(format!("account-more-{}", account.id)), Symbol::Ellipsis, "More")
                 .plain()
+                .surface(ui::Surface::Card)
                 .menu(move |_, _| {
                     let remove = remove.clone();
                     let account = removed.clone();
@@ -618,6 +621,7 @@ impl SettingsView {
             )
             .symbol(if shown.is_none() { Symbol::Plus } else { Symbol::Pencil })
             .variant(Variant::Ghost)
+            .surface(ui::Surface::Card)
             .on_click(move |_, window, cx| {
                 let start = start.clone();
                 let id = id.clone();
@@ -658,6 +662,7 @@ impl SettingsView {
                         "signature",
                         "Save",
                         unchanged,
+                        ui::Surface::Card,
                         Rc::new(move |_, _, cx| {
                             let text = reading.read(cx).value().trim().to_string();
                             save.update(cx, |this, cx| {
@@ -738,7 +743,7 @@ impl SettingsView {
             let order = self.store.clone();
             let target = split.clone();
             split_rows.push(
-                movable_row(
+                ui::MovableRow::new(
                     SharedString::from(format!("split-{}", split.id)),
                     "splits",
                     ui::settings_label(
@@ -747,32 +752,8 @@ impl SettingsView {
                         Lead::Symbol(Symbol::ListFilter),
                         false,
                         cx,
-                    )
-                    .into_any_element(),
-                    Some(
-                        ui::icon(Symbol::ChevronRight, 12.)
-                            .text_color(cx.color(MUTED_STRONGER_FOREGROUND))
-                            .into_any_element(),
                     ),
-                    Rc::new(move |window, cx| {
-                        edit.update(cx, |this, cx| this.edit_split(chosen.clone(), false, window, cx))
-                    }),
-                    Rc::new(move |_, _| {
-                        let remove = menu.clone();
-                        let edit = menu_edit.clone();
-                        let split = menu_split.clone();
-                        let edited = split.clone();
-                        vec![
-                            MenuEntry::item("Edit", move |window, cx| {
-                                edit.update(cx, |this, cx| this.edit_split(edited.clone(), false, window, cx))
-                            }),
-                            MenuEntry::item("Remove", move |_, cx| {
-                                remove.update(cx, |store, cx| store.remove_split(&split, cx))
-                            })
-                            .destructive(),
-                        ]
-                    }),
-                    Rc::new(move |dragged, after, _, cx| {
+                    move |dragged, after, _, cx| {
                         let dragged = dragged.trim_start_matches("split-").to_string();
                         order.update(cx, |store, cx| {
                             let all = store.custom_splits();
@@ -782,9 +763,27 @@ impl SettingsView {
                             let index = ids.iter().position(|id| *id == dragged).unwrap_or(0);
                             store.move_custom_split(&moved, index, cx);
                         });
-                    }),
-                    cx,
+                    },
                 )
+                .trailing(ui::icon(Symbol::ChevronRight, 12.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+                .on_click(move |_, window, cx| {
+                    edit.update(cx, |this, cx| this.edit_split(chosen.clone(), false, window, cx))
+                })
+                .menu(move |_, _| {
+                    let remove = menu.clone();
+                    let edit = menu_edit.clone();
+                    let split = menu_split.clone();
+                    let edited = split.clone();
+                    vec![
+                        MenuEntry::item("Edit", move |window, cx| {
+                            edit.update(cx, |this, cx| this.edit_split(edited.clone(), false, window, cx))
+                        }),
+                        MenuEntry::item("Remove", move |_, cx| {
+                            remove.update(cx, |store, cx| store.remove_split(&split, cx))
+                        })
+                        .destructive(),
+                    ]
+                })
                 .into_any_element(),
             );
         }
@@ -792,12 +791,15 @@ impl SettingsView {
         split_rows.push(
             ui::settings_row(
                 div().ml(px(-space::L + space::S - size::BUTTON_GAP / 2.)).child(
-                    ActionButton::new("add-split", "Add split").symbol(Symbol::Plus).on_click(move |_, window, cx| {
-                        add.update(cx, |this, cx| {
-                            let split = this.store.read(cx).new_split();
-                            this.edit_split(split, true, window, cx);
-                        })
-                    }),
+                    ActionButton::new("add-split", "Add split")
+                        .symbol(Symbol::Plus)
+                        .surface(ui::Surface::Card)
+                        .on_click(move |_, window, cx| {
+                            add.update(cx, |this, cx| {
+                                let split = this.store.read(cx).new_split();
+                                this.edit_split(split, true, window, cx);
+                            })
+                        }),
                 ),
                 Vec::new(),
             )
@@ -841,13 +843,13 @@ impl SettingsView {
             rows.push(ui::settings_note("No tabs. Mailboxes are opened from the sidebar.", cx).into_any_element());
             rows.push(ui::settings_divider(cx).into_any_element());
         }
-        for tab in &tabs {
+        for (index, tab) in tabs.iter().enumerate() {
             let remove = self.store.clone();
             let id = tab.id.clone();
             let order = self.store.clone();
             let target = tab.id.clone();
             rows.push(
-                movable_row(
+                ui::MovableRow::new(
                     SharedString::from(format!("saved-tab-{}", tab.id)),
                     "saved-tabs",
                     ui::settings_label(
@@ -856,21 +858,8 @@ impl SettingsView {
                         Lead::Symbol(Symbol::named(&tab.symbol)),
                         false,
                         cx,
-                    )
-                    .into_any_element(),
-                    None,
-                    Rc::new(|_, _| {}),
-                    Rc::new(move |_, _| {
-                        let remove = remove.clone();
-                        let id = id.clone();
-                        vec![
-                            MenuEntry::item("Remove Tab", move |_, cx| {
-                                remove.update(cx, |store, cx| store.toggle_tab(&id, cx))
-                            })
-                            .destructive(),
-                        ]
-                    }),
-                    Rc::new(move |dragged, after, _, cx| {
+                    ),
+                    move |dragged, after, _, cx| {
                         let dragged = dragged.trim_start_matches("saved-tab-").to_string();
                         order.update(cx, |store, cx| {
                             let ids = store.saved_tabs().into_iter().map(|tab| tab.id).collect();
@@ -878,30 +867,42 @@ impl SettingsView {
                             let index = ids.iter().position(|id| *id == dragged).unwrap_or(0);
                             store.move_tab(&dragged, index, cx);
                         });
-                    }),
-                    cx,
+                    },
                 )
+                .first(index == 0)
+                .menu(move |_, _| {
+                    let remove = remove.clone();
+                    let id = id.clone();
+                    vec![
+                        MenuEntry::item("Remove Tab", move |_, cx| {
+                            remove.update(cx, |store, cx| store.toggle_tab(&id, cx))
+                        })
+                        .destructive(),
+                    ]
+                })
                 .into_any_element(),
             );
         }
         let (unified, accounts) = store.mailboxes_for_tabs();
         let adding = self.store.clone();
-        let add = ActionButton::new("add-tab", "Add tab").symbol(Symbol::Plus).menu(move |_, _| {
-            let item = |mailbox: &crate::models::Mailbox| {
-                let store = adding.clone();
-                let id = mailbox.id.clone();
-                MenuEntry::item(mailbox.name.clone(), move |_, cx| {
-                    store.update(cx, |store, cx| store.toggle_tab(&id, cx))
-                })
-                .symbol(Symbol::named(&mailbox.symbol))
-            };
-            let mut entries: Vec<MenuEntry> = unified.iter().map(item).collect();
-            for (account, mailboxes) in &accounts {
-                entries.push(MenuEntry::Heading(account.title.clone().into()));
-                entries.extend(mailboxes.iter().map(item));
-            }
-            entries
-        });
+        let add = ActionButton::new("add-tab", "Add tab").symbol(Symbol::Plus).surface(ui::Surface::Card).menu(
+            move |_, _| {
+                let item = |mailbox: &crate::models::Mailbox| {
+                    let store = adding.clone();
+                    let id = mailbox.id.clone();
+                    MenuEntry::item(mailbox.name.clone(), move |_, cx| {
+                        store.update(cx, |store, cx| store.toggle_tab(&id, cx))
+                    })
+                    .symbol(Symbol::named(&mailbox.symbol))
+                };
+                let mut entries: Vec<MenuEntry> = unified.iter().map(item).collect();
+                for (account, mailboxes) in &accounts {
+                    entries.push(MenuEntry::Heading(account.title.clone().into()));
+                    entries.extend(mailboxes.iter().map(item));
+                }
+                entries
+            },
+        );
         rows.push(
             ui::settings_row(div().ml(px(-space::L + space::S - size::BUTTON_GAP / 2.)).child(add), Vec::new())
                 .into_any_element(),
@@ -933,7 +934,7 @@ impl SettingsView {
         let store = self.store.read(cx);
         let this = cx.entity();
         let mut rows = Vec::new();
-        for rule in store.custom_rules() {
+        for (index, rule) in store.custom_rules().into_iter().enumerate() {
             let edit = this.clone();
             let menu = self.store.clone();
             let menu_edit = this.clone();
@@ -942,33 +943,11 @@ impl SettingsView {
             let order = self.store.clone();
             let target = rule.clone();
             rows.push(
-                movable_row(
+                ui::MovableRow::new(
                     SharedString::from(format!("rule-{}", rule.id)),
                     "rules",
-                    ui::settings_label(store.rule_summary(&rule.rule), None, Lead::Symbol(Symbol::Zap), false, cx)
-                        .into_any_element(),
-                    Some(
-                        ui::icon(Symbol::ChevronRight, 12.)
-                            .text_color(cx.color(MUTED_STRONGER_FOREGROUND))
-                            .into_any_element(),
-                    ),
-                    Rc::new(move |window, cx| {
-                        edit.update(cx, |this, cx| this.edit_rule(chosen.clone(), false, window, cx))
-                    }),
-                    Rc::new(move |_, _| {
-                        let (remove, edit, rule) = (menu.clone(), menu_edit.clone(), menu_rule.clone());
-                        let edited = rule.clone();
-                        vec![
-                            MenuEntry::item("Edit", move |window, cx| {
-                                edit.update(cx, |this, cx| this.edit_rule(edited.clone(), false, window, cx))
-                            }),
-                            MenuEntry::item("Remove", move |_, cx| {
-                                remove.update(cx, |store, cx| store.remove_rule(&rule, cx))
-                            })
-                            .destructive(),
-                        ]
-                    }),
-                    Rc::new(move |dragged, after, _, cx| {
+                    ui::settings_label(store.rule_summary(&rule.rule), None, Lead::Symbol(Symbol::Zap), false, cx),
+                    move |dragged, after, _, cx| {
                         let dragged = dragged.trim_start_matches("rule-").to_string();
                         order.update(cx, |store, cx| {
                             let all = store.custom_rules();
@@ -978,9 +957,26 @@ impl SettingsView {
                             let index = ids.iter().position(|id| *id == dragged).unwrap_or(0);
                             store.move_custom_rule(&moved, index, cx);
                         });
-                    }),
-                    cx,
+                    },
                 )
+                .first(index == 0)
+                .trailing(ui::icon(Symbol::ChevronRight, 12.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+                .on_click(move |_, window, cx| {
+                    edit.update(cx, |this, cx| this.edit_rule(chosen.clone(), false, window, cx))
+                })
+                .menu(move |_, _| {
+                    let (remove, edit, rule) = (menu.clone(), menu_edit.clone(), menu_rule.clone());
+                    let edited = rule.clone();
+                    vec![
+                        MenuEntry::item("Edit", move |window, cx| {
+                            edit.update(cx, |this, cx| this.edit_rule(edited.clone(), false, window, cx))
+                        }),
+                        MenuEntry::item("Remove", move |_, cx| {
+                            remove.update(cx, |store, cx| store.remove_rule(&rule, cx))
+                        })
+                        .destructive(),
+                    ]
+                })
                 .into_any_element(),
             );
         }
@@ -988,12 +984,14 @@ impl SettingsView {
         rows.push(
             ui::settings_row(
                 div().ml(px(-space::L + space::S - size::BUTTON_GAP / 2.)).child(
-                    ActionButton::new("add-rule", "Add rule").symbol(Symbol::Plus).on_click(move |_, window, cx| {
-                        add.update(cx, |this, cx| {
-                            let rule = this.store.read(cx).new_rule();
-                            this.edit_rule(rule, true, window, cx);
-                        })
-                    }),
+                    ActionButton::new("add-rule", "Add rule").symbol(Symbol::Plus).surface(ui::Surface::Card).on_click(
+                        move |_, window, cx| {
+                            add.update(cx, |this, cx| {
+                                let rule = this.store.read(cx).new_rule();
+                                this.edit_rule(rule, true, window, cx);
+                            })
+                        },
+                    ),
                 ),
                 Vec::new(),
             )
@@ -1046,7 +1044,7 @@ impl SettingsView {
         let this = cx.entity();
         let account_menu = (accounts.len() > 1).then(|| {
             let title = accounts.iter().find(|account| account.id == chosen).map(|account| account.title.clone());
-            ActionButton::new("rule-label-account", title.unwrap_or_default()).chevron().menu(move |_, _| {
+            let choices = move |_: &mut Window, _: &mut App| {
                 accounts
                     .iter()
                     .map(|account| {
@@ -1062,14 +1060,15 @@ impl SettingsView {
                         .checked(account.id == chosen)
                     })
                     .collect()
-            })
+            };
+            ui::dropdown("rule-label-account", Some("Account"), title.unwrap_or_default(), choices, cx)
         });
         div()
             .flex()
             .items_end()
             .gap(px(space::M))
             .child(div().flex_1().child(ui::input_field("rule-label-name", Some("Label name"), &making.name, cx)))
-            .children(account_menu.map(|menu| div().ml(px(-size::BUTTON_GAP / 2.)).child(menu)))
+            .children(account_menu.map(|menu| div().flex_1().child(menu)))
     }
 
     /// Whether the rule being written can be saved: with a label to make, once it has a name.
@@ -1158,6 +1157,7 @@ impl SettingsView {
                     vec![
                         ActionButton::new(SharedString::from(format!("unblock-{address}")), "Unblock")
                             .variant(Variant::Ghost)
+                            .surface(ui::Surface::Card)
                             .on_click(move |_, _, cx| unblock.update(cx, |store, cx| store.unblock(&who, cx)))
                             .into_any_element(),
                     ],
@@ -1201,8 +1201,10 @@ impl SettingsView {
         let store = self.store.read(cx);
         let delay = store.local.undo_delay;
         let delay_store = self.store.clone();
-        let undo =
-            ActionButton::new("undo-delay", LocalSettings::undo_delay_name(delay)).chevron().menu(move |_, _| {
+        let undo = ActionButton::new("undo-delay", LocalSettings::undo_delay_name(delay))
+            .chevron()
+            .surface(ui::Surface::Card)
+            .menu(move |_, _| {
                 LocalSettings::UNDO_DELAYS
                     .into_iter()
                     .map(|seconds| {
@@ -1240,6 +1242,7 @@ impl SettingsView {
                             "More",
                         )
                         .plain()
+                        .surface(ui::Surface::Card)
                         .menu(move |_, _| {
                             let edit = edit.clone();
                             let remove = remove.clone();
@@ -1266,8 +1269,10 @@ impl SettingsView {
         snippet_rows.push(
             ui::settings_row(
                 div().ml(px(-space::L + space::S - size::BUTTON_GAP / 2.)).child(
-                    ActionButton::new("add-snippet", "Add snippet").symbol(Symbol::Plus).on_click(
-                        move |_, window, cx| {
+                    ActionButton::new("add-snippet", "Add snippet")
+                        .symbol(Symbol::Plus)
+                        .surface(ui::Surface::Card)
+                        .on_click(move |_, window, cx| {
                             add.update(cx, |this, cx| {
                                 this.edit_snippet(
                                     Snippet { id: crate::store::uuid(), name: String::new(), text: String::new() },
@@ -1276,8 +1281,7 @@ impl SettingsView {
                                     cx,
                                 )
                             })
-                        },
-                    ),
+                        }),
                 ),
                 Vec::new(),
             )
@@ -1425,6 +1429,7 @@ impl SettingsView {
             IconButton::new(SharedString::from(format!("key-more-{}", command.id)), Symbol::Ellipsis, "More")
                 .size(ControlSize::Small)
                 .plain()
+                .surface(ui::Surface::Card)
                 .menu(move |_, _| {
                     let reset = menu_store.clone();
                     let command = menu_command.clone();
@@ -1467,27 +1472,17 @@ impl SettingsView {
 /// A key of a keybinding on a button that records another: clicked, it takes the next keys
 /// pressed with their modifiers, or two in a row. Esc or a click elsewhere stops it. Without a
 /// key it is a plus, to add one.
-fn key_recorder(
-    store: &Entity<Store>,
-    command: &KeyCommand,
-    key: Option<String>,
-    cx: &App,
-) -> impl IntoElement + use<> {
+fn key_recorder(store: &Entity<Store>, command: &KeyCommand, key: Option<String>, cx: &App) -> ui::KeyRecorder {
     let id = SharedString::from(format!("record-{}-{}", command.id, key.clone().unwrap_or_else(|| "add".into())));
     let recording =
         cx.try_global::<Recording>().filter(|recording| recording.id == id).map(|recording| recording.strokes.clone());
-    let face = match (&recording, &key) {
-        (Some(strokes), _) => {
-            let text = if strokes.is_empty() {
-                "Press keys".to_string()
-            } else {
-                strokes.iter().map(|stroke| keys::label(stroke)).collect::<Vec<_>>().join(" ")
-            };
-            div().text_in(TextStyle::Label, PRIMARY, cx).child(text).into_any_element()
+    let shown = recording.as_ref().map(|strokes| {
+        if strokes.is_empty() {
+            SharedString::from("Press keys")
+        } else {
+            strokes.iter().map(|stroke| keys::label(stroke)).collect::<Vec<_>>().join(" ").into()
         }
-        (None, Some(key)) => ui::key_caps(keys::caps(key), cx).into_any_element(),
-        (None, None) => ui::icon(Symbol::Plus, 13.).into_any_element(),
-    };
+    });
     let help = match (&recording, &key) {
         (Some(_), _) => "Press the keys, or Esc to stop".to_string(),
         (None, Some(key)) => format!("Record a key in place of {}", keys::label(key)),
@@ -1496,81 +1491,31 @@ fn key_recorder(
     let store = store.clone();
     let command = command.clone();
     let start_id = id.clone();
-    let active = recording.is_some();
-    div()
-        .id(id.clone())
-        .px(px(size::BUTTON_GAP / 2.))
-        .cursor_pointer()
-        .tooltip(move |_, cx| ui::Tooltip::view(help.clone(), cx))
-        .on_click(move |_, window, cx| {
-            if active {
-                return;
-            }
-            let store = store.clone();
-            let command = command.clone();
-            let replacing = key.clone();
-            cx.set_global(Recording {
-                strokes: Vec::new(),
-                id: start_id.clone(),
-                done: Rc::new(move |pressed, _, cx| {
-                    let replacing = replacing.clone();
-                    store.update(cx, |store, cx| store.set_key(&pressed, &command, replacing.as_deref(), cx))
-                }),
-            });
+    let stop_id = id.clone();
+    let caps = key.as_deref().map(keys::caps);
+    ui::KeyRecorder::new(id, help, move |_, window, cx| {
+        let store = store.clone();
+        let command = command.clone();
+        let replacing = key.clone();
+        cx.set_global(Recording {
+            strokes: Vec::new(),
+            id: start_id.clone(),
+            done: Rc::new(move |pressed, _, cx| {
+                let replacing = replacing.clone();
+                store.update(cx, |store, cx| store.set_key(&pressed, &command, replacing.as_deref(), cx))
+            }),
+        });
+        window.refresh();
+    })
+    .caps(caps)
+    .recording(shown)
+    .surface(ui::Surface::Card)
+    .on_click_out(move |window, cx| {
+        if cx.try_global::<Recording>().is_some_and(|recording| recording.id == stop_id) {
+            cx.remove_global::<Recording>();
             window.refresh();
-        })
-        .on_mouse_down_out(move |_, window, cx| {
-            if cx.try_global::<Recording>().is_some_and(|recording| recording.id == id) {
-                cx.remove_global::<Recording>();
-                window.refresh();
-            }
-        })
-        .child(
-            div()
-                .min_w(px(size::SMALL))
-                .min_h(px(size::SMALL))
-                .px(px(space::XXS))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(radius::SM))
-                .text_color(cx.color(MUTED_FOREGROUND))
-                .when(active, |face| face.bg(cx.color(BACKGROUND_ACCENT_STRONGER)))
-                .when(!active, |face| {
-                    face.hover(|face| face.bg(cx.color(BACKGROUND_ACCENT)).text_color(cx.color(FOREGROUND)))
-                })
-                .child(face),
-        )
-}
-
-/// A row a settings card's list moves: it hovers, opens on a click, offers a menu on a
-/// right-click, and is dragged onto another to take its place.
-#[allow(clippy::too_many_arguments)]
-fn movable_row(
-    id: SharedString,
-    group: &'static str,
-    leading: AnyElement,
-    trailing: Option<AnyElement>,
-    clicked: Rc<dyn Fn(&mut Window, &mut App)>,
-    menu: Rc<dyn Fn(&mut Window, &mut App) -> Vec<MenuEntry>>,
-    dropped: ui::Dropped,
-    cx: &App,
-) -> impl IntoElement + use<> {
-    let menu_id = id.clone();
-    let dragged = ui::Dragged { id: id.clone(), title: id.clone() };
-    let row = div()
-        .id(id)
-        .border_b_1()
-        .border_color(cx.color(BORDER_CARD))
-        .cursor_pointer()
-        .hover(|row| row.bg(cx.color(BACKGROUND_ACCENT_LARGER)))
-        .on_click(move |_, window, cx| clicked(window, cx))
-        .on_mouse_down(MouseButton::Right, move |event, window, cx| {
-            let entries = menu(window, cx);
-            ui::open_menu(menu_id.clone(), entries, Some(event.position), window, cx);
-        })
-        .child(ui::settings_row(leading, trailing.into_iter().collect()));
-    ui::movable(row, group.into(), dragged, false, dropped, cx)
+        }
+    })
 }
 
 impl SettingsView {
@@ -1660,7 +1605,7 @@ impl SettingsView {
                     Rc::new(move |window, cx| make.update(cx, |this, cx| this.make_label(window, cx)));
                 let label_menu = label_choice(
                     "rule-label",
-                    "Label it",
+                    "Label",
                     rule.rule.label.clone(),
                     labels,
                     Some((make, making.is_some())),
@@ -1678,25 +1623,21 @@ impl SettingsView {
                 let new_label = making.as_ref().map(|making| self.new_label_fields(making, cx));
                 let toggle = |id: &'static str, title: &'static str, on: bool, change: fn(&mut Sheet, bool)| {
                     let this = this.clone();
-                    div().ml(px(-space::L)).child(ui::settings_row(
-                        ui::settings_label(title, None, Lead::None, false, cx),
-                        vec![
-                            ui::switch(
-                                id,
-                                on,
-                                move |on, _, cx| {
-                                    this.update(cx, |this, cx| {
-                                        if let Some(sheet) = &mut this.sheet {
-                                            change(sheet, on);
-                                        }
-                                        cx.notify();
-                                    })
-                                },
-                                cx,
-                            )
-                            .into_any_element(),
-                        ],
-                    ))
+                    ui::toggle_row(
+                        id,
+                        title,
+                        None,
+                        on,
+                        move |on, _, cx| {
+                            this.update(cx, |this, cx| {
+                                if let Some(sheet) = &mut this.sheet {
+                                    change(sheet, on);
+                                }
+                                cx.notify();
+                            })
+                        },
+                        cx,
+                    )
                 };
                 let skip = toggle("rule-skip-inbox", "Skip the inbox", rule.rule.skip_inbox, |sheet, on| {
                     if let Sheet::Rule { rule, .. } = sheet {
@@ -1895,7 +1836,7 @@ impl Render for SettingsView {
     }
 }
 
-/// A menu of the accounts' labels, and None, under `heading`.
+/// A dropdown of the accounts' labels, and None, under `heading`.
 fn label_choice(
     id: &'static str,
     heading: &'static str,
@@ -1917,26 +1858,25 @@ fn label_choice(
     };
     let chosen = chosen.filter(|_| !making);
     let pick = Rc::new(pick);
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(space::XXS))
-        .child(div().text(TextStyle::Footnote, cx).font_weight(gpui::FontWeight::SEMIBOLD).child(heading))
-        .child(div().ml(px(-size::BUTTON_GAP / 2.)).child(ActionButton::new(id, chosen_name).chevron().menu(
-            move |_, _| {
-                let set = |label: Option<String>| {
-                    let pick = pick.clone();
-                    move |_: &mut Window, cx: &mut App| pick(label.clone(), cx)
-                };
-                let mut entries = vec![MenuEntry::item("None", set(None)).checked(chosen.is_none() && !making)];
-                entries.extend(labels.iter().map(|(id, name)| {
-                    MenuEntry::item(name.clone(), set(Some(id.clone()))).checked(chosen.as_ref() == Some(id))
-                }));
-                if let Some((make, _)) = &make {
-                    let make = make.clone();
-                    entries.push(MenuEntry::item("New label", move |window, cx| make(window, cx)).checked(making));
-                }
-                entries
-            },
-        )))
+    ui::dropdown(
+        id,
+        Some(heading),
+        chosen_name,
+        move |_, _| {
+            let set = |label: Option<String>| {
+                let pick = pick.clone();
+                move |_: &mut Window, cx: &mut App| pick(label.clone(), cx)
+            };
+            let mut entries = vec![MenuEntry::item("None", set(None)).checked(chosen.is_none() && !making)];
+            entries.extend(labels.iter().map(|(id, name)| {
+                MenuEntry::item(name.clone(), set(Some(id.clone()))).checked(chosen.as_ref() == Some(id))
+            }));
+            if let Some((make, _)) = &make {
+                let make = make.clone();
+                entries.push(MenuEntry::item("New label", move |window, cx| make(window, cx)).checked(making));
+            }
+            entries
+        },
+        cx,
+    )
 }

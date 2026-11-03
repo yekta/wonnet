@@ -33,7 +33,7 @@ export function MailboxTabs({
   onPick: (mailbox: Mailbox) => void
 }) {
   return (
-    <div className="flex gap-1">
+    <div className="flex">
       {TABS.map((tab) => (
         <PillTab
           key={tab.id}

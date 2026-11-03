@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// A section's name, and maybe a muted line about it.
+/// A section's name, and maybe a muted line about it. Muted, it names a list without looking
+/// like one of its rows.
 struct SectionHeading: View {
     let title: String
     var detail: String?
+    var muted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xxs) {
-            Text(title).textStyle(.subheading)
+            Text(title).textStyle(.subheading, color: muted ? Tokens.mutedForeground.color : nil)
             if let detail {
                 Text(detail).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
             }
@@ -38,6 +40,7 @@ struct Card<Content: View>: View {
             .padding(Space.l)
             .background(RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.card.color))
             .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
+            .environment(\.onFormCard, true)
     }
 }
 
@@ -54,11 +57,21 @@ private struct OnCardKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct OnFormCardKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     /// Whether the view is on the card that fills the page, where a chip fills with its accents.
     var onCard: Bool {
         get { self[OnCardKey.self] }
         set { self[OnCardKey.self] = newValue }
+    }
+
+    /// Whether the view is on a card of `card`: a settings group's, a form's.
+    var onFormCard: Bool {
+        get { self[OnFormCardKey.self] }
+        set { self[OnFormCardKey.self] = newValue }
     }
 }
 

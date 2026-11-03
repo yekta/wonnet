@@ -175,7 +175,7 @@ fun ListHeader(store: MailStore) {
             Chip(if (filter == Filter.Unread) "Unread" else "Starred", Modifier.padding(end = Space.l), symbol = Symbol.ListFilter, remove = { store.narrow(null) })
         }
         if (store.canEmpty) {
-            ActionButton("Empty ${store.mailboxName}", Modifier.padding(end = Space.l), variant = ButtonVariant.Ghost, onClick = store::emptyMailbox)
+            ActionButton("Empty ${store.mailboxName}", Modifier.padding(end = Space.l - Dims.buttonGap / 2), variant = ButtonVariant.Ghost, onClick = store::emptyMailbox)
         }
     }
 }

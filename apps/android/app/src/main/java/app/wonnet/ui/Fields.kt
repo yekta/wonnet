@@ -28,12 +28,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -201,14 +203,24 @@ fun Toggle(on: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
     )
 }
 
-/** A switch with its words. */
+/** A switch with its words. A tap anywhere on the row flips it; the row hovers as a large thing, its fill reaching `Space.s` past its words and its switch. */
 @Composable
 fun ToggleRow(title: String, on: Boolean, modifier: Modifier = Modifier, detail: String? = null, onChange: (Boolean) -> Unit) {
-    Row(modifier.fillMaxWidth().heightIn(min = Dims.rowHeight), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, TextStyle.Body)
-            detail?.let { Text(it, TextStyle.Caption) }
+    Pressable({ onChange(!on) }, modifier.fillMaxWidth().pullOut(Space.s), role = Role.Switch) { hovered ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = ControlSize.Small.scaled)
+                .background(if (hovered) Tokens.backgroundAccentLarger.color else Color.Transparent, RoundedCornerShape(Radius.md))
+                .padding(horizontal = Space.s),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.l),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, TextStyle.Body)
+                detail?.let { Text(it, TextStyle.Caption) }
+            }
+            Toggle(on, onChange)
         }
-        Toggle(on, onChange)
     }
 }

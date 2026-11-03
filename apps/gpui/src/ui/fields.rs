@@ -6,11 +6,12 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Entity, FocusHandle, Focusable as _, Global, Keystroke, MouseButton, SharedString, Window, div, px,
+    AnyElement, App, Div, Entity, FocusHandle, Focusable as _, Global, Keystroke, MouseButton, SharedString, Window,
+    div, px,
 };
 use gpui_component::input::{Input, InputState};
 
-use super::{IconButton, Symbol, icon, line};
+use super::{IconButton, MenuEntry, Symbol, icon, line, menu_under, open_menu};
 use crate::theme::*;
 
 /// What a field does with the keys that move through the list under it. True when it took one.
@@ -280,4 +281,44 @@ pub fn combobox_face(
         .when_some(detail, |face, detail| face.child(line(detail, TextStyle::Caption, cx)))
         .when(field, |face| face.child(div().flex_1()))
         .child(icon(Symbol::ChevronDown, 12.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+}
+
+/// A choice from a short list under a label: its face shows the one in force, and a click opens
+/// the list in a menu under it.
+pub fn dropdown(
+    id: &str,
+    label: Option<&str>,
+    chosen: impl Into<SharedString>,
+    choices: impl Fn(&mut Window, &mut App) -> Vec<MenuEntry> + 'static,
+    cx: &App,
+) -> Div {
+    let menu = menu_under(id, cx);
+    let opening = SharedString::from(id.to_string());
+    let face = combobox_face(
+        id,
+        None,
+        Some(chosen.into()),
+        None,
+        "",
+        ComboboxStyle::Field,
+        menu.is_some(),
+        None,
+        Rc::new(move |_, window, cx| {
+            let entries = choices(window, cx);
+            open_menu(opening.clone(), entries, None, window, cx);
+        }),
+        cx,
+    );
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(space::XXS))
+        .w_full()
+        .when_some(label, |column, label| {
+            column.child(
+                div().text(TextStyle::Footnote, cx).font_weight(gpui::FontWeight::MEDIUM).child(label.to_string()),
+            )
+        })
+        .child(face)
+        .children(menu)
 }

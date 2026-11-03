@@ -9,7 +9,7 @@ struct SwatchRow: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(Theme.accountColorNames.enumerated()), id: \.element) { index, name in
-                PlainButton(help: "Colour \(index + 1)", tint: Theme.accountColor(name), action: { pick(name) }) {
+                PlainButton(help: "Colour \(index + 1)", tint: Theme.accountColor(name), round: true, action: { pick(name) }) {
                     Circle()
                         .fill(Theme.accountColor(name).color)
                         .frame(width: 12, height: 12)

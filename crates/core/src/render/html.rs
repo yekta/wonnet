@@ -27,8 +27,9 @@ img { max-width: 100%; height: auto; }
 .plain { white-space: pre-wrap; }
 blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(--border-card); color: var(--muted-foreground); }
 /* The fold rests and hovers as a chip on the thread's card does; pressed is hovered, at once.
-   It is 32px tall to click, its dots in line with the text. */
-details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 7px 12px; margin: 0 0 0 -12px;
+   It is 32px tall to click and starts at the text's edge, where the page ends; the spacing after
+   its last dot stands for a pixel of its right padding. */
+details.quote > summary { list-style: none; display: inline-block; cursor: pointer; padding: 7px 11px 7px 12px; margin: 0;
   border-radius: 16px; background-color: var(--card-larger-accent); color: var(--muted-foreground);
   font-size: 12px; line-height: 18px; letter-spacing: 1px; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
 details.quote > summary:active { background-color: var(--card-larger-accent-stronger); }

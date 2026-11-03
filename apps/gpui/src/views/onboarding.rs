@@ -135,26 +135,34 @@ impl OnboardingView {
             .flex_col()
             .gap(px(space::S))
             .w_full()
-            .child(option(
+            .child(ui::option_button(
                 "google",
                 "Continue with Google",
-                if signing_in == Some("google") { waiting } else { "Gmail and Google Workspace" },
+                Some(SharedString::from(if signing_in == Some("google") {
+                    waiting
+                } else {
+                    "Gmail and Google Workspace"
+                })),
                 ui::google_mark(20., cx).into_any_element(),
                 Rc::new(move |_, _, cx| google.update(cx, |store, cx| store.sign_in_with_google(cx))),
                 cx,
             ))
-            .child(option(
+            .child(ui::option_button(
                 "microsoft",
                 "Continue with Microsoft",
-                if signing_in == Some("microsoft") { waiting } else { "Outlook, Hotmail and Microsoft 365" },
+                Some(SharedString::from(if signing_in == Some("microsoft") {
+                    waiting
+                } else {
+                    "Outlook, Hotmail and Microsoft 365"
+                })),
                 ui::microsoft_mark(20., cx).into_any_element(),
                 Rc::new(move |_, _, cx| microsoft.update(cx, |store, cx| store.sign_in_with_microsoft(cx))),
                 cx,
             ))
-            .child(option(
+            .child(ui::option_button(
                 "jmap",
                 "Continue with JMAP",
-                "Fastmail, Stalwart and others",
+                Some("Fastmail, Stalwart and others".into()),
                 ui::icon(Symbol::Server, 20.).text_color(cx.color(FOREGROUND)).into_any_element(),
                 Rc::new(move |_, window, cx| this.update(cx, |this, cx| this.show(Page::Jmap, window, cx))),
                 cx,
@@ -230,44 +238,6 @@ impl OnboardingView {
                     ),
             )
     }
-}
-
-/// A wide button for one of a few ways to do something: a mark, what it is, a line about it.
-fn option(
-    id: &str,
-    title: &str,
-    detail: &str,
-    mark: gpui::AnyElement,
-    on_click: ui::OnClick,
-    cx: &gpui::App,
-) -> impl IntoElement + use<> {
-    div()
-        .id(SharedString::from(id.to_string()))
-        .flex()
-        .items_center()
-        .gap(px(space::M))
-        .w_full()
-        .min_h(px(size::OPTION))
-        .px(px(space::L))
-        .rounded(px(radius::MD))
-        .bg(cx.color(CARD))
-        .border_1()
-        .border_color(cx.color(BORDER))
-        .cursor_pointer()
-        .hover(|button| button.bg(cx.color(CARD_ACCENT)))
-        .on_click(move |event, window, cx| on_click(event, window, cx))
-        .child(div().size(px(24.)).flex().items_center().justify_center().child(mark))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .child(ui::line(title.to_string(), TextStyle::BodyStrong, cx))
-                .child(ui::line(detail.to_string(), TextStyle::Caption, cx)),
-        )
-        .child(ui::icon(Symbol::ChevronRight, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
 }
 
 impl Render for OnboardingView {

@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// A bar floating over a page, on the system's glass: icon buttons spread evenly across a
-/// capsule, as the commands under an open thread. Before iOS 26 it is the page's colour on a
-/// bordered capsule with a little shadow, as `FloatingButton`.
+/// capsule, as the commands under an open thread. The glass answers their press, in place of
+/// their fill. Before iOS 26 it is the page's colour on a bordered capsule with a little shadow,
+/// as `FloatingButton`.
 struct GlassBar<Content: View>: View {
     @ViewBuilder let content: Content
 
@@ -11,7 +12,7 @@ struct GlassBar<Content: View>: View {
             .padding(.horizontal, Space.xxs)
             .frame(maxWidth: .infinity)
             .frame(height: Theme.barHeight)
-            .glassFace(interactive: false, hovered: false)
+            .glassFace(hovered: false)
     }
 
     /// Shares its width equally among its children, each centred in its share.
@@ -54,19 +55,20 @@ struct GlassCircle: View {
             Image(symbol, size: ControlSize.large.icon)
                 .foregroundStyle(Tokens.foreground.color)
                 .frame(width: Theme.barHeight, height: Theme.barHeight)
-                .glassFace(interactive: true, hovered: hovered)
+                .glassFace(hovered: hovered)
                 .contentShape(Circle())
         }
     }
 }
 
 private struct GlassFace: ViewModifier {
-    let interactive: Bool
     let hovered: Bool
 
     func body(content: Content) -> some View {
         if #available(iOS 26, macOS 26, *) {
-            content.glassEffect(interactive ? .regular.interactive() : .regular, in: .capsule)
+            content
+                .environment(\.onGlass, true)
+                .glassEffect(.regular.interactive(), in: .capsule)
         } else {
             content
                 .background(Capsule().fill(hovered ? Tokens.backgroundAccent.color : Tokens.background.color).shadow(.sm))
@@ -76,9 +78,20 @@ private struct GlassFace: ViewModifier {
 }
 
 private extension View {
-    /// The capsule of glass, or its stand-in before iOS 26; `interactive` lets the glass answer
-    /// a press.
-    func glassFace(interactive: Bool, hovered: Bool) -> some View {
-        modifier(GlassFace(interactive: interactive, hovered: hovered))
+    /// The capsule of glass, which answers a press, or its stand-in before iOS 26.
+    func glassFace(hovered: Bool) -> some View {
+        modifier(GlassFace(hovered: hovered))
+    }
+}
+
+private struct OnGlassKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the view is on the system's glass, which answers a press itself.
+    var onGlass: Bool {
+        get { self[OnGlassKey.self] }
+        set { self[OnGlassKey.self] = newValue }
     }
 }

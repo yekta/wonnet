@@ -140,8 +140,6 @@ struct ThreadScreen: View {
                         open: { index in open(message, index) },
                         save: { indices in save(message, indices) }
                     )
-                    .contentShape(Rectangle())
-                    .onTapGesture { if folded { store.toggleFold(message) } }
                     .id(message.id)
                     if message.id != conversation.messages.last?.id {
                         Rule(color: Theme.cardRule)
@@ -210,6 +208,7 @@ struct ThreadScreen: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if conversation.unsubscribe {
                         ActionButton(title: "Unsubscribe", symbol: .mailX, variant: .ghost) { store.act(.unsubscribe, on: [conversation.id]) }
+                            .padding(.trailing, -Theme.buttonGap / 2)
                     }
                 }
             }
@@ -232,8 +231,6 @@ struct ThreadScreen: View {
                 ActionButton(title: "Open", variant: .outline) { store.openDraft(id) }
             }
             .padding(.vertical, Space.l)
-            .contentShape(Rectangle())
-            .onTapGesture { store.openDraft(id) }
         }
     }
 
@@ -299,29 +296,22 @@ struct MessageCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
-            HStack(alignment: .center, spacing: Space.m) {
-                Avatar(initials: message.initials, email: message.fromEmail, size: Theme.messageAvatar)
-                    .onTapGesture(perform: tapSender)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(message.fromName)
-                        .textStyle(folded ? .body : .subheading, color: folded ? Tokens.mutedStrongerForeground.color : Tokens.foreground.color)
-                        .lineLimit(1)
-                        .onTapGesture(perform: tapSender)
-                        .help(folded ? "" : message.fromEmail)
-                    Text(folded ? message.snippet : message.to).textStyle(.caption).lineLimit(1)
+            // A click on a message's line unfolds it, or folds it again, as in Gmail.
+            LineButton(action: toggle) { hovered in
+                HStack(alignment: .center, spacing: Space.m) {
+                    sender(hovered: hovered)
+                    Spacer(minLength: Space.s)
+                    if !message.attachments.isEmpty {
+                        Image(.paperclip, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                    }
+                    Text(message.date).textStyle(.caption)
+                    if !folded {
+                        actions
+                    }
                 }
-                Spacer(minLength: Space.s)
-                if !message.attachments.isEmpty {
-                    Image(.paperclip, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color)
-                }
-                Text(message.date).textStyle(.caption)
-                if !folded {
-                    actions
-                }
+                .padding(.top, Space.l)
+                .padding(.bottom, folded ? Space.l : 0)
             }
-            // A click on the line of an open message folds it again, as in Gmail.
-            .contentShape(Rectangle())
-            .onTapGesture(perform: toggle)
             if !folded {
                 Group {
                     if let html = message.html {
@@ -339,19 +329,41 @@ struct MessageCard: View {
                 }
             }
         }
-        .padding(.vertical, Space.l)
+        .padding(.bottom, folded ? 0 : Space.l)
+    }
+
+    /// Who sent it, their name lit while the line is hovered. Open, it is a button of its own
+    /// that opens the person.
+    @ViewBuilder private func sender(hovered: Bool) -> some View {
+        let face = HStack(alignment: .center, spacing: Space.m) {
+            Avatar(initials: message.initials, email: message.fromEmail, size: Theme.messageAvatar)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(message.fromName).textStyle(folded ? .body : .subheading, color: nameColor(hovered: hovered)).lineLimit(1)
+                Text(folded ? message.snippet : message.to).textStyle(.caption).lineLimit(1)
+            }
+        }
+        if folded {
+            face
+        } else {
+            PlainButton(help: message.fromEmail, flush: true, action: showPerson) { face }
+        }
+    }
+
+    private func nameColor(hovered: Bool) -> Color {
+        if folded { return hovered ? Tokens.foreground.color : Tokens.mutedStrongerForeground.color }
+        return hovered ? Tokens.emphasizedForeground.color : Tokens.foreground.color
     }
 
     /// Answering this message, not only the thread's last: a long thread needn't be scrolled to its end.
     private var actions: some View {
         HStack(spacing: 0) {
             if canShowOriginal {
-                IconButton(symbol: original ? .moon : .sun, help: original ? "Show in dark colours" : "Show the original", size: .small, circled: false, quiet: true) {
+                IconButton(symbol: original ? .moon : .sun, help: original ? "Show in dark colours" : "Show the original", circled: false, quiet: true) {
                     store.toggleOriginal(message.id)
                 }
             }
-            IconButton(symbol: .reply, help: "Reply", size: .small, circled: false) { reply(.reply) }
-            IconMenu(symbol: .ellipsis, help: "More", size: .small, circled: false) {
+            IconButton(symbol: .reply, help: "Reply", circled: false) { reply(.reply) }
+            IconMenu(symbol: .ellipsis, help: "More", circled: false) {
                 Button { reply(.replyAll) } label: { Label { Text("Reply all") } icon: { Image(.replyAll, size: 15) } }
                 Button { reply(.forward) } label: { Label { Text("Forward") } icon: { Image(.forward, size: 15) } }
             }
@@ -367,12 +379,6 @@ struct MessageCard: View {
         #else
         0
         #endif
-    }
-
-    /// A sender's own tap gesture takes the click from the card's, so a folded message unfolds here too.
-    private func tapSender() {
-        guard folded else { return showPerson() }
-        toggle()
     }
 
     private var original: Bool { store.originalMessages.contains(message.id) }

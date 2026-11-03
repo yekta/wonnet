@@ -9,7 +9,7 @@ use gpui::{AnyElement, App, Context, Entity, SharedString, Window, div, px};
 use crate::models::{Address, ShapeLine};
 use crate::store::Store;
 use crate::theme::*;
-use crate::ui::{self, ActionButton, Chip, ChoiceRow, IconButton, Lead, NavRow, SheetSize, Symbol, Variant};
+use crate::ui::{self, ActionButton, Chip, ChoiceRow, IconButton, Lead, MenuEntry, NavRow, SheetSize, Symbol, Variant};
 
 pub struct Gallery {
     store: Entity<Store>,
@@ -97,7 +97,34 @@ impl Render for Gallery {
             .into_any_element(),
             ui::swatch_row("gallery-swatch", "account-3", Rc::new(|_, _, _| {}), cx).into_any_element(),
         ];
+        let flip = this.clone();
         let rows = vec![
+            div()
+                .w(px(320.))
+                .child(ui::toggle_row(
+                    "gallery-toggle-row",
+                    "Mark as read",
+                    Some("With a line about it.".into()),
+                    self.on,
+                    move |on, _, cx| {
+                        flip.update(cx, |this, cx| {
+                            this.on = on;
+                            cx.notify();
+                        })
+                    },
+                    cx,
+                ))
+                .into_any_element(),
+            div()
+                .w(px(320.))
+                .child(ui::dropdown(
+                    "gallery-dropdown",
+                    Some("Dropdown"),
+                    "None",
+                    |_, _| vec![MenuEntry::item("Work", |_, _| {}), MenuEntry::item("Home", |_, _| {})],
+                    cx,
+                ))
+                .into_any_element(),
             div()
                 .w(px(260.))
                 .child(NavRow::new("gallery-nav-1", "Inbox").symbol(Symbol::Inbox).count(3).selected(true))

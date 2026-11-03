@@ -434,7 +434,7 @@ private struct InboxSettings: View {
                     [RowMenuItem(title: "Edit") { editing = split }, RowMenuItem(title: "Remove", destructive: true) { store.removeSplit(split) }]
                 }
             ) { split in
-                MovableRow {
+                MovableSettingsRow(opens: true) {
                     SettingsLabel(title: split.name, detail: store.summary(of: split), symbol: .listFilter)
                 } trailing: {
                     Image(.chevronRight, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)
@@ -477,7 +477,7 @@ private struct TabRows: View {
             items: tabs, scrolls: false, group: { _ in "tabs" }, moved: store.moveTab,
             menu: { tab in [RowMenuItem(title: "Remove Tab", destructive: true) { store.toggleTab(tab.id) }] }
         ) { tab in
-            MovableRow {
+            MovableSettingsRow {
                 SettingsLabel(title: store.tabName(tab), symbol: Symbol.named(tab.symbol))
             } trailing: {
                 EmptyView()
@@ -500,20 +500,6 @@ private struct TabRows: View {
         Button { store.toggleTab(mailbox.id) } label: {
             Label { Text(mailbox.name) } icon: { Image(Symbol.named(mailbox.symbol), size: 15) }
         }
-    }
-}
-
-/// A row a `MovableList` moves inside a settings card: it hovers, and keeps the card's hairline
-/// under it, over the row that adds one.
-private struct MovableRow<Leading: View, Trailing: View>: View {
-    @ViewBuilder let leading: Leading
-    @ViewBuilder let trailing: Trailing
-    @Environment(\.hovered) private var hovered
-
-    var body: some View {
-        SettingsRow { leading } trailing: { trailing }
-            .background(hovered ? Tokens.backgroundAccentLarger.color : .clear)
-            .rule(.bottom, color: Tokens.borderCard)
     }
 }
 
@@ -570,7 +556,7 @@ private struct RuleRows: View {
                     [RowMenuItem(title: "Edit") { editing = store.draft(of: rule) }, RowMenuItem(title: "Remove", destructive: true) { store.removeRule(rule) }]
                 }
             ) { rule in
-                MovableRow {
+                MovableSettingsRow(opens: true, first: rule.id == rules.first?.id) {
                     SettingsLabel(title: store.summary(of: rule), symbol: .zap)
                 } trailing: {
                     Image(.chevronRight, size: 12).foregroundStyle(Tokens.mutedStrongerForeground.color)

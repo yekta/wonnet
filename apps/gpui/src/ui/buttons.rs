@@ -5,9 +5,9 @@
 use std::rc::Rc;
 
 use gpui::prelude::*;
-use gpui::{AnyElement, App, ClickEvent, Hsla, MouseButton, SharedString, Window, div, px};
+use gpui::{AnyElement, App, ClickEvent, Div, Hsla, MouseButton, SharedString, Stateful, Window, div, px};
 
-use super::{MenuEntry, OnClick, Symbol, Tooltip, icon, icon_in, menu_under, open_menu, spinner};
+use super::{MenuEntry, OnClick, Symbol, Tooltip, icon, icon_in, line, menu_under, open_menu, spinner};
 use crate::theme::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -23,6 +23,32 @@ pub enum Variant {
     Ghost,
     /// A pill in red.
     Destructive,
+}
+
+/// What a control rests on, which picks what it hovers in so that the hover shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Surface {
+    /// The page: the bars, the list, a sheet.
+    #[default]
+    Page,
+    /// The card that fills the page: an open thread, a message being written.
+    PageCard,
+    /// A form's card: a settings group's.
+    Card,
+    /// A menu, an alert, the banner and the toast.
+    Popover,
+}
+
+impl Surface {
+    /// What a small control on it hovers in.
+    pub fn hover(self) -> ThemeColor {
+        match self {
+            Self::Page => BACKGROUND_ACCENT,
+            Self::PageCard => CARD_ACCENT_STRONGER,
+            Self::Card => FORM_CARD_ACCENT,
+            Self::Popover => POPOVER_ACCENT_STRONGER,
+        }
+    }
 }
 
 /// What a button that opens a menu offers, built when it is clicked.
@@ -65,6 +91,7 @@ pub struct ActionButton {
     icon_only: bool,
     disabled: bool,
     chevron: bool,
+    surface: Surface,
     tooltip: Option<SharedString>,
     on_click: Option<OnClick>,
     menu: Option<MenuBuilder>,
@@ -83,6 +110,7 @@ impl ActionButton {
             icon_only: false,
             disabled: false,
             chevron: false,
+            surface: Surface::Page,
             tooltip: None,
             on_click: None,
             menu: None,
@@ -130,6 +158,11 @@ impl ActionButton {
         self
     }
 
+    pub fn surface(mut self, surface: Surface) -> Self {
+        self.surface = surface;
+        self
+    }
+
     pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
         self.tooltip = Some(tooltip.into());
         self
@@ -159,7 +192,7 @@ impl RenderOnce for ActionButton {
         let (fill, hover_fill): (Option<Hsla>, Hsla) = match self.variant {
             Variant::Primary => (Some(cx.color(PRIMARY)), cx.tint(PRIMARY, opacity::LIT)),
             Variant::Success => (Some(cx.color(SUCCESS)), cx.tint(SUCCESS, opacity::LIT)),
-            _ => (None, cx.color(BACKGROUND_ACCENT)),
+            _ => (None, cx.color(self.surface.hover())),
         };
         let border = match self.variant {
             Variant::Outline => Some(cx.tint(PRIMARY, opacity::COLOR_BORDER)),
@@ -228,8 +261,7 @@ pub struct IconButton {
     pending: bool,
     floating: bool,
     disabled: bool,
-    on_card: bool,
-    on_popover: bool,
+    surface: Surface,
     on_click: Option<OnClick>,
     menu: Option<MenuBuilder>,
 }
@@ -248,8 +280,7 @@ impl IconButton {
             pending: false,
             floating: false,
             disabled: false,
-            on_card: false,
-            on_popover: false,
+            surface: Surface::Page,
             on_click: None,
             menu: None,
         }
@@ -300,13 +331,16 @@ impl IconButton {
     }
 
     /// On the card that fills the page, whose hairlines are its own.
-    pub fn on_card(mut self) -> Self {
-        self.on_card = true;
-        self
+    pub fn on_card(self) -> Self {
+        self.surface(Surface::PageCard)
     }
 
-    pub fn on_popover(mut self) -> Self {
-        self.on_popover = true;
+    pub fn on_popover(self) -> Self {
+        self.surface(Surface::Popover)
+    }
+
+    pub fn surface(mut self, surface: Surface) -> Self {
+        self.surface = surface;
         self
     }
 
@@ -333,8 +367,8 @@ impl RenderOnce for IconButton {
         } else {
             (MUTED_FOREGROUND, FOREGROUND)
         };
-        let hover_fill = if self.on_popover { POPOVER_ACCENT_STRONGER } else { BACKGROUND_ACCENT };
-        let ring = if self.on_card { CARD_RULE } else { BORDER };
+        let hover_fill = self.surface.hover();
+        let ring = if self.surface == Surface::PageCard { CARD_RULE } else { BORDER };
         let group = self.id.clone();
         let live = !self.disabled && !self.pending;
         let glyph = if self.pending {
@@ -375,19 +409,48 @@ impl RenderOnce for IconButton {
 }
 
 /// A button that is only its content: a star, a sender's name, a word in a toast. `tint` is the
-/// colour it hovers in, as a wash of it.
+/// colour it hovers in, as a wash of it; `round` hovers in a circle, for a round face; `flush`
+/// hovers with room all round and is pulled out by it, so its content stands where it would
+/// without it, and gives way to what is beside it.
 #[derive(IntoElement)]
 pub struct PlainButton {
     id: SharedString,
     help: Option<SharedString>,
     tint: Option<ThemeColor>,
+    round: bool,
+    flush: bool,
+    surface: Surface,
     content: AnyElement,
     on_click: Option<OnClick>,
 }
 
 impl PlainButton {
     pub fn new(id: impl Into<SharedString>, content: impl IntoElement) -> Self {
-        Self { id: id.into(), help: None, tint: None, content: content.into_any_element(), on_click: None }
+        Self {
+            id: id.into(),
+            help: None,
+            tint: None,
+            round: false,
+            flush: false,
+            surface: Surface::Page,
+            content: content.into_any_element(),
+            on_click: None,
+        }
+    }
+
+    pub fn round(mut self) -> Self {
+        self.round = true;
+        self
+    }
+
+    pub fn flush(mut self) -> Self {
+        self.flush = true;
+        self
+    }
+
+    pub fn surface(mut self, surface: Surface) -> Self {
+        self.surface = surface;
+        self
     }
 
     pub fn help(mut self, help: impl Into<SharedString>) -> Self {
@@ -409,7 +472,7 @@ impl RenderOnce for PlainButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let fill = match self.tint {
             Some(tint) => cx.tint(tint, opacity::COLOR_TINT),
-            None => cx.color(BACKGROUND_ACCENT),
+            None => cx.color(self.surface.hover()),
         };
         let on_click = self.on_click.clone();
         div()
@@ -417,10 +480,12 @@ impl RenderOnce for PlainButton {
             .flex()
             .items_center()
             .justify_center()
-            .min_w(px(size::SMALL))
             .min_h(px(size::SMALL))
-            .px(px(space::XXS))
-            .rounded(px(radius::SM))
+            .when(!self.flush, |face| face.px(px(space::XXS)).min_w(px(size::SMALL)))
+            .when(self.flush, |face| face.min_w_0().p(px(space::XS)).m(px(-space::XS)))
+            .when(self.round, |face| face.rounded_full())
+            .when(!self.round && !self.flush, |face| face.rounded(px(radius::SM)))
+            .when(!self.round && self.flush, |face| face.rounded(px(radius::MD)))
             .cursor_pointer()
             .hover(move |face| face.bg(fill))
             .when_some(self.help.clone(), |face, help| face.tooltip(move |_, cx| Tooltip::view(help.clone(), cx)))
@@ -431,6 +496,142 @@ impl RenderOnce for PlainButton {
                 }
             })
             .child(self.content)
+    }
+}
+
+/// A wide button on a card, for one of a few ways to do something: a mark, what it is, a line
+/// about it and a chevron; the providers an account comes from.
+pub fn option_button(
+    id: impl Into<SharedString>,
+    title: impl Into<SharedString>,
+    detail: Option<SharedString>,
+    mark: AnyElement,
+    on_click: OnClick,
+    cx: &App,
+) -> Stateful<Div> {
+    div()
+        .id(id.into())
+        .flex()
+        .items_center()
+        .gap(px(space::M))
+        .w_full()
+        .min_h(px(size::OPTION))
+        .px(px(space::L))
+        .rounded(px(radius::MD))
+        .bg(cx.color(CARD))
+        .border_1()
+        .border_color(cx.color(BORDER))
+        .cursor_pointer()
+        .hover(|button| button.bg(cx.color(FORM_CARD_ACCENT)))
+        .on_click(move |event, window, cx| on_click(event, window, cx))
+        .child(div().size(px(24.)).flex().items_center().justify_center().child(mark))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(line(title, TextStyle::BodyStrong, cx))
+                .when_some(detail, |words, detail| words.child(line(detail, TextStyle::Caption, cx))),
+        )
+        .child(icon(Symbol::ChevronRight, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+}
+
+/// A key of a keybinding on a button that records another: its caps, or a plus to add one; while
+/// it records, the keys pressed so far. A click elsewhere is told to `on_click_out`.
+#[derive(IntoElement)]
+pub struct KeyRecorder {
+    id: SharedString,
+    help: SharedString,
+    caps: Option<Vec<String>>,
+    recording: Option<SharedString>,
+    surface: Surface,
+    on_click: OnClick,
+    on_click_out: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+}
+
+impl KeyRecorder {
+    pub fn new(
+        id: impl Into<SharedString>,
+        help: impl Into<SharedString>,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            help: help.into(),
+            caps: None,
+            recording: None,
+            surface: Surface::Page,
+            on_click: Rc::new(on_click),
+            on_click_out: None,
+        }
+    }
+
+    pub fn caps(mut self, caps: Option<Vec<String>>) -> Self {
+        self.caps = caps;
+        self
+    }
+
+    /// The keys pressed so far, while it records.
+    pub fn recording(mut self, recording: Option<SharedString>) -> Self {
+        self.recording = recording;
+        self
+    }
+
+    pub fn surface(mut self, surface: Surface) -> Self {
+        self.surface = surface;
+        self
+    }
+
+    pub fn on_click_out(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_click_out = Some(Rc::new(handler));
+        self
+    }
+}
+
+impl RenderOnce for KeyRecorder {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let group = self.id.clone();
+        let active = self.recording.is_some();
+        let hover_fill = self.surface.hover();
+        let face = match (self.recording, self.caps) {
+            (Some(text), _) => div().text_in(TextStyle::Label, PRIMARY, cx).child(text).into_any_element(),
+            (None, Some(caps)) => super::key_caps(caps, cx).into_any_element(),
+            (None, None) => icon(Symbol::Plus, 13.).into_any_element(),
+        };
+        let help = self.help.clone();
+        let on_click = self.on_click.clone();
+        div()
+            .id(self.id.clone())
+            .group(group.clone())
+            .flex_none()
+            .px(px(size::BUTTON_GAP / 2.))
+            .when(!active, |hit| hit.cursor_pointer())
+            .tooltip(move |_, cx| Tooltip::view(help.clone(), cx))
+            .on_click(move |event, window, cx| {
+                if active {
+                    return;
+                }
+                on_click(event, window, cx);
+            })
+            .when_some(self.on_click_out, |hit, out| hit.on_mouse_down_out(move |_, window, cx| out(window, cx)))
+            .child(
+                div()
+                    .min_w(px(size::SMALL))
+                    .min_h(px(size::SMALL))
+                    .px(px(space::XXS))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(radius::SM))
+                    .text_color(cx.color(MUTED_FOREGROUND))
+                    .when(active, |face| face.bg(cx.color(BACKGROUND_ACCENT_STRONGER)))
+                    .when(!active, |face| {
+                        face.group_hover(group, |face| face.bg(cx.color(hover_fill)).text_color(cx.color(FOREGROUND)))
+                    })
+                    .child(face),
+            )
     }
 }
 

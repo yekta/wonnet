@@ -6,7 +6,7 @@ use std::rc::Rc;
 use gpui::prelude::*;
 use gpui::{AnyElement, App, Div, MouseButton, SharedString, Window, div, px};
 
-use super::{ActionButton, IconButton, Symbol, Variant, icon, line, paragraph_in, rule, spinner};
+use super::{ActionButton, IconButton, Surface, Symbol, Variant, icon, line, paragraph_in, rule, spinner};
 use crate::theme::*;
 
 /// How big a sheet is.
@@ -158,6 +158,11 @@ pub fn section_heading(title: impl Into<SharedString>, detail: Option<SharedStri
         })
 }
 
+/// A list's name, muted so it doesn't look like one of its rows.
+pub fn muted_section_heading(title: impl Into<SharedString>, cx: &App) -> Div {
+    div().text_in(TextStyle::Subheading, MUTED_FOREGROUND, cx).child(title.into())
+}
+
 /// The tone of a notice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
@@ -264,7 +269,11 @@ pub fn banner(banner: Banner, cx: &App) -> impl IntoElement + use<> {
                 .child(under),
         )
         .child(
-            div().flex().items_center().children(banner.action).children(banner.close.map(|close| close.on_popover())),
+            div()
+                .flex()
+                .items_center()
+                .children(banner.action.map(|action| action.surface(Surface::Popover)))
+                .children(banner.close.map(|close| close.on_popover())),
         )
 }
 
@@ -293,16 +302,18 @@ pub fn toast(
                     "toast-action",
                     div().text_in(TextStyle::LabelStrong, PRIMARY, cx).child(title),
                 )
+                .surface(Surface::Popover)
                 .on_click(move |event, window, cx| on_click(event, window, cx)),
             )
         })
 }
 
-/// Cancel and Save under a form.
+/// Cancel and Save under a form, on `surface`.
 pub fn form_buttons(
     id: &str,
     save: &str,
     save_disabled: bool,
+    surface: Surface,
     on_save: super::OnClick,
     on_cancel: super::OnClick,
 ) -> Div {
@@ -312,6 +323,7 @@ pub fn form_buttons(
         .child(
             ActionButton::new(SharedString::from(format!("{id}-cancel")), "Cancel")
                 .variant(Variant::Ghost)
+                .surface(surface)
                 .on_click(move |event, window, cx| on_cancel(event, window, cx)),
         )
         .child(

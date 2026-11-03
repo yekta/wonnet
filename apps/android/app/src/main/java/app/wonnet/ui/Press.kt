@@ -9,15 +9,23 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
+import app.wonnet.theme.Dims
 import app.wonnet.theme.Opacity
+import app.wonnet.theme.ThemeColor
+import app.wonnet.theme.Tokens
 import app.wonnet.theme.opacity
 
 /** Whether the view is on the card that fills the page, where a chip fills with its accents. */
@@ -25,6 +33,18 @@ val LocalOnCard = compositionLocalOf { false }
 
 /** Whether the view is on a popup or a banner, whose rows and buttons hover in their fills. */
 val LocalOnPopover = compositionLocalOf { false }
+
+/** Whether the view is on a card of `card`: a settings group, a form's card. */
+val LocalOnFormCard = compositionLocalOf { false }
+
+/** What a small control hovers in, so that it shows on what it sits on: the page, the card that fills it, a settings card or a popover. */
+val hoverFill: ThemeColor
+    @Composable @ReadOnlyComposable get() = when {
+        LocalOnPopover.current -> Tokens.popoverAccentStronger
+        LocalOnCard.current -> Dims.cardAccentStronger
+        LocalOnFormCard.current -> Tokens.cardAccent
+        else -> Tokens.backgroundAccent
+    }
 
 /**
  * How every button answers a finger, a pointer and being disabled, so none does it a way of its
@@ -60,4 +80,12 @@ fun Pressable(
     ) {
         content((pressed || pointer) && enabled)
     }
+}
+
+/** Lays a control out as if `by` at each side, and `vertical` above and below, weren't there: its content stays where it would be, its face and hit area reach past. */
+fun Modifier.pullOut(by: Dp, vertical: Dp = 0.dp): Modifier = layout { measurable, constraints ->
+    val side = by.roundToPx()
+    val end = vertical.roundToPx()
+    val placeable = measurable.measure(constraints.offset(horizontal = side * 2, vertical = end * 2))
+    layout((placeable.width - side * 2).coerceAtLeast(0), (placeable.height - end * 2).coerceAtLeast(0)) { placeable.place(-side, -end) }
 }

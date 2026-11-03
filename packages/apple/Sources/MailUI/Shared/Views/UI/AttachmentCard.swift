@@ -47,10 +47,9 @@ struct AttachmentCard: View {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                picture
-                    .frame(maxWidth: .infinity)
+                previewFill.color
                     .frame(height: Theme.attachmentPreviewHeight * Platform.scale)
-                    .background(previewFill.color)
+                    .overlay(alignment: .top) { picture }
                     .clipped()
                 Rule(color: border)
                 HStack(spacing: Space.xs) {
@@ -70,15 +69,13 @@ struct AttachmentCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Radius.md))
         }
 
+        /// Laid over the preview's fill, so that a picture wider than the card can't widen it.
         @ViewBuilder private var picture: some View {
             if let preview {
-                Image(decorative: preview, scale: 2)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .clipped()
+                Image(decorative: preview, scale: 2).resizable().scaledToFill()
             } else {
                 Image(kind, size: 28).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                    .frame(maxHeight: .infinity)
             }
         }
 
@@ -91,7 +88,7 @@ struct AttachmentCard: View {
 
         private var footerFill: ThemeColor {
             if onCard { return hovered ? Theme.cardAccent : Theme.cardFill }
-            return hovered ? Tokens.backgroundAccentLarger : Tokens.card
+            return hovered ? Tokens.cardAccent : Tokens.card
         }
     }
 }

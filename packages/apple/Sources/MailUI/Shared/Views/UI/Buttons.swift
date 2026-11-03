@@ -62,6 +62,15 @@ extension EnvironmentValues {
         get { self[HoveredKey.self] }
         set { self[HoveredKey.self] = newValue }
     }
+
+    /// What a small control hovers in, so that it shows on what it sits on: the page, the card
+    /// that fills it, a settings card or a popover.
+    var controlHover: ThemeColor {
+        if onPopover { return Tokens.popoverAccentStronger }
+        if onCard { return Theme.cardAccentStronger }
+        if onFormCard { return Tokens.cardAccent }
+        return Tokens.backgroundAccent
+    }
 }
 
 /// How every button answers the pointer and being disabled, so none does it a way of its own.
@@ -155,6 +164,7 @@ struct ActionButton: View {
         var iconOnly = false
         var chevron = false
         @Environment(\.hovered) private var hovered
+        @Environment(\.controlHover) private var hoverFill
 
         var body: some View {
             content
@@ -199,7 +209,7 @@ struct ActionButton: View {
             switch variant {
             case .primary: hovered ? Tokens.primary.opacity(Opacity.lit).color : Tokens.primary.color
             case .success: hovered ? Tokens.success.opacity(Opacity.lit).color : Tokens.success.color
-            case .outline, .ghost, .destructive: hovered ? Tokens.backgroundAccent.color : .clear
+            case .outline, .ghost, .destructive: hovered ? hoverFill.color : .clear
             }
         }
 
@@ -328,7 +338,8 @@ struct IconCircle: View {
     var floating = false
     @Environment(\.hovered) private var hovered
     @Environment(\.onCard) private var onCard
-    @Environment(\.onPopover) private var onPopover
+    @Environment(\.onGlass) private var onGlass
+    @Environment(\.controlHover) private var hoverFill
 
     var body: some View {
         ButtonIcon(symbol: symbol, pending: pending, size: size.icon, tint: tint)
@@ -340,7 +351,8 @@ struct IconCircle: View {
     }
 
     private var fill: Color {
-        if hovered { return (onPopover ? Tokens.popoverAccentStronger : Tokens.backgroundAccent).color }
+        // The glass answers a press itself.
+        if hovered && !onGlass { return hoverFill.color }
         return floating ? Tokens.background.color : .clear
     }
 
@@ -354,15 +366,19 @@ struct IconCircle: View {
 
 /// A button that is only its content: a star, a sender's name, a word in a toast. For what no
 /// other button fits; it still hovers, presses and disables as they do, and is never under
-/// the smallest control in height. `tint` is the colour it hovers in, as a wash of it.
+/// the smallest control in height. `tint` is the colour it hovers in, as a wash of it; `round`
+/// hovers in a circle, for a round face. `flush` hovers with room all round and is pulled out
+/// by it, so its content stays where it would be: a sender.
 struct PlainButton<Label: View>: View {
     var help: String?
     var tint: ThemeColor?
+    var round = false
+    var flush = false
     let action: () -> Void
     @ViewBuilder let label: Label
 
     @ViewBuilder var body: some View {
-        let button = Button(action: action) { Face(label: label, tint: tint) }.buttonStyle(.press)
+        let button = Button(action: action) { Face(label: label, tint: tint, round: round, flush: flush) }.buttonStyle(.press)
         if let help {
             button.help(help).accessibilityLabel(help)
         } else {
@@ -373,19 +389,50 @@ struct PlainButton<Label: View>: View {
     private struct Face: View {
         let label: Label
         let tint: ThemeColor?
+        let round: Bool
+        let flush: Bool
         @Environment(\.hovered) private var hovered
+        @Environment(\.controlHover) private var hoverFill
 
         var body: some View {
             label
-                .padding(.horizontal, Space.xxs)
-                .frame(minWidth: ControlSize.small.height, minHeight: ControlSize.small.height)
-                .background(RoundedRectangle(cornerRadius: Radius.sm).fill(hovered ? fill : .clear))
+                .padding(.horizontal, flush ? Space.xs : Space.xxs)
+                .padding(.vertical, flush ? Space.xs : 0)
+                .frame(minWidth: flush ? nil : ControlSize.small.height, minHeight: ControlSize.small.height)
+                .background { wash.fill(hovered ? fill : .clear) }
                 .contentShape(Rectangle())
+                .padding(flush ? -Space.xs : 0)
+        }
+
+        private var wash: AnyShape {
+            if round { return AnyShape(Circle()) }
+            return AnyShape(RoundedRectangle(cornerRadius: flush ? Radius.md : Radius.sm))
         }
 
         private var fill: Color {
-            guard let tint else { return Tokens.backgroundAccent.color }
+            guard let tint else { return hoverFill.color }
             return tint.opacity(Opacity.colorTint).color
+        }
+    }
+}
+
+/// A line clicked as a whole, as a message's line in a thread: no fill of its own, its words
+/// light up as `FoldedCount`'s do, `label` told whether it is hovered. Buttons on it take their
+/// own clicks.
+struct LineButton<Label: View>: View {
+    let action: () -> Void
+    @ViewBuilder let label: (_ hovered: Bool) -> Label
+
+    var body: some View {
+        Button(action: action) { Face(label: label) }.buttonStyle(.press)
+    }
+
+    private struct Face: View {
+        let label: (Bool) -> Label
+        @Environment(\.hovered) private var hovered
+
+        var body: some View {
+            label(hovered).contentShape(Rectangle())
         }
     }
 }

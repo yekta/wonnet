@@ -12,7 +12,9 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -263,6 +265,7 @@ private fun ThreadRowView(
     val rest = commands.size * slot + inset
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val hovered by interaction.collectIsHoveredAsState()
     val open by rememberUpdatedState(isOpen)
 
     LaunchedEffect(isOpen) {
@@ -356,6 +359,7 @@ private fun ThreadRowView(
                         scope.launch { pulled.animateTo(if (opens) rest else 0f, spring(dampingRatio = 0.95f, stiffness = 400f)) }
                     }
                 }
+                .hoverable(interaction)
                 .combinedClickable(
                     interactionSource = interaction, indication = null,
                     onLongClick = if (selectable && !selecting) {
@@ -368,7 +372,7 @@ private fun ThreadRowView(
                     onClick = onTap,
                 ),
         ) {
-            RowFace(row, selecting, checked, pressed, current = store.selected == row.id)
+            RowFace(row, selecting, checked, pressed, hovered, current = store.selected == row.id)
         }
     }
 }
@@ -413,8 +417,9 @@ private fun SwipeTray(
             }
             val interaction = remember { MutableInteractionSource() }
             val pressed by interaction.collectIsPressedAsState()
+            val hovered by interaction.collectIsHoveredAsState()
             val (fill, glyph) = command.swipeTint
-            val lit = filled || pressed
+            val lit = filled || pressed || hovered
             Box(
                 Modifier
                     .offset { IntOffset((center - slot / 2).roundToInt(), 0) }
@@ -422,6 +427,7 @@ private fun SwipeTray(
                     .fillMaxHeight()
                     .alpha(alpha)
                     .semantics { contentDescription = command.swipeName }
+                    .hoverable(interaction)
                     .combinedClickable(interactionSource = interaction, indication = null, onClick = { tap(command) }),
                 contentAlignment = Alignment.Center,
             ) {
@@ -439,18 +445,19 @@ private fun SwipeTray(
     }
 }
 
-/** A row's face, as Newton drew them: unread rows bold and dark, read rows grey. */
+/** A row's face, as Newton drew them: unread rows bold and dark, read rows grey. Its fill keeps half of `Dims.rowGap` off the next row's. */
 @Composable
-private fun RowFace(row: ThreadRow, selecting: Boolean, checked: Boolean, pressed: Boolean, current: Boolean) {
+private fun RowFace(row: ThreadRow, selecting: Boolean, checked: Boolean, pressed: Boolean, hovered: Boolean, current: Boolean) {
     val strong = if (row.unread) Tokens.foreground.color else Tokens.mutedForeground.color
     val fill = when {
         checked -> Tokens.primary.opacity(Opacity.colorTint).color
         pressed -> Tokens.backgroundAccentLargerStronger.color
         // The row the keyboard is on, or the thread last open, stays in the hover's fill.
-        current -> Tokens.backgroundAccentLarger.color
+        hovered || current -> Tokens.backgroundAccentLarger.color
         else -> Color.Transparent
     }
-    Row(Modifier.fillMaxSize().background(fill)) {
+    Box(Modifier.fillMaxSize().padding(vertical = Dims.rowGap / 2).background(fill))
+    Row(Modifier.fillMaxSize()) {
         val bar = Dims.accountColor(row.color).color
         if (selecting) {
             Box(Modifier.padding(vertical = Dims.rowGap).width(Dims.accountBarWidth).fillMaxHeight().background(bar, RoundedCornerShape(50)))

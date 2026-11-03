@@ -49,7 +49,7 @@ export function Compose({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex h-[52px] shrink-0 items-center border-b border-(--border) pr-5 pl-[99px]">
+      <div className="relative flex h-[52px] shrink-0 items-center border-b border-(--border) pr-4 pl-[91px]">
         <IconButton icon={ArrowLeftIcon} label="Back (Esc)" onClick={onClose} />
         <span className="absolute left-1/2 -translate-x-1/2 text-[14px] font-semibold text-(--foreground)">
           {draft.replyTo ? draft.subject : "New message"}
@@ -63,7 +63,7 @@ export function Compose({
           onClick={onSend}
         />
       </div>
-      <div className="mx-auto mt-4 flex min-h-0 w-[1000px] flex-1 flex-col rounded-sm border border-(--border) bg-(--card-larger) px-20">
+      <div className="mx-auto mt-4 flex min-h-0 w-[1000px] flex-1 flex-col rounded-sm border border-(--border) bg-(--card-larger) px-20 [--button-hover:var(--card-larger-accent-stronger)] [--button-ring:var(--border-card)]">
         <Field label="To">
           <input
             ref={to}
@@ -71,21 +71,34 @@ export function Compose({
             onChange={(event) => onChange({ ...draft, to: event.target.value })}
             className="min-w-0 flex-1 bg-transparent text-(--foreground) outline-none"
           />
-          <span className="text-[13px] text-(--muted-foreground)">Cc Bcc</span>
+          <ActionButton
+            title="Cc Bcc"
+            variant="ghost"
+            size="small"
+            className="-mr-[3px]"
+            onClick={onNotInDemo}
+          />
         </Field>
-        <Field label="From">
-          <span
-            className="size-[7px] rounded-full"
-            style={{ background: `var(--${account.color})` }}
-          />
-          <span className="font-medium text-(--foreground)">Sam Lee</span>
-          <span className="text-[12px] text-(--muted-stronger-foreground)">
-            {account.email}
-          </span>
-          <ChevronDownIcon
-            className="size-3 text-(--muted-stronger-foreground)"
-            strokeWidth={2}
-          />
+        <Field label="From" focus={false}>
+          <button
+            type="button"
+            title="Send as another address (⌘⇧F)"
+            onClick={onNotInDemo}
+            className="-ml-1 flex h-7 items-center gap-2 rounded-sm px-1 hover:bg-(--button-hover)"
+          >
+            <span
+              className="size-[7px] rounded-full"
+              style={{ background: `var(--${account.color})` }}
+            />
+            <span className="font-medium text-(--foreground)">Sam Lee</span>
+            <span className="text-[12px] text-(--muted-stronger-foreground)">
+              {account.email}
+            </span>
+            <ChevronDownIcon
+              className="size-3 text-(--muted-stronger-foreground)"
+              strokeWidth={2}
+            />
+          </button>
         </Field>
         <Field label="Subject">
           <input
@@ -103,7 +116,7 @@ export function Compose({
           className="min-h-0 flex-1 resize-none bg-transparent pt-5 text-[15px] leading-[1.55] text-(--foreground) outline-none"
         />
       </div>
-      <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-t border-(--border) px-5">
+      <div className="flex h-[52px] shrink-0 items-center border-t border-(--border) px-4">
         <IconButton icon={PaperclipIcon} label="Attach" onClick={onNotInDemo} />
         <IconButton icon={ZapIcon} label="Snippets" onClick={onNotInDemo} />
         <IconButton
@@ -127,13 +140,23 @@ export function Compose({
   )
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** A line of the head; with `focus`, a click anywhere on it puts the caret in its field. */
+function Field({
+  label,
+  focus = true,
+  children,
+}: {
+  label: string
+  focus?: boolean
+  children: ReactNode
+}) {
+  const Line = focus ? "label" : "div"
   return (
-    <label className="flex h-[45px] shrink-0 items-center gap-2 border-b border-(--border-card) text-[14px]">
+    <Line className="flex h-[45px] shrink-0 items-center gap-2 border-b border-(--border-card) text-[14px]">
       <span className="w-[58px] shrink-0 text-[13px] text-(--muted-stronger-foreground)">
         {label}
       </span>
       {children}
-    </label>
+    </Line>
   )
 }

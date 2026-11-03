@@ -27,6 +27,7 @@ struct SettingsCard<Content: View>: View {
             .background(RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.card.color))
             .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+            .environment(\.onFormCard, true)
     }
 }
 
@@ -64,6 +65,28 @@ struct SettingsRow<Leading: View, Trailing: View>: View {
 extension SettingsRow where Trailing == EmptyView {
     init(@ViewBuilder leading: () -> Leading) {
         self.init(leading: leading, trailing: { EmptyView() })
+    }
+}
+
+/// A `SettingsRow` a `MovableList` moves inside a settings card, keeping the card's hairline
+/// under it, over the row that adds one. One that `opens` something hovers in the card's accent;
+/// the `first` rounds its fill into the card's corners, which don't clip the list's rows.
+struct MovableSettingsRow<Leading: View, Trailing: View>: View {
+    var opens = false
+    var first = false
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+    @Environment(\.hovered) private var hovered
+
+    var body: some View {
+        SettingsRow { leading } trailing: { trailing }
+            .background(fill.fill(hovered && opens ? Tokens.cardAccent.color : .clear))
+            .rule(.bottom, color: Tokens.borderCard)
+    }
+
+    private var fill: UnevenRoundedRectangle {
+        let corner = first ? Radius.md : 0
+        return UnevenRoundedRectangle(topLeadingRadius: corner, topTrailingRadius: corner)
     }
 }
 
