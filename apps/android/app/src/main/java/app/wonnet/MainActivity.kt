@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
         intent.data?.takeIf { it.scheme == "wonnet" }?.let { store.finishSignIn(it.toString()) }
         intent.getStringExtra(Notifier.THREAD)?.let { thread ->
             intent.removeExtra(Notifier.THREAD)
-            store.show(thread)
+            store.showThread(thread)
         }
     }
 

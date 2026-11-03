@@ -338,7 +338,7 @@ class MailStore(private val context: Context) {
         trackUi()
         threadAfterBoot?.let {
             threadAfterBoot = null
-            show(it)
+            showThread(it)
         }
     }
 
@@ -643,8 +643,8 @@ class MailStore(private val context: Context) {
     private suspend fun openThread(thread: String): Conversation =
         bridge.call("open_thread", mapOf("thread" to thread, "images" to (thread in imagesShown))) { Conversation.read(it.objectOrEmpty) }
 
-    /** Opens the thread of a notification, whose mail may not have synced yet. */
-    fun show(thread: String) {
+    /** Opens a thread over the page on screen, as a notification's does; its mail may not have synced yet. */
+    fun showThread(thread: String) {
         if (!booted) {
             threadAfterBoot = thread
             return

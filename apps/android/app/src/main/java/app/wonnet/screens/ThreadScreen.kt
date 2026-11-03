@@ -296,7 +296,7 @@ private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boole
         Sheet("Contact", { personEmail = null }) {
             PersonView(store, email, closeSheet = { personEmail = null }) { thread ->
                 personEmail = null
-                store.show(thread)
+                store.showThread(thread)
             }
         }
     }
