@@ -678,6 +678,11 @@ impl Store {
         .detach();
     }
 
+    /// The window is in front again: the core checks its link to the server.
+    pub fn came_back(&mut self, cx: &mut Context<Self>) {
+        self.ask(Command::CameBack, cx, |_, _: Result<Empty, String>, _| {});
+    }
+
     pub fn reload_mailboxes(&mut self, cx: &mut Context<Self>) {
         self.ask(Command::Mailboxes, cx, |this, found: Result<Mailboxes, String>, _| {
             let Ok(found) = found else { return };

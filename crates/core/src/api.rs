@@ -391,6 +391,9 @@ pub enum Command {
     /// Asks the server to check every account with its provider now, reconnecting first when
     /// offline. `{}` once the server has, or after a while when it can't be reached.
     Refresh,
+    /// The app is on screen again. A link that went quiet while it was away is made anew, and
+    /// one that was offline reconnects at once instead of after its backoff. `{}` at once.
+    CameBack,
     /// `{}` once the core is caught up with the server and has sent everything waiting (but
     /// sends waiting for their time), or after 25 s. For an app that runs in the background a
     /// short while, as for a notification's action.

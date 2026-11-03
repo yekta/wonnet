@@ -111,6 +111,7 @@ impl MailWindow {
                         store.forget_sign_in();
                     }
                     if active && store.booted {
+                        store.came_back(cx);
                         store.reload_mailboxes(cx);
                         store.settle_notifications(None, cx);
                     } else {

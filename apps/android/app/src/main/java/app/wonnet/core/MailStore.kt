@@ -426,6 +426,7 @@ class MailStore(private val context: Context) {
     fun cameBack() {
         if (!booted) return
         scope.launch {
+            runCatching { bridge.call("came_back") }
             reloadMailboxes()
             Notifier.settle(null)
         }
