@@ -33,10 +33,11 @@ struct PersonView: View {
                     Text(email).textStyle(.label, color: Tokens.mutedStrongerForeground.color).textSelection(.enabled)
                 }
                 ActionButton(title: "New message", symbol: .squarePen, variant: .outline, action: write)
+                    .padding(.leading, -Theme.buttonGap / 2)
             }
             .padding(Space.xl)
             if let threads = person?.threads, !threads.isEmpty {
-                SectionHeading(title: "Recent")
+                SectionHeading(title: "Recent", muted: true)
                     .padding(.horizontal, Space.xl)
                     .padding(.top, Space.xxs)
                     .padding(.bottom, Space.m - Theme.rowGap / 2)

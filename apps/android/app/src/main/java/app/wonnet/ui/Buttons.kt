@@ -102,7 +102,7 @@ fun ButtonFace(
     val background = when (variant) {
         ButtonVariant.Primary -> (if (hovered) Tokens.primary.opacity(Opacity.lit) else Tokens.primary).color
         ButtonVariant.Success -> (if (hovered) Tokens.success.opacity(Opacity.lit) else Tokens.success).color
-        else -> if (hovered) Tokens.backgroundAccent.color else Color.Transparent
+        else -> if (hovered) hoverFill.color else Color.Transparent
     }
     val border = when (variant) {
         ButtonVariant.Outline -> Tokens.primary.opacity(Opacity.colorBorder).color
@@ -170,7 +170,7 @@ fun IconCircle(
         hovered -> Tokens.foreground.color
         else -> Tokens.mutedForeground.color
     }
-    val fill = if (!hovered) Color.Transparent else if (LocalOnPopover.current) Tokens.popoverAccentStronger.color else Tokens.backgroundAccent.color
+    val fill = if (hovered) hoverFill.color else Color.Transparent
     val ring = if (!circled) Color.Transparent else if (LocalOnCard.current) Dims.cardRule.color else Tokens.border.color
     Box(
         Modifier.padding(horizontal = Dims.buttonGap / 2).size(size.scaled).background(fill, CircleShape).border(Dims.hairline, ring, CircleShape),
@@ -259,7 +259,7 @@ fun <T> ChoiceMenu(options: List<T>, selected: T, title: (T) -> String, size: Co
 /**
  * A button that is only its content: a star, a sender's name, a word in a toast. It still hovers,
  * presses and disables as the others do, and is never under the smallest control in height.
- * `tint` is the colour it hovers in, as a wash of it.
+ * `tint` is the colour it hovers in, as a wash of it; `round` washes a round thing in a circle.
  */
 @Composable
 fun PlainButton(
@@ -267,15 +267,16 @@ fun PlainButton(
     modifier: Modifier = Modifier,
     help: String? = null,
     tint: ThemeColor? = null,
+    round: Boolean = false,
     enabled: Boolean = true,
     content: @Composable RowScope.(hovered: Boolean) -> Unit,
 ) {
     Pressable(onClick, modifier, enabled, help = help) { hovered ->
-        val fill = if (!hovered) Color.Transparent else tint?.opacity(Opacity.colorTint)?.color ?: Tokens.backgroundAccent.color
+        val fill = if (!hovered) Color.Transparent else tint?.opacity(Opacity.colorTint)?.color ?: hoverFill.color
         Row(
             Modifier
                 .defaultMinSize(ControlSize.Small.scaled, ControlSize.Small.scaled)
-                .background(fill, RoundedCornerShape(Radius.sm))
+                .background(fill, if (round) CircleShape else RoundedCornerShape(Radius.sm))
                 .padding(horizontal = Space.xxs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,

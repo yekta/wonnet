@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
@@ -157,9 +158,11 @@ fun ConfirmDialog(
             Text(title, TextStyle.Heading)
             Text(message, TextStyle.Body, color = Tokens.mutedForeground.color)
             Spacer(Modifier.height(Space.s))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                ActionButton(cancel, variant = ButtonVariant.Ghost, onClick = onCancel)
-                ActionButton(action, variant = if (destructive) ButtonVariant.Destructive else ButtonVariant.Primary, onClick = onConfirm)
+            CompositionLocalProvider(LocalOnPopover provides true) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    ActionButton(cancel, variant = ButtonVariant.Ghost, onClick = onCancel)
+                    ActionButton(action, variant = if (destructive) ButtonVariant.Destructive else ButtonVariant.Primary, onClick = onConfirm)
+                }
             }
         }
     }

@@ -81,6 +81,8 @@ import app.wonnet.ui.IconMenu
 import app.wonnet.ui.MenuItem
 import app.wonnet.ui.Notice
 import app.wonnet.ui.PageCard
+import app.wonnet.ui.PlainButton
+import app.wonnet.ui.pullOut
 import app.wonnet.ui.Pressable
 import app.wonnet.ui.Rule
 import app.wonnet.ui.Sheet
@@ -346,7 +348,9 @@ private fun Header(store: MailStore, conversation: Conversation) {
                     if (conversation.muted) Chip("Muted", symbol = Symbol.BellOff)
                 }
                 if (conversation.unsubscribe) {
-                    ActionButton("Unsubscribe", symbol = Symbol.MailX, variant = ButtonVariant.Ghost) { store.act(Action.Unsubscribe, listOf(conversation.id)) }
+                    ActionButton("Unsubscribe", Modifier.offset(x = Dims.buttonGap / 2), symbol = Symbol.MailX, variant = ButtonVariant.Ghost) {
+                        store.act(Action.Unsubscribe, listOf(conversation.id))
+                    }
                 }
             }
         }
@@ -361,13 +365,11 @@ private fun Header(store: MailStore, conversation: Conversation) {
 private fun DraftCard(store: MailStore, id: String) {
     Column {
         Rule(color = Dims.cardRule)
-        Pressable({ store.openDraft(id) }) {
-            Row(Modifier.fillMaxWidth().padding(vertical = Space.l), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                Icon(Symbol.Pencil, 14f, Tokens.destructive.color)
-                Text("Draft", TextStyle.Subheading, color = Tokens.destructive.color)
-                Text("A reply you started", TextStyle.Label, Modifier.weight(1f), color = Tokens.mutedStrongerForeground.color, maxLines = 1)
-                ActionButton("Open") { store.openDraft(id) }
-            }
+        Row(Modifier.fillMaxWidth().padding(vertical = Space.l), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            Icon(Symbol.Pencil, 14f, Tokens.destructive.color)
+            Text("Draft", TextStyle.Subheading, color = Tokens.destructive.color)
+            Text("A reply you started", TextStyle.Label, Modifier.weight(1f), color = Tokens.mutedStrongerForeground.color, maxLines = 1)
+            ActionButton("Open", Modifier.offset(x = Dims.buttonGap / 2)) { store.openDraft(id) }
         }
     }
 }
@@ -390,16 +392,28 @@ private fun MessageCard(
     val reply = { kind: ReplyKind -> store.reply(kind, conversation.id, message.id) }
     Column(Modifier.padding(vertical = Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
         // A tap on the line of an open message folds it again, as in Gmail; on a folded one, unfolds it.
-        Pressable({ store.toggleFold(message) }) {
+        Pressable({ store.toggleFold(message) }) { lit ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                Pressable({ if (folded) store.toggleFold(message) else showPerson() }, help = message.fromEmail) {
-                    Avatar(message.initials, message.fromEmail, Dims.messageAvatar)
+                // Who sent it, the name lit while the line is. Open, it opens the person, pulled out by its padding so it stays at the line's start.
+                val nameColor = when {
+                    folded -> if (lit) Tokens.foreground else Tokens.mutedStrongerForeground
+                    else -> if (lit) Tokens.emphasizedForeground else Tokens.foreground
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Pressable({ if (folded) store.toggleFold(message) else showPerson() }) {
-                        Text(message.fromName, if (folded) TextStyle.Body else TextStyle.Subheading, color = if (folded) Tokens.mutedStrongerForeground.color else Tokens.foreground.color, maxLines = 1)
+                val sender = @Composable { modifier: Modifier ->
+                    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                        Avatar(message.initials, message.fromEmail, Dims.messageAvatar)
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(message.fromName, if (folded) TextStyle.Body else TextStyle.Subheading, color = nameColor.color, maxLines = 1)
+                            Text(if (folded) message.snippet else message.to, TextStyle.Caption, maxLines = 1)
+                        }
                     }
-                    Text(if (folded) message.snippet else message.to, TextStyle.Caption, maxLines = 1)
+                }
+                Box(Modifier.weight(1f)) {
+                    if (folded) {
+                        sender(Modifier)
+                    } else {
+                        PlainButton(showPerson, Modifier.pullOut(Space.xxs), help = message.fromEmail) { sender(Modifier.weight(1f, fill = false)) }
+                    }
                 }
                 if (message.attachments.isNotEmpty()) Icon(Symbol.Paperclip, 13f, Tokens.mutedStrongerForeground.color)
                 Text(message.date, TextStyle.Caption, maxLines = 1)

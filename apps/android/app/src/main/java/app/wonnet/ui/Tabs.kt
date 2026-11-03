@@ -5,6 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,8 +47,9 @@ import kotlin.math.roundToInt
 /**
  * Tabs across the bottom of the screen, each an icon over its name and count, the chosen one in
  * the text's colour. They share the width equally; a long name is cut short. A tab held and
- * dragged goes to another place, and the new order is given when it is let go. The page's colour
- * reaches under the navigation bar.
+ * dragged goes to another place, and the new order is given when it is let go. A tab hovered,
+ * pressed or dragged is lit in a rounded fill a little inside it. The page's colour reaches under
+ * the navigation bar.
  */
 @Composable
 fun <T> BottomTabs(
@@ -73,11 +77,14 @@ fun <T> BottomTabs(
             .rule(Edge.Top)
             .background(Tokens.background.color)
             .navigationBarsPadding()
-            .padding(horizontal = Space.xxs, vertical = Space.xxs)
+            .padding(horizontal = Space.xxs)
             .onSizeChanged { width = it.width.toFloat() },
     ) {
         for ((index, tab) in tabs.withIndex()) {
             val id = key(tab)
+            androidx.compose.runtime.key(id) {
+            val pointer = remember { MutableInteractionSource() }
+            val hovered by pointer.collectIsHoveredAsState()
             val shift = when {
                 from < 0 || index == from -> 0f
                 to > from && index in (from + 1)..to -> -share
@@ -86,14 +93,14 @@ fun <T> BottomTabs(
             }
             val slide by animateFloatAsState(shift, tween(160), label = "tab")
             val chosen = id == selected
-            val lit = chosen || pressed == id || dragging == id
-            val foreground = if (lit) Tokens.foreground.color else Tokens.mutedStrongerForeground.color
+            val lit = hovered || pressed == id || dragging == id
+            val foreground = if (chosen || lit) Tokens.foreground.color else Tokens.mutedStrongerForeground.color
             Column(
                 Modifier
                     .weight(1f)
                     .zIndex(if (dragging == id) 1f else 0f)
                     .graphicsLayer { translationX = if (dragging == id) offset else slide }
-                    .background(if (dragging == id) Tokens.backgroundAccent.color else Color.Transparent, RoundedCornerShape(Radius.md))
+                    .hoverable(pointer)
                     .pointerInput(id) {
                         detectTapGestures(
                             onPress = {
@@ -130,7 +137,9 @@ fun <T> BottomTabs(
                             },
                         )
                     }
-                    .padding(start = Space.xxs, end = Space.xxs, top = Space.m, bottom = Space.s),
+                    .padding(vertical = Space.xxs)
+                    .background(if (lit) Tokens.backgroundAccent.color else Color.Transparent, RoundedCornerShape(Radius.md))
+                    .padding(start = Space.xxs, end = Space.xxs, top = Space.m - Space.xxs, bottom = Space.s - Space.xxs),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Space.xxs - 1.dp),
             ) {
@@ -140,11 +149,12 @@ fun <T> BottomTabs(
                     if (count(tab) > 0) Text("${count(tab)}", TextStyle.Footnote, maxLines = 1)
                 }
             }
+            }
         }
     }
 }
 
-/** Tabs on a line, each with a count; the chosen one underlined in the primary colour. */
+/** Tabs on a line, each with a count; the chosen one underlined in the primary colour, a hovered one lit in a rounded fill. */
 @Composable
 fun <T> TabStrip(tabs: List<T>, key: (T) -> String, selected: String?, title: (T) -> String, count: (T) -> Int, pick: (T) -> Unit) {
     Row {
@@ -152,6 +162,12 @@ fun <T> TabStrip(tabs: List<T>, key: (T) -> String, selected: String?, title: (T
             val chosen = key(tab) == selected
             Pressable({ pick(tab) }) { hovered ->
                 Box(Modifier.height(Dims.rowHeight)) {
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .padding(horizontal = Space.xxs / 2, vertical = Space.xxs)
+                            .background(if (hovered) Tokens.backgroundAccent.color else Color.Transparent, RoundedCornerShape(Radius.md)),
+                    )
                     Row(
                         Modifier.padding(horizontal = Space.s + 1.dp).align(Alignment.Center),
                         horizontalArrangement = Arrangement.spacedBy(Space.xs),

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Tabs on a line, each with a count; the chosen one underlined.
+/// Tabs on a line, each with a count; the chosen one underlined. A tab hovers in a rounded fill
+/// clear of the line, as `PillTabs` do.
 struct TabStrip<Tab: Identifiable & Hashable>: View {
     let tabs: [Tab]
     let selected: Tab.ID?
@@ -37,6 +38,12 @@ struct TabStrip<Tab: Identifiable & Hashable>: View {
             .foregroundStyle(chosen || hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
             .padding(.horizontal, Space.s + 1)
             .frame(height: Theme.rowHeight * Platform.scale)
+            .background {
+                RoundedRectangle(cornerRadius: Radius.md)
+                    .fill(hovered ? Tokens.backgroundAccent.color : .clear)
+                    .padding(.vertical, Space.xxs)
+                    .padding(.horizontal, Space.xxs / 2)
+            }
             .overlay(alignment: .bottom) {
                 Rectangle().fill(chosen ? Tokens.primary.color : .clear).frame(height: 2)
             }

@@ -37,11 +37,17 @@ added to the component, not to the view.
   `backgroundAccentLargerStrongest`, so they show on the row's fill. A chip rests in
   `backgroundSecondary` and hovers in `backgroundSecondaryAccent`; on the card that fills the
   page (`.pageCard()`, which sets `onCard`) it rests in `Theme.cardAccent` and hovers in
-  `Theme.cardAccentStronger`, since that card is as dark as `backgroundSecondary`. An accent is never thinned with an opacity: if a step is
-  missing, add a token for it. A control with a colour of its own (the star) hovers in a wash
-  of it: the colour at `Opacity.colorTint`, lighter in the dark scheme. Pressed is hovered: on
-  iOS a press shows the hover's fill. A disabled button shows at `Opacity.disabled`, a filled
-  one lights at `Opacity.lit`.
+  `Theme.cardAccentStronger`, since that card is as dark as `backgroundSecondary`. A small
+  thing hovers in what shows on what it sits on (`controlHover`): `backgroundAccent` on the
+  page, `Theme.cardAccentStronger` on that card, `cardAccent` on a settings card (`onFormCard`),
+  `popoverAccentStronger` on a popover, a toast or a banner; on the system's glass it has no
+  fill and the glass answers the press. A row that is only clicked as a whole, with no fill (a
+  message's line in a thread), lights its words instead. What can't be clicked has no hover.
+  An accent is never thinned with an opacity: if a step is missing, add a token for it. A
+  control with a colour of its own (the star) hovers in a wash of it: the colour at
+  `Opacity.colorTint`, lighter in the dark scheme. Pressed is hovered: on iOS a press shows the
+  hover's fill. A disabled button shows at `Opacity.disabled`, a filled one lights at
+  `Opacity.lit`.
 - Things side by side have no gap between them: an `HStack(spacing: 0)` of buttons, rows with
   no spacing. The space is inside each control, so hover areas and hit areas touch. Buttons
   with a face (a circle, a pill) show `Theme.buttonGap` (6pt) between the faces, rows one
@@ -101,7 +107,8 @@ added to the component, not to the view.
 | `GlassBar`, `GlassCircle` | A bar floating over a page on the system's glass (the page's colour on a bordered capsule before iOS 26): icon buttons spread evenly across a capsule, and one action on a circle beside it; the commands under an open thread and a selection on iOS |
 | `OptionButton` | A wide button on a card, for one of a few ways to do something: a mark, what it is, a line about it and a chevron; the providers an account comes from |
 | `AppMark`, `GoogleMark` | The app's icon drawn small, and Google's G in its colours |
-| `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover |
+| `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover, `round` makes it a circle; a sender's name |
+| `LineButton` | A line clicked as a whole, its words lit on hover, with buttons of its own on it: a message's line in a thread |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `SelectCircle` | The circle that selects threads, filled in the primary colour with a check once selected; the Mac's rows draw it in the gutter before them |
 | `InputField` | A text field with its label above, or a text box of `lines` |
@@ -110,7 +117,7 @@ added to the component, not to the view.
 | `Dropdown` | A choice from a short list, with a label |
 | `Combobox` | A choice from a list that can grow, found by typing: its face shows the one in force, a `.field` with a label or `.inline` words; opens a popup with a `SearchField` over a `ChoiceList` on the Mac, drawn by the window's or the sheet's `comboboxHost` so nothing is over it, a sheet on iOS |
 | `ChoiceMenu` | One of a few choices, as a button with a chevron that opens them |
-| `ToggleRow` | A switch with its words |
+| `ToggleRow` | A switch with its words, flipped by a click anywhere on the row, which hovers |
 | `Disclosure` | A line that opens more |
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |
 | `AttachmentCard` | A message's file under it, as Gmail shows them: its picture (or its kind's icon) over its name, kind and size; `pending` |
@@ -120,7 +127,7 @@ added to the component, not to the view.
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |
 | `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, with a check when it is the one in force; and the list that scrolls to the highlighted one |
 | `PopupCard` | A card over the page for suggestions; `inset` is the space to its edges |
-| `TabStrip` | Tabs on a line with counts |
+| `TabStrip` | Tabs on a line with counts, the chosen one underlined, hovering in a rounded fill |
 | `PillTabs` | Tabs on a line with an icon and a count, the chosen one filled in a rounded rectangle; dragged to reorder, with a menu on each |
 | `BottomTabs` | Tabs across the bottom of the screen, full width, each an icon over its name and count; held and dragged to reorder (iOS) |
 | `MovableList` | Rows along an axis that the list picks up and moves itself, in groups, with the rows under one going along; the sidebar and the tab strips are made of it |
@@ -132,7 +139,7 @@ added to the component, not to the view.
 | `Banner`, `ToastView` | A card floating at the bottom that stays, with its icon, a line (or a progress bar beside it), an action and a close (the Mac's update), always the same height; its tint is its state: `process` under way, `primary` waiting on the user, `success` done (its button too: Restart is `success`), `destructive` failed. And the note at the bottom that goes |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
-| `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right; a control at either end of a row is as far from the card's side as from the row's top and bottom |
+| `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote`, `MovableSettingsRow` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right; a control at either end of a row is as far from the card's side as from the row's top and bottom; a row of a `MovableList` on the card, hovering only when it `opens` something |
 | `Switch` | The system's switch alone, for a row that says what it does |
 | `KeyCaps`, `KeyRecorder` | Keys on caps, and the Mac's button that records new ones for a keybinding |
 | `Rule`, `.rule(edge)` | A hairline, in `border` or in `borderCard` |

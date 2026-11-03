@@ -1017,6 +1017,7 @@ impl ComposeView {
             ActionButton::new("cc-bcc", "Cc Bcc")
                 .variant(Variant::Ghost)
                 .size(ControlSize::Small)
+                .surface(ui::Surface::PageCard)
                 .on_click(move |_, window, cx| this.update(cx, |this, cx| this.reveal(Line::Cc, window, cx)))
         });
         fields.push(self.address_line(Line::To, reveal, window, cx));

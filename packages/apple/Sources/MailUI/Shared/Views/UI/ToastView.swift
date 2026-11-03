@@ -16,8 +16,9 @@ struct ToastView: View {
             }
             .padding(.horizontal, Space.l + 2)
             .frame(height: Theme.searchHeight * Platform.scale)
-                        .background(Capsule().fill(Tokens.popover.color).shadow(.md))
+            .background(Capsule().fill(Tokens.popover.color).shadow(.md))
             .overlay(Capsule().strokeBorder(Tokens.border.color, lineWidth: Theme.hairline))
+            .environment(\.onPopover, true)
             .padding(.bottom, Space.xl)
             .task(id: toast.id) {
                 try? await Task.sleep(for: .seconds(toast.duration))

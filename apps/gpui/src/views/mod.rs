@@ -825,11 +825,13 @@ fn confirmation_alert(
                     .child(
                         ActionButton::new("confirm-cancel", confirmation.cancel)
                             .variant(Variant::Ghost)
+                            .surface(ui::Surface::Popover)
                             .on_click(move |_, window, cx| close_button(window, cx)),
                     )
                     .child(
                         ActionButton::new("confirm-do", confirmation.action.clone())
                             .variant(if confirmation.safe { Variant::Primary } else { Variant::Destructive })
+                            .surface(ui::Surface::Popover)
                             .on_click(move |_, _, cx| {
                                 let perform = perform.clone();
                                 confirm.update(cx, |store, cx| {

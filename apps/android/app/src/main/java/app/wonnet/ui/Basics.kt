@@ -71,11 +71,11 @@ fun Modifier.rule(edge: Edge, color: ThemeColor = Tokens.border): Modifier {
     }
 }
 
-/** A section's name, and maybe a muted line about it. */
+/** A section's name, and maybe a muted line about it. Muted, it names a list without looking like one of its rows. */
 @Composable
-fun SectionHeading(title: String, modifier: Modifier = Modifier, detail: String? = null) {
+fun SectionHeading(title: String, modifier: Modifier = Modifier, detail: String? = null, muted: Boolean = false) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-        Text(title, TextStyle.Subheading)
+        Text(title, TextStyle.Subheading, color = if (muted) Tokens.mutedForeground.color else null)
         detail?.let { Text(it, TextStyle.Caption, color = Tokens.mutedForeground.color) }
     }
 }
@@ -93,7 +93,9 @@ fun FormSection(title: String, detail: String? = null, content: @Composable Colu
 @Composable
 fun Card(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(Radius.md)
-    Column(modifier.background(Tokens.card.color, shape).border(Dims.hairline, Tokens.border.color, shape).padding(Space.l), content = content)
+    Column(modifier.background(Tokens.card.color, shape).border(Dims.hairline, Tokens.border.color, shape).padding(Space.l)) {
+        CompositionLocalProvider(LocalOnFormCard provides true) { content() }
+    }
 }
 
 /** The card that fills the page (`Dims.cardFill`), with what is on it told so. */

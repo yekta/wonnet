@@ -215,7 +215,7 @@ fn menu_card(open: &OpenMenu, cx: &App) -> impl IntoElement + use<> {
                 .text(TextStyle::Label, cx)
                 .text_color(cx.color(color))
                 .when(highlighted, |row| row.bg(cx.color(POPOVER_ACCENT_STRONGER)))
-                .when(!disabled, |row| row.hover(|row| row.bg(cx.color(POPOVER_ACCENT))))
+                .when(!disabled && !highlighted, |row| row.hover(|row| row.bg(cx.color(POPOVER_ACCENT))))
                 .when(disabled, |row| row.opacity(cx.number(opacity::DISABLED)))
                 .child(match symbol {
                     Some(symbol) => icon(*symbol, 15.).into_any_element(),

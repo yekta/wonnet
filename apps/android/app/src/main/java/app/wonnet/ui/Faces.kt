@@ -229,7 +229,7 @@ fun SwatchRow(selected: String, pick: (String) -> Unit) {
     Row {
         for ((index, name) in Dims.accountColorNames.withIndex()) {
             val color = Dims.accountColor(name)
-            PlainButton({ pick(name) }, help = "Colour ${index + 1}", tint = color) {
+            PlainButton({ pick(name) }, help = "Colour ${index + 1}", tint = color, round = true) {
                 Box(
                     Modifier
                         .border(1.5.dp, if (name == selected) Tokens.foreground.color else Color.Transparent, CircleShape)

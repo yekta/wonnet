@@ -101,6 +101,7 @@ pub struct Chip {
     pending: bool,
     on_card: bool,
     help: Option<SharedString>,
+    remove_help: Option<SharedString>,
     remove: Option<OnClick>,
     action: Option<OnClick>,
 }
@@ -116,6 +117,7 @@ impl Chip {
             pending: false,
             on_card: false,
             help: None,
+            remove_help: None,
             remove: None,
             action: None,
         }
@@ -146,6 +148,12 @@ impl Chip {
         self
     }
 
+    /// What the x says it does, else "Remove" and the title.
+    pub fn remove_help(mut self, help: impl Into<SharedString>) -> Self {
+        self.remove_help = Some(help.into());
+        self
+    }
+
     pub fn remove(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.remove = Some(Rc::new(handler));
         self
@@ -171,9 +179,11 @@ impl RenderOnce for Chip {
         let action = self.action.clone();
         let remove = self.remove.clone().map(|remove| {
             let remove_fill = if self.on_card { CARD_ACCENT_STRONGER } else { BACKGROUND_SECONDARY_ACCENT_STRONGER };
-            let title = self.title.clone();
+            let remove_help = self.remove_help.clone().unwrap_or_else(|| format!("Remove {}", self.title).into());
+            let group = SharedString::from(format!("{}-remove", self.id));
             div()
-                .id(SharedString::from(format!("{}-remove", self.id)))
+                .id(group.clone())
+                .group(group.clone())
                 .size(px(size::CHIP))
                 .mr(px(-(space::S + 2.)))
                 .flex()
@@ -188,10 +198,10 @@ impl RenderOnce for Chip {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .hover(|circle| circle.bg(cx.color(remove_fill)).text_color(cx.color(FOREGROUND)))
+                        .group_hover(group, |circle| circle.bg(cx.color(remove_fill)).text_color(cx.color(FOREGROUND)))
                         .child(icon(Symbol::X, 11.)),
                 )
-                .tooltip(move |_, cx| Tooltip::view(format!("Remove {title}"), cx))
+                .tooltip(move |_, cx| Tooltip::view(remove_help.clone(), cx))
                 .on_click(move |event, window, cx| {
                     cx.stop_propagation();
                     remove(event, window, cx);
@@ -256,7 +266,8 @@ pub fn file_kind(mime: &str) -> Symbol {
 }
 
 /// A message's file as a card, as Gmail shows them: its picture (or its kind's icon) over its
-/// name, kind and size.
+/// name, kind and size. GPUI clips to a rectangle, so its picture and fills round their own
+/// corners inside its border.
 pub fn attachment_card(
     id: SharedString,
     name: &str,
@@ -276,8 +287,9 @@ pub fn attachment_card(
         format!("{extension} · {}", super::file_size(bytes))
     };
     let group = SharedString::from(format!("{id}-card"));
+    let corner = px(radius::MD - size::HAIRLINE);
     let picture = match preview {
-        Some(path) => img(path).size_full().object_fit(ObjectFit::Cover).into_any_element(),
+        Some(path) => img(path).size_full().rounded_t(corner).object_fit(ObjectFit::Cover).into_any_element(),
         None => icon(kind, 28.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)).into_any_element(),
     };
     let glyph = if pending {
@@ -306,6 +318,7 @@ pub fn attachment_card(
                 .items_center()
                 .justify_center()
                 .overflow_hidden()
+                .rounded_t(corner)
                 .bg(cx.color(CARD_ACCENT))
                 .group_hover(group.clone(), |area| area.bg(cx.color(CARD_ACCENT_STRONGER)))
                 .child(picture),
@@ -318,6 +331,7 @@ pub fn attachment_card(
                 .gap(px(space::XS))
                 .px(px(space::S))
                 .py(px(space::XS))
+                .rounded_b(corner)
                 .bg(cx.color(CARD_FILL))
                 .group_hover(group, |footer| footer.bg(cx.color(CARD_ACCENT)))
                 .child(glyph)
@@ -539,6 +553,7 @@ pub fn swatch_row(
                 .child(div().size(px(12.)).rounded_full().bg(cx.color(color))),
         )
         .tint(color)
+        .round()
         .help(format!("Colour {}", index + 1))
         .on_click(move |_, window, cx| pick(picked.clone(), window, cx))
     }))
@@ -574,4 +589,42 @@ pub fn switch(
                 .bg(cx.color(CARD))
                 .shadow(cx.shadow(ShadowSize::Sm, opacity::SHADOW)),
         )
+}
+
+/// A setting that is on or off, its switch at the end: a click anywhere on it turns it. Pulled out
+/// by its padding, so its words line up with what is above it.
+pub fn toggle_row(
+    id: impl Into<SharedString>,
+    title: impl Into<SharedString>,
+    detail: Option<SharedString>,
+    on: bool,
+    toggle: impl Fn(bool, &mut Window, &mut App) + 'static,
+    cx: &App,
+) -> gpui::Stateful<gpui::Div> {
+    let id = id.into();
+    let toggle = Rc::new(toggle);
+    let flip = toggle.clone();
+    div()
+        .id(SharedString::from(format!("{id}-row")))
+        .flex()
+        .items_center()
+        .gap(px(space::L))
+        .min_h(px(size::SMALL))
+        .px(px(space::S))
+        .mx(px(-space::S))
+        .rounded(px(radius::MD))
+        .cursor_pointer()
+        .hover(|row| row.bg(cx.color(BACKGROUND_ACCENT_LARGER)))
+        .on_click(move |_, window, cx| flip(!on, window, cx))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(div().text(TextStyle::Body, cx).child(title.into()))
+                .when_some(detail, |words, detail| words.child(div().text(TextStyle::Caption, cx).child(detail))),
+        )
+        .child(switch(id, on, move |on, window, cx| toggle(on, window, cx), cx))
 }

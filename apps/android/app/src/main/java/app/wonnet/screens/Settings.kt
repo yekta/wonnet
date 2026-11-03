@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.key
@@ -45,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -117,6 +119,7 @@ import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.ChoiceMenu
 import app.wonnet.ui.IconButton
 import app.wonnet.ui.InputField
+import app.wonnet.ui.LocalOnFormCard
 import app.wonnet.ui.MovableList
 import app.wonnet.ui.Pressable
 import app.wonnet.ui.Rule
@@ -434,7 +437,7 @@ private fun InboxPage(store: MailStore, anchor: (String) -> Modifier, push: (Pag
     }
     val splits = store.customSplits
     Group("Splits", "Hold a split and drag it to move it; swipe it to remove it.") {
-        MovableList(splits, { it.id }, clicked = { push(Page.Split(it, false)) }, moved = { split, index -> store.moveSplit(split, index) }) { split, hovered ->
+        MovableList(splits, { it.id }, rowRadius = Radius.md, clicked = { push(Page.Split(it, false)) }, moved = { split, index -> store.moveSplit(split, index) }) { split, hovered ->
             SwipeToRemove(split.id, "Remove", { store.removeSplit(split) }) {
                 SettingsRow(split.name, detail = store.summary(split), leading = { Tile(Symbol.ListFilter) }, chevron = true, hovered = hovered)
             }
@@ -444,7 +447,7 @@ private fun InboxPage(store: MailStore, anchor: (String) -> Modifier, push: (Pag
     }
     val rules = store.customRules
     Group("Rules", "Mail that matches is labelled, kept out of the inbox or marked read as it arrives.", anchor("rules")) {
-        MovableList(rules, { it.id }, clicked = { push(Page.RuleEdit(it, false)) }, moved = { rule, index -> store.moveRule(rule, index) }) { rule, hovered ->
+        MovableList(rules, { it.id }, rowRadius = Radius.md, clicked = { push(Page.RuleEdit(it, false)) }, moved = { rule, index -> store.moveRule(rule, index) }) { rule, hovered ->
             SwipeToRemove(rule.id, "Remove", { store.removeRule(rule) }) {
                 SettingsRow(store.summary(rule), leading = { Tile(Symbol.Zap) }, chevron = true, wrap = true, hovered = hovered)
             }
@@ -454,9 +457,9 @@ private fun InboxPage(store: MailStore, anchor: (String) -> Modifier, push: (Pag
     }
     val tabs = store.savedTabs
     Group("Tabs", "The mailboxes along the bottom. Hold a tab and drag it to move it; swipe it to remove it.", anchor("tabs")) {
-        MovableList(tabs, { it.id }, clicked = {}, moved = { tab, index -> store.moveTab(tab, index) }) { tab, hovered ->
+        MovableList(tabs, { it.id }, rowRadius = Radius.md, moved = { tab, index -> store.moveTab(tab, index) }) { tab, _ ->
             SwipeToRemove(tab.id, "Remove", { store.toggleTab(tab.id) }) {
-                SettingsRow(store.tabName(tab), leading = { Tile(Symbol.named(tab.symbol)) }, hovered = hovered)
+                SettingsRow(store.tabName(tab), leading = { Tile(Symbol.named(tab.symbol)) })
             }
         }
         if (tabs.isNotEmpty()) RowRule()
@@ -469,9 +472,9 @@ private fun InboxPage(store: MailStore, anchor: (String) -> Modifier, push: (Pag
         "Swipe a thread to the left to show it; swipe a little further to do it. Add another to choose between them."
     }
     Group("Swipe Left", footer, anchor("swipe")) {
-        MovableList(commands, { it.id }, clicked = {}, moved = { command, index -> store.moveSwipeCommand(command, index) }) { command, hovered ->
+        MovableList(commands, { it.id }, rowRadius = Radius.md, moved = { command, index -> store.moveSwipeCommand(command, index) }) { command, _ ->
             val row = @Composable {
-                SettingsRow(command.swipeName, leading = { SwipeTile(command) }, value = if (command == commands.first()) (if (commands.size == 1) "Short swipe" else "Long swipe") else null, hovered = hovered)
+                SettingsRow(command.swipeName, leading = { SwipeTile(command) }, value = if (command == commands.first()) (if (commands.size == 1) "Short swipe" else "Long swipe") else null)
             }
             if (commands.size == 1) row() else SwipeToRemove(command.id, "Remove", { store.setSwipeCommands(store.swipeCommands - command) }) { row() }
         }
@@ -691,14 +694,16 @@ private fun SnippetPage(store: MailStore, start: Snippet, isNew: Boolean, back: 
 
 // Parts
 
-/** A group of rows: its name over it, a card of rows, and the muted line under it saying what it does. */
+/** A group of rows: its name over it, a card of rows, and the muted line under it saying what it does. The rows' fills reach the card's edges and take its corners. */
 @Suppress("ModifierParameter")
 @Composable
 private fun Group(title: String? = null, footer: String? = null, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
         title?.let { Text(it, TextStyle.Subheading, Modifier.padding(horizontal = Space.l)) }
         val shape = RoundedCornerShape(Radius.lg)
-        Column(Modifier.fillMaxWidth().background(Tokens.card.color, shape).border(Dims.hairline, Tokens.borderCard.color, shape).padding(vertical = Space.xxs), content = content)
+        Column(Modifier.fillMaxWidth().clip(shape).background(Tokens.card.color).border(Dims.hairline, Tokens.borderCard.color, shape)) {
+            CompositionLocalProvider(LocalOnFormCard provides true) { content() }
+        }
         footer?.let { Text(it, TextStyle.Caption, Modifier.padding(horizontal = Space.l), color = Tokens.mutedForeground.color) }
     }
 }
@@ -782,7 +787,8 @@ private fun SwipeToRemove(id: String, title: String, remove: () -> Unit, content
         Box(
             Modifier
                 .offset { IntOffset(offset.value.roundToInt(), 0) }
-                .background(Tokens.card.color)
+                // Covers the action only while swiped, so that a lifted row lies on its light.
+                .background(if (offset.value < 0f) Tokens.card.color else Color.Transparent)
                 .pointerInput(id) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)

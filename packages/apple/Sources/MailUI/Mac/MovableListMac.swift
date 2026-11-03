@@ -276,6 +276,29 @@ final class MovableStack: NSView {
         window?.isMovable = true
     }
 
+    /// A scroll moves the rows under a pointer that stays still, so the hover follows it.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: nil)
+        guard window != nil, let clip = enclosingScrollView?.contentView else { return }
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: clip)
+    }
+
+    @objc private func scrolled() {
+        hoverPointer()
+    }
+
+    /// Hovers the row under the pointer where it is now, for when the rows moved under it.
+    private func hoverPointer() {
+        guard let window, window.isKeyWindow else {
+            hover(-1)
+            return
+        }
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        hover(visibleRect.contains(point) ? slot(at: point) ?? -1 : -1)
+    }
+
     private func hover(_ index: Int) {
         guard index != hovered, lift == nil else { return }
         let before = hovered
@@ -356,9 +379,13 @@ final class MovableStack: NSView {
         let lifted = Landings.lifted(from: from, follows: slots.map(\.follows))
         let kept = slots.indices.filter { !lifted.contains($0) }
         let order = Array(kept[..<index]) + Array(lifted) + Array(kept[index...])
+        let lit = hosts.indices.contains(hovered) ? hosts[hovered] : nil
         slots = order.map { slots[$0] }
         hosts = order.map { hosts[$0] }
+        hovered = -1
+        if let lit, let place = hosts.firstIndex(of: lit) { lit.rootView = content(place) }
         reappear()
+        hoverPointer()
         guard index != kept.filter({ $0 < from }).count else { return }
         moved(from, index)
     }

@@ -5,10 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -17,15 +19,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import app.wonnet.theme.Radius
 import app.wonnet.theme.ShadowSize
 import app.wonnet.theme.Tokens
 import app.wonnet.theme.shadow
@@ -36,7 +47,8 @@ import kotlin.math.abs
  * light, a little smaller, and follows the finger; the rows of its group it passes slide out of
  * its way, and let go it lands in its place. The rows under one that `follows` go along with it.
  * A row held and let go without moving opens its `menu`. Rows are faces: the list takes the taps
- * and tells each row when it is pressed.
+ * and tells each row when it is hovered or pressed; without `clicked`, only when it is lifted.
+ * `rowInset` (above and below) and `rowRadius` are the shape a row lifts in, its light.
  */
 @Composable
 fun <T> MovableList(
@@ -45,7 +57,9 @@ fun <T> MovableList(
     modifier: Modifier = Modifier,
     group: (T) -> String? = { "rows" },
     follows: (T) -> Boolean = { false },
-    clicked: (T) -> Unit,
+    rowInset: Dp = 0.dp,
+    rowRadius: Dp = 0.dp,
+    clicked: ((T) -> Unit)? = null,
     moved: (T, Int) -> Unit,
     menu: (T) -> List<MenuItem> = { emptyList() },
     row: @Composable (T, hovered: Boolean) -> Unit,
@@ -64,6 +78,7 @@ fun <T> MovableList(
     val clickedNow by rememberUpdatedState(clicked)
     val movedNow by rememberUpdatedState(moved)
     val menuNow by rememberUpdatedState(menu)
+    val light = remember(rowInset, rowRadius) { LightShape(rowInset, rowRadius) }
 
     /** Where the lifted rows would land, as an index among the rows without them. */
     fun landing(): Int? {
@@ -113,21 +128,26 @@ fun <T> MovableList(
             }
             val slide by animateFloatAsState(shift, tween(180), label = "slide")
             val draggable = group(item) != null
+            val pointer = remember { MutableInteractionSource() }
+            val hovered by pointer.collectIsHoveredAsState()
+            val clickable = clicked != null
             Box(
                 Modifier
                     .fillMaxWidth()
                     .onPlaced { if (id !in lifted) places[id] = it.positionInParent().y to it.size.height.toFloat() }
                     .zIndex(if (isLifted) 1f else 0f)
                     .graphicsLayer { translationY = if (isLifted) offset else slide }
-                    .then(if (isLifted && lifted.first() == id) Modifier.scale(0.97f).shadow(ShadowSize.LG, RoundedCornerShape(Radius.md)).background(Tokens.popover.color, RoundedCornerShape(Radius.md)) else Modifier)
-                    .pointerInput(id) {
+                    .then(if (isLifted && lifted.first() == id) Modifier.scale(0.97f).shadow(ShadowSize.LG, light).background(Tokens.backgroundAccent.color, light).clip(light) else Modifier)
+                    .hoverable(pointer, clickable)
+                    .pointerInput(id, clickable) {
+                        if (!clickable) return@pointerInput
                         detectTapGestures(
                             onPress = {
                                 pressed = id
                                 tryAwaitRelease()
                                 pressed = null
                             },
-                            onTap = { current.firstOrNull { keyOf(it) == id }?.let(clickedNow) },
+                            onTap = { current.firstOrNull { keyOf(it) == id }?.let { clickedNow?.invoke(it) } },
                         )
                     }
                     .pointerInput(id, draggable) {
@@ -172,10 +192,19 @@ fun <T> MovableList(
                         )
                     },
             ) {
-                row(item, pressed == id || isLifted)
+                row(item, (clickable && (pressed == id || hovered)) || isLifted)
                 if (menuFor == id) Menu(true, { menuFor = null }, menu(item))
             }
             }
         }
+    }
+}
+
+/** A row's light: its bounds less `inset` above and below, with corners of `radius`. */
+private class LightShape(private val inset: Dp, private val radius: Dp) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val top = with(density) { inset.toPx() }
+        val corner = with(density) { radius.toPx() }
+        return Outline.Rounded(RoundRect(0f, top, size.width, size.height - top, CornerRadius(corner)))
     }
 }

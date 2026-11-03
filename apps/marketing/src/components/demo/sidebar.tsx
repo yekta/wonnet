@@ -64,7 +64,7 @@ export function Sidebar({
           !open && "-translate-x-full"
         )}
       >
-        <div className="flex-1 overflow-y-auto px-2">
+        <div className="flex-1 overflow-y-auto">
           {MAILBOXES.map((one) => (
             <NavRow
               key={one.id}
@@ -116,10 +116,11 @@ export function Sidebar({
             )
           })}
         </div>
-        <div className="border-t border-(--border) px-2 py-0.5">
+        <div className="border-t border-(--border)">
           <NavRow
             icon={SettingsIcon}
             title="Settings"
+            tall
             selected={false}
             onClick={onSettings}
           />
@@ -135,6 +136,7 @@ function NavRow({
   title,
   count = 0,
   indent = false,
+  tall = false,
   selected,
   onClick,
   children,
@@ -144,6 +146,8 @@ function NavRow({
   title: string
   count?: number
   indent?: boolean
+  /** Settings at the foot, with room above and below. */
+  tall?: boolean
   selected: boolean
   onClick: () => void
   children?: ReactNode
@@ -152,32 +156,37 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "my-px flex h-9 w-full items-center gap-2.5 rounded-sm pr-4 text-left text-[13px] text-(--foreground)",
-        indent ? "pl-[34px]" : "pl-[18px]",
-        selected
-          ? "bg-(--background-accent-stronger) font-medium"
-          : "hover:bg-(--background-accent)"
-      )}
+      className="group/row block w-full py-px text-left text-[13px] text-(--foreground)"
     >
-      <span className="flex w-[18px] justify-center">
-        {Icon && (
-          <Icon
-            className="size-4 text-(--muted-foreground)"
-            strokeWidth={1.75}
-          />
+      <span
+        className={cn(
+          "flex items-center gap-3 pr-4",
+          tall ? "h-10" : "h-9",
+          indent ? "pl-[34px]" : "pl-[18px]",
+          selected
+            ? "bg-(--background-accent-stronger) font-medium"
+            : "group-hover/row:bg-(--background-accent)"
         )}
-        {dot && (
-          <span className="size-2 rounded-full" style={{ background: dot }} />
-        )}
-      </span>
-      <span className="flex-1 truncate">{title}</span>
-      {count > 0 && (
-        <span className="text-[12px] text-(--muted-stronger-foreground)">
-          {count}
+      >
+        <span className="flex w-[18px] justify-center">
+          {Icon && (
+            <Icon
+              className="size-4 text-(--muted-foreground)"
+              strokeWidth={1.75}
+            />
+          )}
+          {dot && (
+            <span className="size-2 rounded-full" style={{ background: dot }} />
+          )}
         </span>
-      )}
-      {children}
+        <span className="flex-1 truncate">{title}</span>
+        {count > 0 && (
+          <span className="text-[12px] text-(--muted-stronger-foreground)">
+            {count}
+          </span>
+        )}
+        {children}
+      </span>
     </button>
   )
 }
@@ -200,7 +209,7 @@ export function SnoozeSheet({
 
   return (
     <Sheet title="Snooze until" onClose={onClose}>
-      <label className="flex h-11 items-center gap-2 border-b border-(--border-popover) px-3">
+      <label className="flex h-11 items-center gap-2 border-b border-(--border-card) px-3">
         <ClockIcon
           className="size-3.5 text-(--muted-stronger-foreground)"
           strokeWidth={1.75}
@@ -233,11 +242,12 @@ export function SnoozeSheet({
           <button
             key={choice.name}
             type="button"
-            onMouseEnter={() => setChosen(index)}
             onClick={() => onPick(choice.at)}
             className={cn(
               "flex h-9 w-full items-center justify-between rounded-sm px-2.5 text-[14px] text-(--foreground)",
-              index === chosen && "bg-(--popover-accent)"
+              index === chosen
+                ? "bg-(--background-accent-larger-stronger)"
+                : "hover:bg-(--background-accent-larger)"
             )}
           >
             {choice.name}

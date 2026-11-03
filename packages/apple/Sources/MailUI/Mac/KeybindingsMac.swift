@@ -16,7 +16,6 @@ struct KeybindingSettings: View {
             )
             ActionButton(title: "Reset all", symbol: .undo, variant: .ghost, action: store.resetAllKeys)
                 .disabled(!changed)
-                .opacity(Opacity.disabled, when: !changed)
         }
         .padding(.trailing, -Theme.buttonGap / 2)
         .id("keybindings")

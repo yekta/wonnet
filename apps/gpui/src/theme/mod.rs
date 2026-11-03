@@ -299,3 +299,5 @@ pub const CARD_FILL: ThemeColor = CARD_LARGER;
 pub const CARD_RULE: ThemeColor = BORDER_CARD;
 pub const CARD_ACCENT: ThemeColor = CARD_LARGER_ACCENT;
 pub const CARD_ACCENT_STRONGER: ThemeColor = CARD_LARGER_ACCENT_STRONGER;
+/// What hovers on a form's card, `card`: a settings group's. `CARD_ACCENT` is the page card's.
+pub const FORM_CARD_ACCENT: ThemeColor = tokens::CARD_ACCENT;
