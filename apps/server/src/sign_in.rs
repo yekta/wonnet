@@ -13,7 +13,10 @@ use mail_protocol::{APP_REDIRECT, Provider};
 use reqwest::Url;
 use serde_json::json;
 
-use crate::db::{NewAccount, NewSignIn};
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::db::{NewAccount, NewSignIn, SignInUser};
 use crate::{AppState, db, google, microsoft, random_token, sha256_hex};
 
 fn is_sha256_hex(text: &str) -> bool {
@@ -36,6 +39,23 @@ fn failed(message: &str) -> Response {
         message
     );
     (StatusCode::BAD_REQUEST, Html(page)).into_response()
+}
+
+/// The user a sign-in with this mailbox alone opens, made if the mailbox is new, or why it can't.
+pub async fn user_signing_in(
+    db: &PgPool,
+    provider: Provider,
+    address: &str,
+    login: &str,
+) -> sqlx::Result<Result<Uuid, &'static str>> {
+    Ok(match db::sign_in_user(db, provider, address, login).await? {
+        SignInUser::New => Ok(db::create_user(db).await?),
+        SignInUser::Existing(user_id) => Ok(user_id),
+        SignInUser::Shared => Err("This email is used by more than one person, so it can't sign you in. \
+             Start by adding another address, then add this one later."),
+        SignInUser::Added => Err("This email was added after another address, so it can't sign you in. \
+             Sign in with the address you started with."),
+    })
 }
 
 pub async fn google_start(State(state): State<AppState>, Query(query): Query<HashMap<String, String>>) -> Response {
@@ -126,15 +146,19 @@ async fn callback(state: &AppState, query: &HashMap<String, String>, provider: P
         }
     };
 
+    let user_id = match sign_in.link_user_id {
+        Some(user_id) => user_id,
+        None => match user_signing_in(&state.db, provider, &email, "").await {
+            Ok(Ok(user_id)) => user_id,
+            Ok(Err(refusal)) => return failed(refusal),
+            Err(error) => {
+                tracing::error!("couldn't find who is signing in: {error}");
+                return failed("Something went wrong. Try again in a moment.");
+            }
+        },
+    };
     let code = random_token();
     let saved = async {
-        // A second account joins the user who asked; a known one signs its user in; else a new user.
-        let existing = db::account_by_login(&state.db, provider, &email, "").await?;
-        let user_id = match (sign_in.link_user_id, existing) {
-            (Some(user_id), _) => user_id,
-            (None, Some(account)) => account.user_id,
-            (None, None) => db::create_user(&state.db).await?,
-        };
         let credentials = state.sealer.seal(json!({ "refresh_token": refresh_token }).to_string().as_bytes());
         let account = NewAccount { user_id, provider, address: &email, login: "", credentials };
         let account_id = db::upsert_account(&state.db, account).await?;
