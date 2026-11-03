@@ -82,7 +82,6 @@ import app.wonnet.ui.MenuItem
 import app.wonnet.ui.Notice
 import app.wonnet.ui.PageCard
 import app.wonnet.ui.PlainButton
-import app.wonnet.ui.pullOut
 import app.wonnet.ui.Pressable
 import app.wonnet.ui.Rule
 import app.wonnet.ui.Sheet
@@ -394,7 +393,7 @@ private fun MessageCard(
         // A tap on the line of an open message folds it again, as in Gmail; on a folded one, unfolds it.
         Pressable({ store.toggleFold(message) }) { lit ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                // Who sent it, the name lit while the line is. Open, it opens the person, pulled out by its padding so it stays at the line's start.
+                // Who sent it, the name lit while the line is. Open, it opens the person.
                 val nameColor = when {
                     folded -> if (lit) Tokens.foreground else Tokens.mutedStrongerForeground
                     else -> if (lit) Tokens.emphasizedForeground else Tokens.foreground
@@ -412,7 +411,7 @@ private fun MessageCard(
                     if (folded) {
                         sender(Modifier)
                     } else {
-                        PlainButton(showPerson, Modifier.pullOut(Space.xxs), help = message.fromEmail) { sender(Modifier.weight(1f, fill = false)) }
+                        PlainButton(showPerson, help = message.fromEmail, flush = true) { sender(Modifier.weight(1f, fill = false)) }
                     }
                 }
                 if (message.attachments.isNotEmpty()) Icon(Symbol.Paperclip, 13f, Tokens.mutedStrongerForeground.color)
@@ -420,15 +419,15 @@ private fun MessageCard(
                 if (!folded) {
                     Row(Modifier.offset(x = Dims.buttonGap / 2)) {
                         if (canShowOriginal) {
-                            IconButton(if (original) Symbol.Moon else Symbol.Sun, if (original) "Show in dark colours" else "Show the original", size = ControlSize.Small, circled = false, quiet = true) {
+                            IconButton(if (original) Symbol.Moon else Symbol.Sun, if (original) "Show in dark colours" else "Show the original", circled = false, quiet = true) {
                                 store.toggleOriginal(message.id)
                             }
                         }
-                        IconButton(Symbol.Reply, "Reply", size = ControlSize.Small, circled = false) { reply(ReplyKind.Reply) }
+                        IconButton(Symbol.Reply, "Reply", circled = false) { reply(ReplyKind.Reply) }
                         IconMenu(
                             Symbol.Ellipsis, "More",
                             listOf(MenuItem("Reply all", Symbol.ReplyAll) { reply(ReplyKind.ReplyAll) }, MenuItem("Forward", Symbol.Forward) { reply(ReplyKind.Forward) }),
-                            size = ControlSize.Small, circled = false,
+                            circled = false,
                         )
                     }
                 }

@@ -145,6 +145,30 @@ function MessageView({
   const date =
     now && longDate(new Date(now.getTime() - message.ago * 60_000), now)
 
+  const sender = (
+    <>
+      <Avatar
+        initials={message.mine ? "S" : initials(from.name)}
+        color={avatarColor(from.email)}
+      />
+      <div className="min-w-0">
+        <p
+          className={cn(
+            "truncate text-[14px]",
+            open
+              ? "font-semibold text-(--foreground)"
+              : "text-(--muted-foreground) group-hover/line:text-(--foreground)"
+          )}
+        >
+          {from.name}
+        </p>
+        <p className="truncate text-[12px] text-(--muted-stronger-foreground)">
+          {open ? `to ${to}` : message.text}
+        </p>
+      </div>
+    </>
+  )
+
   return (
     <section
       className={cn("py-4", !first && "border-t border-(--border-card)")}
@@ -153,31 +177,25 @@ function MessageView({
         className="group/line flex cursor-default items-center gap-3"
         onClick={onOpen}
       >
-        <Avatar
-          initials={message.mine ? "S" : initials(from.name)}
-          color={avatarColor(from.email)}
-        />
-        <div className="min-w-0 flex-1">
-          {open ? (
+        {open ? (
+          <div className="flex min-w-0 flex-1">
             <PlainButton
+              flush
               title={from.email}
               onClick={(event) => {
                 event.stopPropagation()
                 onNotInDemo()
               }}
-              className="-mx-1 -my-1 w-fit py-1 text-[14px] font-semibold text-(--foreground)"
+              className="min-w-0 gap-3 text-left"
             >
-              {from.name}
+              {sender}
             </PlainButton>
-          ) : (
-            <p className="text-[14px] text-(--muted-foreground) group-hover/line:text-(--foreground)">
-              {from.name}
-            </p>
-          )}
-          <p className="truncate text-[12px] text-(--muted-stronger-foreground)">
-            {open ? `to ${to}` : message.text}
-          </p>
-        </div>
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {sender}
+          </div>
+        )}
         {attachment && (
           <PaperclipIcon
             className="size-[13px] text-(--muted-stronger-foreground)"

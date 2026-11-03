@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import app.wonnet.theme.Dims
 import app.wonnet.theme.Opacity
@@ -81,9 +82,10 @@ fun Pressable(
     }
 }
 
-/** Lays a control out as if `by` at each side weren't there: its content stays where it would be, its face and hit area reach past. */
-fun Modifier.pullOut(by: Dp): Modifier = layout { measurable, constraints ->
+/** Lays a control out as if `by` at each side, and `vertical` above and below, weren't there: its content stays where it would be, its face and hit area reach past. */
+fun Modifier.pullOut(by: Dp, vertical: Dp = 0.dp): Modifier = layout { measurable, constraints ->
     val side = by.roundToPx()
-    val placeable = measurable.measure(constraints.offset(horizontal = side * 2))
-    layout((placeable.width - side * 2).coerceAtLeast(0), placeable.height) { placeable.place(-side, 0) }
+    val end = vertical.roundToPx()
+    val placeable = measurable.measure(constraints.offset(horizontal = side * 2, vertical = end * 2))
+    layout((placeable.width - side * 2).coerceAtLeast(0), (placeable.height - end * 2).coerceAtLeast(0)) { placeable.place(-side, -end) }
 }

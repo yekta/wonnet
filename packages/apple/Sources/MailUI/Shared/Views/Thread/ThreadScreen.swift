@@ -333,7 +333,7 @@ struct MessageCard: View {
     }
 
     /// Who sent it, their name lit while the line is hovered. Open, it is a button of its own
-    /// that opens the person, pulled out by its padding so it stands where the line's start is.
+    /// that opens the person.
     @ViewBuilder private func sender(hovered: Bool) -> some View {
         let face = HStack(alignment: .center, spacing: Space.m) {
             Avatar(initials: message.initials, email: message.fromEmail, size: Theme.messageAvatar)
@@ -345,8 +345,7 @@ struct MessageCard: View {
         if folded {
             face
         } else {
-            PlainButton(help: message.fromEmail, action: showPerson) { face }
-                .padding(.horizontal, -Space.xxs)
+            PlainButton(help: message.fromEmail, flush: true, action: showPerson) { face }
         }
     }
 
@@ -359,12 +358,12 @@ struct MessageCard: View {
     private var actions: some View {
         HStack(spacing: 0) {
             if canShowOriginal {
-                IconButton(symbol: original ? .moon : .sun, help: original ? "Show in dark colours" : "Show the original", size: .small, circled: false, quiet: true) {
+                IconButton(symbol: original ? .moon : .sun, help: original ? "Show in dark colours" : "Show the original", circled: false, quiet: true) {
                     store.toggleOriginal(message.id)
                 }
             }
-            IconButton(symbol: .reply, help: "Reply", size: .small, circled: false) { reply(.reply) }
-            IconMenu(symbol: .ellipsis, help: "More", size: .small, circled: false) {
+            IconButton(symbol: .reply, help: "Reply", circled: false) { reply(.reply) }
+            IconMenu(symbol: .ellipsis, help: "More", circled: false) {
                 Button { reply(.replyAll) } label: { Label { Text("Reply all") } icon: { Image(.replyAll, size: 15) } }
                 Button { reply(.forward) } label: { Label { Text("Forward") } icon: { Image(.forward, size: 15) } }
             }

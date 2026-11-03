@@ -97,14 +97,19 @@ export function ActionButton({
   )
 }
 
-/** A button that is only its content (a sender's name, a word in a toast), on a rounded fill
- * when hovered, never under 28px. */
-export function PlainButton({ className, ...props }: ComponentProps<"button">) {
+/** A button that is only its content (a sender, a word in a toast), on a rounded fill when
+ * hovered, never under 28px. `flush` gives the fill room all round and pulls it out by as much. */
+export function PlainButton({
+  flush,
+  className,
+  ...props
+}: { flush?: boolean } & ComponentProps<"button">) {
   return (
     <button
       type="button"
       className={cn(
-        "flex min-h-7 min-w-7 items-center justify-center rounded-sm px-1 hover:bg-(--button-hover)",
+        "flex min-h-7 items-center justify-center hover:bg-(--button-hover)",
+        flush ? "-m-1.5 rounded-md p-1.5" : "min-w-7 rounded-sm px-1",
         className
       )}
       {...props}

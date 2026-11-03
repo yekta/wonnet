@@ -418,7 +418,6 @@ impl ThreadPane {
                             if original { Symbol::Moon } else { Symbol::Sun },
                             if original { "Show in dark colours" } else { "Show the original" },
                         )
-                        .size(ControlSize::Small)
                         .plain()
                         .quiet()
                         .on_card()
@@ -429,14 +428,12 @@ impl ThreadPane {
                 })
                 .child(
                     IconButton::new(SharedString::from(format!("reply-{}", message.id)), Symbol::Reply, "Reply")
-                        .size(ControlSize::Small)
                         .plain()
                         .on_card()
                         .on_click(move |_, window, cx| reply_now(window, cx)),
                 )
                 .child(
                     IconButton::new(SharedString::from(format!("more-{}", message.id)), Symbol::Ellipsis, "More")
-                        .size(ControlSize::Small)
                         .plain()
                         .on_card()
                         .menu(move |_, _| {
@@ -455,7 +452,7 @@ impl ThreadPane {
         let name_color = if folded { MUTED_STRONGER_FOREGROUND } else { FOREGROUND };
         let under = if folded { message.snippet.clone() } else { message.to.clone() };
         // The line is clicked as a whole, its name lit on hover. An open message's sender is a
-        // button of its own that opens the person, pulled out by its padding.
+        // button of its own that opens the person.
         let line_group = SharedString::from(format!("line-{}", message.id));
         let lit = if folded { FOREGROUND } else { EMPHASIZED_FOREGROUND };
         let sender = div()
