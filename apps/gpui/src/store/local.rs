@@ -1,5 +1,5 @@
-//! The settings kept on this device only: the theme, the undo delay, the settings' sidebar and
-//! whether the mailboxes' sidebar is kept open.
+//! The settings kept on this device only: the theme, the undo delay, the notification's button,
+//! the settings' sidebar and whether the mailboxes' sidebar is kept open.
 
 use std::path::PathBuf;
 
@@ -26,12 +26,33 @@ impl Appearance {
     }
 }
 
+/// What the first button of a new mail's notification does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationAction {
+    #[default]
+    Archive,
+    Trash,
+}
+
+impl NotificationAction {
+    pub const ALL: [NotificationAction; 2] = [Self::Archive, Self::Trash];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Archive => "Archive",
+            Self::Trash => "Delete",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LocalSettings {
     pub appearance: Appearance,
     /// How long a message waits after Send, in seconds, to be taken back.
     pub undo_delay: u64,
+    pub notification_action: NotificationAction,
     pub settings_sidebar: f32,
     /// The sidebar stays open beside the mail, which makes room for it, instead of over it.
     pub keep_sidebar: bool,
@@ -44,6 +65,7 @@ impl Default for LocalSettings {
         Self {
             appearance: Appearance::System,
             undo_delay: 5,
+            notification_action: NotificationAction::Archive,
             settings_sidebar: crate::theme::size::SIDEBAR_WIDTH,
             keep_sidebar: false,
             path: None,

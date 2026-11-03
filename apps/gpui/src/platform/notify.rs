@@ -1,7 +1,9 @@
 //! New mail as the system's notifications, from its sender, with their picture, while the
-//! window is in the background. A click opens the thread; the buttons archive it, mark it read,
-//! or open a reply. A thread's notifications are taken down once it is read or leaves the inbox,
-//! here or elsewhere, and all of them at sign-out.
+//! window is in the background. A click opens the thread; the buttons archive it or move it to
+//! the trash (as the settings choose), mark it read, or open a reply. After archiving or trashing,
+//! a quiet notification offers Undo for a few seconds, which brings the thread back to the inbox.
+//! A thread's notifications are taken down once it is read or leaves the inbox, here or
+//! elsewhere, but not its Undo; all of them at sign-out.
 //!
 //! On Linux the buttons answer on the notification's own thread. Windows starts the app with a
 //! `wonnet://notification` link for them, which a running window is handed.
@@ -9,16 +11,24 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::models::NewMailItem;
+use crate::store::NotificationAction;
+
+/// How long the Undo after a button stays up.
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
+const UNDO_SHOWN: Duration = Duration::from_secs(10);
 
 /// What a notification was clicked for.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Answer {
     Open(String),
     Archive(String),
+    Trash(String),
     Read(String),
     Reply(String),
+    Undo(String),
 }
 
 impl Answer {
@@ -39,8 +49,10 @@ impl Answer {
         Some(match asked?.as_str() {
             "open" => Self::Open(thread),
             "archive" => Self::Archive(thread),
+            "trash" => Self::Trash(thread),
             "read" => Self::Read(thread),
             "reply" => Self::Reply(thread),
+            "undo" => Self::Undo(thread),
             _ => return None,
         })
     }
@@ -55,10 +67,21 @@ impl Answer {
         Some(match action {
             "default" => Self::Open(thread),
             "archive" => Self::Archive(thread),
+            "trash" => Self::Trash(thread),
             "read" => Self::Read(thread),
             "reply" => Self::Reply(thread),
+            "undo" => Self::Undo(thread),
             _ => return None,
         })
+    }
+}
+
+/// What the first button answers, as the settings choose it.
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
+fn first_button(action: NotificationAction) -> &'static str {
+    match action {
+        NotificationAction::Archive => "archive",
+        NotificationAction::Trash => "trash",
     }
 }
 
@@ -95,11 +118,14 @@ pub struct Notifier {
     answers: async_channel::Sender<Answer>,
     /// Linux's ids of each thread's notifications.
     shown: Arc<Mutex<HashMap<String, Vec<u32>>>>,
+    /// Linux's id of each thread's Undo, or of the notification it is to replace; apart from
+    /// `shown` so that the thread settling leaves it up.
+    undos: Arc<Mutex<HashMap<String, u32>>>,
 }
 
 impl Notifier {
     pub fn new(answers: async_channel::Sender<Answer>) -> Self {
-        Self { answers, shown: Arc::default() }
+        Self { answers, shown: Arc::default(), undos: Arc::default() }
     }
 
     /// The threads with a notification up.
@@ -108,9 +134,21 @@ impl Notifier {
     }
 
     /// Shows a message's notification, with its sender's picture when there is one.
-    pub fn show(&self, message: NewMailItem, photo: Option<PathBuf>) {
+    pub fn show(&self, message: NewMailItem, photo: Option<PathBuf>, first: NotificationAction) {
         let notifier = self.clone();
-        std::thread::spawn(move || notifier.show_now(message, photo));
+        std::thread::spawn(move || notifier.show_now(message, photo, first));
+    }
+
+    /// Offers to take back what a button did to a thread, in place of its notification.
+    pub fn show_undo(&self, thread: String, done: &'static str) {
+        let notifier = self.clone();
+        std::thread::spawn(move || notifier.show_undo_now(thread, done));
+    }
+
+    pub fn take_down_undo(&self, thread: &str) {
+        let Some(id) = self.undos.lock().ok().and_then(|mut undos| undos.remove(thread)) else { return };
+        let thread = thread.to_string();
+        std::thread::spawn(move || close(&thread, &[id]));
     }
 
     /// Takes down the notifications of these threads.
@@ -131,6 +169,10 @@ impl Notifier {
     pub fn take_down_all(&self) {
         let threads = self.threads();
         self.take_down(&threads);
+        let undos: Vec<String> = self.undos.lock().map(|undos| undos.keys().cloned().collect()).unwrap_or_default();
+        for thread in undos {
+            self.take_down_undo(&thread);
+        }
         #[cfg(target_os = "windows")]
         std::thread::spawn(windows::clear);
     }
@@ -139,6 +181,13 @@ impl Notifier {
     fn noted(&self, thread: &str, id: u32) {
         if let Ok(mut shown) = self.shown.lock() {
             shown.entry(thread.to_string()).or_default().push(id);
+        }
+    }
+
+    #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
+    fn noted_undo(&self, thread: &str, id: u32) {
+        if let Ok(mut undos) = self.undos.lock() {
+            undos.insert(thread.to_string(), id);
         }
     }
 
@@ -164,7 +213,7 @@ fn text(message: &NewMailItem) -> String {
 
 #[cfg(target_os = "linux")]
 impl Notifier {
-    fn show_now(&self, message: NewMailItem, photo: Option<PathBuf>) {
+    fn show_now(&self, message: NewMailItem, photo: Option<PathBuf>, first: NotificationAction) {
         let mut notification = notify_rust::Notification::new();
         notification
             .appname("Wonnet")
@@ -172,7 +221,7 @@ impl Notifier {
             .body(&text(&message))
             .hint(notify_rust::Hint::Category("email.arrived".into()))
             .action("default", "Open")
-            .action("archive", "Archive")
+            .action(first_button(first), first.name())
             .action("read", "Mark as Read")
             .action("reply", "Reply");
         match photo.as_ref().and_then(|photo| photo.to_str()) {
@@ -185,11 +234,46 @@ impl Notifier {
         let answers = self.answers.clone();
         let thread = message.thread.clone();
         handle.wait_for_action(|action| {
+            let Some(answer) = Answer::from_action(action, thread.clone()) else { return };
+            if matches!(answer, Answer::Archive(_) | Answer::Trash(_)) {
+                self.noted_undo(&thread, id);
+            }
+            let _ = answers.send_blocking(answer);
+        });
+        self.forget(&message.thread, id);
+    }
+
+    fn show_undo_now(&self, thread: String, done: &str) {
+        let replaced = self.undos.lock().ok().and_then(|undos| undos.get(&thread).copied());
+        let mut notification = notify_rust::Notification::new();
+        notification
+            .appname("Wonnet")
+            .summary(done)
+            .icon(&super::icon_path().display().to_string())
+            .hint(notify_rust::Hint::SuppressSound(true))
+            .timeout(UNDO_SHOWN)
+            .action("default", "Open")
+            .action("undo", "Undo");
+        if let Some(replaced) = replaced {
+            notification.id(replaced);
+        }
+        let Ok(handle) = notification.show() else { return };
+        let id = handle.id();
+        self.noted_undo(&thread, id);
+        let answers = self.answers.clone();
+        handle.wait_for_action(|action| {
             if let Some(answer) = Answer::from_action(action, thread.clone()) {
                 let _ = answers.send_blocking(answer);
             }
         });
-        self.forget(&message.thread, id);
+        self.forget_undo(&thread, id);
+    }
+
+    fn forget_undo(&self, thread: &str, id: u32) {
+        let Ok(mut undos) = self.undos.lock() else { return };
+        if undos.get(thread) == Some(&id) {
+            undos.remove(thread);
+        }
     }
 }
 
@@ -209,12 +293,24 @@ fn close(_thread: &str, ids: &[u32]) {
 
 #[cfg(target_os = "windows")]
 impl Notifier {
-    fn show_now(&self, message: NewMailItem, photo: Option<PathBuf>) {
-        if let Err(error) = windows::show(&message, photo) {
+    fn show_now(&self, message: NewMailItem, photo: Option<PathBuf>, first: NotificationAction) {
+        if let Err(error) = windows::show(&message, photo, first) {
             eprintln!("The notification couldn't be shown: {error}");
             return;
         }
         self.noted(&message.thread, 0);
+    }
+
+    fn show_undo_now(&self, thread: String, done: &str) {
+        // The Undo takes the thread's tag, which taking down the settled thread would remove.
+        if let Ok(mut shown) = self.shown.lock() {
+            shown.remove(&thread);
+        }
+        if let Err(error) = windows::show_undo(&thread, done) {
+            eprintln!("The notification couldn't be shown: {error}");
+            return;
+        }
+        self.noted_undo(&thread, 0);
     }
 }
 
@@ -232,8 +328,10 @@ mod windows {
     //! app's id, which the process takes too.
 
     use std::path::PathBuf;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use windows::Data::Xml::Dom::XmlDocument;
+    use windows::Foundation::{DateTime, IReference, PropertyValue};
     use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
     use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
     use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
@@ -244,8 +342,9 @@ mod windows {
     use windows::Win32::UI::Shell::{IShellLinkW, SetCurrentProcessExplicitAppUserModelID, ShellLink};
     use windows::core::{HSTRING, Interface, PCWSTR};
 
-    use super::{Answer, text};
+    use super::{Answer, UNDO_SHOWN, first_button, text};
     use crate::models::NewMailItem;
+    use crate::store::NotificationAction;
 
     const APP_ID: &str = "app.wonnet.wonnet";
     const GROUP: &str = "mail";
@@ -291,7 +390,7 @@ mod windows {
         text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
     }
 
-    pub fn show(message: &NewMailItem, photo: Option<PathBuf>) -> windows::core::Result<()> {
+    pub fn show(message: &NewMailItem, photo: Option<PathBuf>, first: NotificationAction) -> windows::core::Result<()> {
         let link = |asked: &str| escape(&Answer::link(asked, &message.thread));
         let picture = photo
             .map(|photo| {
@@ -304,19 +403,50 @@ mod windows {
         let lines: String =
             text(message).lines().map(|line| format!("<text>{}</text>", escape(line))).collect::<Vec<_>>().join("");
         let xml = format!(
-            "<toast launch=\"{open}\" activationType=\"protocol\"><visual><binding template=\"ToastGeneric\"><text>{from}</text>{lines}{picture}</binding></visual><actions><action content=\"Archive\" activationType=\"protocol\" arguments=\"{archive}\"/><action content=\"Mark as Read\" activationType=\"protocol\" arguments=\"{read}\"/><action content=\"Reply\" activationType=\"protocol\" arguments=\"{reply}\"/></actions></toast>",
+            "<toast launch=\"{open}\" activationType=\"protocol\"><visual><binding template=\"ToastGeneric\"><text>{from}</text>{lines}{picture}</binding></visual><actions><action content=\"{first_name}\" activationType=\"protocol\" arguments=\"{first}\"/><action content=\"Mark as Read\" activationType=\"protocol\" arguments=\"{read}\"/><action content=\"Reply\" activationType=\"protocol\" arguments=\"{reply}\"/></actions></toast>",
             open = link("open"),
             from = escape(&message.from),
-            archive = link("archive"),
+            first_name = first.name(),
+            first = link(first_button(first)),
             read = link("read"),
             reply = link("reply"),
         );
+        present(&tagged(xml, &message.thread)?)
+    }
+
+    /// A silent toast in place of the thread's, offering Undo until it expires.
+    pub fn show_undo(thread: &str, done: &str) -> windows::core::Result<()> {
+        let link = |asked: &str| escape(&Answer::link(asked, thread));
+        let xml = format!(
+            "<toast launch=\"{open}\" activationType=\"protocol\"><visual><binding template=\"ToastGeneric\"><text>{done}</text></binding></visual><audio silent=\"true\"/><actions><action content=\"Undo\" activationType=\"protocol\" arguments=\"{undo}\"/></actions></toast>",
+            open = link("open"),
+            done = escape(done),
+            undo = link("undo"),
+        );
+        let toast = tagged(xml, thread)?;
+        let expiry = PropertyValue::CreateDateTime(from_now(UNDO_SHOWN))?.cast::<IReference<DateTime>>()?;
+        toast.SetExpirationTime(&expiry)?;
+        present(&toast)
+    }
+
+    fn tagged(xml: String, thread: &str) -> windows::core::Result<ToastNotification> {
         let document = XmlDocument::new()?;
         document.LoadXml(&HSTRING::from(xml))?;
         let toast = ToastNotification::CreateToastNotification(&document)?;
-        toast.SetTag(&HSTRING::from(tag(&message.thread)))?;
+        toast.SetTag(&HSTRING::from(tag(thread)))?;
         toast.SetGroup(&HSTRING::from(GROUP))?;
-        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID))?.Show(&toast)
+        Ok(toast)
+    }
+
+    fn present(toast: &ToastNotification) -> windows::core::Result<()> {
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID))?.Show(toast)
+    }
+
+    /// The time `after` from now, as Windows counts it: in 100 ns since 1601.
+    fn from_now(after: Duration) -> DateTime {
+        const FROM_1601_TO_1970: Duration = Duration::from_secs(11_644_473_600);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        DateTime { UniversalTime: ((FROM_1601_TO_1970 + now + after).as_nanos() / 100) as i64 }
     }
 
     pub fn remove(thread: &str) {
@@ -333,8 +463,12 @@ mod windows {
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
 impl Notifier {
-    fn show_now(&self, message: NewMailItem, photo: Option<PathBuf>) {
-        let _ = (message, photo);
+    fn show_now(&self, message: NewMailItem, photo: Option<PathBuf>, first: NotificationAction) {
+        let _ = (message, photo, first);
+    }
+
+    fn show_undo_now(&self, thread: String, done: &str) {
+        let _ = (thread, done);
     }
 }
 
@@ -351,18 +485,38 @@ mod tests {
         for answer in [
             Answer::Open(thread.into()),
             Answer::Archive(thread.into()),
+            Answer::Trash(thread.into()),
             Answer::Read(thread.into()),
             Answer::Reply(thread.into()),
+            Answer::Undo(thread.into()),
         ] {
             let asked = match &answer {
                 Answer::Open(_) => "open",
                 Answer::Archive(_) => "archive",
+                Answer::Trash(_) => "trash",
                 Answer::Read(_) => "read",
                 Answer::Reply(_) => "reply",
+                Answer::Undo(_) => "undo",
             };
             assert_eq!(Answer::from_link(&Answer::link(asked, thread)), Some(answer));
         }
         assert_eq!(Answer::from_link("wonnet://notification?do=delete&thread=x"), None);
         assert_eq!(Answer::from_link("wonnet://signed-in?code=x"), None);
+    }
+
+    #[test]
+    fn reads_the_buttons_of_its_notifications() {
+        let thread = "t:1";
+        for (action, answer) in [
+            ("default", Answer::Open(thread.into())),
+            ("archive", Answer::Archive(thread.into())),
+            ("trash", Answer::Trash(thread.into())),
+            ("read", Answer::Read(thread.into())),
+            ("reply", Answer::Reply(thread.into())),
+            ("undo", Answer::Undo(thread.into())),
+        ] {
+            assert_eq!(Answer::from_action(action, thread.into()), Some(answer));
+        }
+        assert_eq!(Answer::from_action("__closed", thread.into()), None);
     }
 }

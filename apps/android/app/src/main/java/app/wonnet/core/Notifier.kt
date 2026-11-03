@@ -14,6 +14,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
+import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
@@ -47,11 +48,26 @@ data class MailNotice(
     val snippet: String,
 )
 
+/** What a new mail's notification offers next to Mark as Read and Reply, kept on this device. */
+enum class NotificationButton(val title: String, val action: String) {
+    Archive("Archive", NotificationActions.ARCHIVE), Delete("Delete", NotificationActions.TRASH);
+
+    companion object {
+        const val KEY = "notificationButton"
+
+        fun saved(context: Context): NotificationButton {
+            val name = context.getSharedPreferences("app", Context.MODE_PRIVATE).getString(KEY, null)
+            return entries.firstOrNull { it.name == name } ?: Archive
+        }
+    }
+}
+
 /**
  * New mail as notifications from its sender, with their avatar, while the app is away: a tap
- * opens its thread and its buttons archive, mark read or reply. With push, the server tells of
- * new mail, sealed with this device's key; without it, the app tells of the mail it syncs. A
- * thread's notification is taken down once it is read or leaves the inbox, here or elsewhere.
+ * opens its thread and its buttons archive or delete, mark read or reply. With push, the server
+ * tells of new mail, sealed with this device's key; without it, the app tells of the mail it
+ * syncs. A thread's notification is taken down once it is read or leaves the inbox, here or
+ * elsewhere, except while it offers Undo.
  */
 object Notifier {
     private const val CHANNEL = "mail"
@@ -59,6 +75,9 @@ object Notifier {
     /** The tag of new mail a push couldn't say more of. */
     private const val PLAIN = "new-mail"
     private const val ASKED = "askedPermissions"
+    /** Marks a notification offering Undo, which settling leaves up until it times out. */
+    private const val UNDO = "undo"
+    private const val UNDO_SHOWN_MS = 10_000L
 
     /** The core, to ask which threads are still unread. */
     var bridge: CoreBridge? = null
@@ -132,6 +151,7 @@ object Notifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val reply = RemoteInput.Builder(NotificationActions.TEXT).setLabel("Reply").build()
+        val button = NotificationButton.saved(context)
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setStyle(style)
@@ -141,7 +161,7 @@ object Notifier {
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_EMAIL)
             .setNumber(unread)
-            .addAction(0, "Archive", NotificationActions.intent(context, NotificationActions.ARCHIVE, notice.thread))
+            .addAction(0, button.title, NotificationActions.intent(context, button.action, notice.thread))
             .addAction(0, "Mark as Read", NotificationActions.intent(context, NotificationActions.READ, notice.thread))
             .addAction(
                 NotificationCompat.Action.Builder(0, "Reply", NotificationActions.intent(context, NotificationActions.REPLY, notice.thread, mutable = true))
@@ -180,11 +200,36 @@ object Notifier {
     private fun allowed(context: Context) = android.os.Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    /** Takes down the notifications of these threads. */
-    fun takeDown(context: Context, threads: Collection<String>) {
+    /** The thread's notification, as what its button did, with Undo for a while. */
+    fun offerUndo(context: Context, thread: String, done: String) {
         val manager = NotificationManagerCompat.from(context)
-        threads.forEach { manager.cancel(it, 1) }
+        if (!allowed(context) || !manager.areNotificationsEnabled()) return
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(done)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setTimeoutAfter(UNDO_SHOWN_MS)
+            .setCategory(NotificationCompat.CATEGORY_EMAIL)
+            .addExtras(Bundle().apply { putBoolean(UNDO, true) })
+            .addAction(0, "Undo", NotificationActions.intent(context, NotificationActions.UNDO, thread))
+            .build()
+        try {
+            manager.notify(thread, 1, notification)
+        } catch (_: SecurityException) {
+            // The permission was taken back since.
+        }
     }
+
+    /** Takes down the notifications of these threads, but not one offering Undo. */
+    fun takeDown(context: Context, threads: Collection<String>) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val undoing = manager.activeNotifications.filter { it.notification.extras.getBoolean(UNDO) }.mapNotNull { it.tag }.toSet()
+        threads.filter { it !in undoing }.forEach { manager.cancel(it, 1) }
+    }
+
+    /** Takes down the thread's notification, whatever it shows. */
+    fun withdraw(context: Context, thread: String) = NotificationManagerCompat.from(context).cancel(thread, 1)
 
     /** Takes down the notifications of these threads (all shown, when null) that are no longer unread in an inbox. */
     suspend fun settle(threads: List<String>?) {
@@ -243,12 +288,19 @@ class NotificationActions : BroadcastReceiver() {
         val thread = intent.getStringExtra(Notifier.THREAD) ?: return
         val answer = when (intent.action) {
             ARCHIVE -> NotificationAnswer.Archive
+            TRASH -> NotificationAnswer.Trash
             READ -> NotificationAnswer.Read
+            UNDO -> NotificationAnswer.Undo
             REPLY -> RemoteInput.getResultsFromIntent(intent)?.getCharSequence(TEXT)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
                 ?.let { NotificationAnswer.Reply(it) } ?: return
             else -> return
         }
-        Notifier.takeDown(context, listOf(thread))
+        when (answer) {
+            NotificationAnswer.Archive -> Notifier.offerUndo(context, thread, "Archived.")
+            NotificationAnswer.Trash -> Notifier.offerUndo(context, thread, "Moved to Trash.")
+            NotificationAnswer.Undo -> Notifier.withdraw(context, thread)
+            NotificationAnswer.Read, is NotificationAnswer.Reply -> Notifier.takeDown(context, listOf(thread))
+        }
         val pending = goAsync()
         val store = App.store
         store.start(demo = false)
@@ -260,7 +312,9 @@ class NotificationActions : BroadcastReceiver() {
 
     companion object {
         const val ARCHIVE = "app.wonnet.ARCHIVE"
+        const val TRASH = "app.wonnet.TRASH"
         const val READ = "app.wonnet.READ"
+        const val UNDO = "app.wonnet.UNDO"
         const val REPLY = "app.wonnet.REPLY"
         const val TEXT = "text"
 

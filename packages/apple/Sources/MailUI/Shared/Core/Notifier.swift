@@ -12,14 +12,35 @@ import UIKit
 /// What a notification's button asks for.
 enum NotificationAnswer {
     case archive
+    case trash
     case read
     case reply(String)
+    case undo
+}
+
+/// The first button of a new mail's notification, which each device picks.
+enum NotificationAction: String, CaseIterable, Identifiable {
+    case archive, trash
+
+    static var saved: NotificationAction {
+        NotificationAction(rawValue: UserDefaults.standard.string(forKey: "notificationAction") ?? "") ?? .archive
+    }
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .archive: "Archive"
+        case .trash: "Delete"
+        }
+    }
 }
 
 /// New mail as notifications from its sender, with their avatar, while the app is in the
 /// background, a click on one opening its
-/// thread and its buttons archiving, marking read or replying; and the unread count of the
-/// inboxes on the app's icon. On the Mac the app tells of mail as it syncs. On iOS the server
+/// thread and its buttons archiving or deleting, marking read or replying; and the unread count
+/// of the inboxes on the app's icon. Archive and Delete are followed by a quiet notification
+/// offering Undo for a while. On the Mac the app tells of mail as it syncs. On iOS the server
 /// pushes it, sealed with this device's key, which the notification extension opens. A thread's
 /// notification is taken down once it is read or leaves the inbox, here or on another device.
 @MainActor
@@ -57,12 +78,23 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     func install() {
         guard let center else { return }
         center.delegate = self
-        let archive = UNNotificationAction(identifier: "archive", title: "Archive", options: [.authenticationRequired])
+        setButtons(first: .saved)
+    }
+
+    /// Registered again when the first button changes: the server's pushes name the category, not
+    /// the buttons.
+    func setButtons(first: NotificationAction) {
+        guard let center else { return }
+        let chosen = UNNotificationAction(identifier: first.rawValue, title: first.name, options: [.authenticationRequired])
         let read = UNNotificationAction(identifier: "read", title: "Mark as Read", options: [])
         let reply = UNTextInputNotificationAction(
             identifier: "reply", title: "Reply", options: [.authenticationRequired], textInputButtonTitle: "Send", textInputPlaceholder: ""
         )
-        center.setNotificationCategories([UNNotificationCategory(identifier: "message", actions: [archive, read, reply], intentIdentifiers: [])])
+        let undo = UNNotificationAction(identifier: "undo", title: "Undo", options: [])
+        center.setNotificationCategories([
+            UNNotificationCategory(identifier: "message", actions: [chosen, read, reply], intentIdentifiers: []),
+            UNNotificationCategory(identifier: "undo", actions: [undo], intentIdentifiers: []),
+        ])
     }
 
     /// Asks once, when there is mail to tell of: after an account is added, not at first launch.
@@ -93,6 +125,28 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 try? await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: shown, trigger: nil))
             }
         }
+    }
+
+    /// After a notification's Archive or Delete: a quiet notification of the thread, saying what
+    /// was done, whose Undo moves it back to the inbox. It goes after a while.
+    func offerUndo(_ thread: String, saying title: String) async {
+        guard let center else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.threadIdentifier = thread
+        content.categoryIdentifier = "undo"
+        content.userInfo = ["thread": thread]
+        content.interruptionLevel = .passive
+        let identifier = Self.undoIdentifier(thread)
+        try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            center.removeDeliveredNotifications(withIdentifiers: [identifier])
+        }
+    }
+
+    private static func undoIdentifier(_ thread: String) -> String {
+        "undo:\(thread)"
     }
 
     /// Always set: an alert push sets the icon's badge too, so a value kept here could be stale.
@@ -154,7 +208,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// unread in an inbox.
     func settle(_ threads: [String]?) async {
         guard let center, let bridge else { return }
-        let shown = Set(await center.deliveredNotifications().compactMap { $0.request.content.userInfo["thread"] as? String })
+        let shown = Set(await center.deliveredNotifications().filter(\.isOfMail).compactMap(\.thread))
         let changed = threads.map { shown.intersection($0) } ?? shown
         guard !changed.isEmpty else { return }
         guard let unread = try? await bridge.call("unread_in_inbox", ["threads": Array(changed)], as: ThreadList.self) else { return }
@@ -164,7 +218,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private func takeDown(_ threads: Set<String>) async {
         guard let center, !threads.isEmpty else { return }
         let delivered = await center.deliveredNotifications()
-        let gone = delivered.filter { threads.contains($0.request.content.userInfo["thread"] as? String ?? "") }
+        let gone = delivered.filter { $0.isOfMail && threads.contains($0.thread ?? "") }
         center.removeDeliveredNotifications(withIdentifiers: gone.map(\.request.identifier))
     }
 
@@ -177,7 +231,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let thread = response.notification.request.content.userInfo["thread"] as? String else { return }
+        guard let thread = response.notification.thread else { return }
         let text = (response as? UNTextInputNotificationResponse)?.userText
         await respond(to: response.actionIdentifier, thread: thread, text: text)
     }
@@ -191,10 +245,14 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             }
             open(thread)
         case "archive": await answer?(.archive, thread)
+        case "trash": await answer?(.trash, thread)
         case "read": await answer?(.read, thread)
         case "reply":
             guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             await answer?(.reply(text), thread)
+        case "undo":
+            center?.removeDeliveredNotifications(withIdentifiers: [Self.undoIdentifier(thread)])
+            await answer?(.undo, thread)
         default: break
         }
     }
@@ -206,4 +264,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
 private struct ThreadList: Decodable {
     let threads: [String]
+}
+
+private extension UNNotification {
+    var thread: String? { request.content.userInfo["thread"] as? String }
+
+    /// Not an Undo, which stays while its thread is out of the inbox.
+    var isOfMail: Bool { request.content.categoryIdentifier != "undo" }
 }

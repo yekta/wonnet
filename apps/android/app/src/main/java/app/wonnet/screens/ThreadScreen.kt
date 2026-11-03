@@ -114,16 +114,17 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: () -> Unit) {
     val current by rememberUpdatedState(thread)
 
     LaunchedEffect(store.sides) { store.peekAround() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(opened) {
         // The thread is read after the page is pushed; once shown, it going away takes the page with it.
         var shown = false
         snapshotFlow { store.conversation?.id }.collect { open ->
-            if (open != null) {
-                shown = true
-                thread = open
-            } else if (shown) {
-                dismiss()
+            if (open == null) {
+                if (shown) dismiss()
+                return@collect
             }
+            if (!shown && open != opened) return@collect
+            shown = true
+            thread = open
         }
     }
     DisposableEffect(Unit) {
