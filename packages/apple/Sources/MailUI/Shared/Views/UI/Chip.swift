@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A small pill: an address in a field, a file, a thread's label. `invalid` is an address that
-/// can't be sent to.
+/// can't be sent to. `removeHelp` is what the x says it does, "Remove" and the title without it.
 struct Chip: View {
     enum Variant {
         case plain, invalid
@@ -13,6 +13,7 @@ struct Chip: View {
     var variant: Variant = .plain
     var pending = false
     var help: String?
+    var removeHelp: String?
     var remove: (() -> Void)?
     var action: (() -> Void)?
     @Environment(\.hovered) private var hovered
@@ -38,8 +39,8 @@ struct Chip: View {
             if let remove {
                 Button(action: remove) { RemoveFace(fill: onCard ? Theme.cardAccentStronger : Tokens.backgroundSecondaryAccentStronger) }
                     .buttonStyle(.press)
-                    .help("Remove \(title)")
-                    .accessibilityLabel("Remove \(title)")
+                    .help(removeHelp ?? "Remove \(title)")
+                    .accessibilityLabel(removeHelp ?? "Remove \(title)")
                     .padding(.trailing, -(Space.s + 2))
             }
         }

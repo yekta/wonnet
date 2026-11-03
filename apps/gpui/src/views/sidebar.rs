@@ -15,15 +15,20 @@ pub fn sidebar(store: Entity<Store>, cx: &App) -> impl IntoElement + use<> {
     div()
         .absolute()
         .inset_0()
-        .child(div().id("sidebar-scrim").absolute().inset_0().bg(cx.tint(OVERLAY, opacity::OVERLAY)).on_mouse_down(
-            MouseButton::Left,
-            move |_, _, cx| {
-                close.update(cx, |store, cx| {
-                    store.sidebar_open = false;
-                    cx.notify();
-                })
-            },
-        ))
+        .child(
+            div()
+                .id("sidebar-scrim")
+                .absolute()
+                .inset_0()
+                .bg(cx.tint(OVERLAY, opacity::OVERLAY))
+                .occlude()
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    close.update(cx, |store, cx| {
+                        store.sidebar_open = false;
+                        cx.notify();
+                    })
+                }),
+        )
         .child(
             panel(&store, Some(bar(&store, cx).into_any_element()), cx)
                 .absolute()

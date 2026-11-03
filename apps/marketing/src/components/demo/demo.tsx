@@ -339,7 +339,7 @@ export function Demo() {
             if (!(event.target as HTMLElement).closest("input, textarea"))
               event.currentTarget.focus({ preventScroll: true })
           }}
-          className="relative flex h-[760px] w-[1200px] origin-top-left scale-(--demo-scale) flex-col overflow-hidden rounded-lg bg-(--background) text-left text-(--foreground) outline-none select-none"
+          className="relative flex h-[760px] w-[1200px] origin-top-left scale-(--demo-scale) flex-col overflow-hidden rounded-lg bg-(--background) text-left text-(--foreground) outline-none select-none [--button-hover:var(--background-accent)] [--button-ring:var(--border)]"
           style={{
             fontFamily: FONT,
             boxShadow: `0 0 0 1px var(--color-border), ${shadow("xl", "shadow-stronger")}`,
@@ -349,7 +349,7 @@ export function Demo() {
             <TrafficLights />
           </div>
           {!draft && (
-            <div className="absolute top-2 left-[99px] z-30 flex h-9 items-center gap-1.5">
+            <div className="absolute top-2 left-[91px] z-30 flex h-9 items-center">
               <IconButton
                 icon={MenuIcon}
                 label="Mailboxes"
@@ -378,16 +378,17 @@ export function Demo() {
           ) : (
             <>
               {!open && chosen.length > 0 ? (
-                <div className="flex h-[52px] shrink-0 items-center border-b border-(--border) pr-5 pl-[134px]">
+                <div className="flex h-[52px] shrink-0 items-center border-b border-(--border) pr-4 pl-[136px]">
                   <SelectCircle
                     checked={allChosen}
+                    className="mx-[3px]"
                     label={allChosen ? "Select none" : "Select all (⌘A)"}
                     onClick={allChosen ? clearSelection : selectAll}
                   />
                   <span className="text-[13px] font-semibold text-(--foreground)">
                     {chosen.length} selected
                   </span>
-                  <div className="ml-auto flex items-center gap-0.5">
+                  <div className="ml-auto flex items-center">
                     <ActionButton
                       variant="ghost"
                       icon={ArchiveIcon}
@@ -437,7 +438,7 @@ export function Demo() {
                   </div>
                 </div>
               ) : (
-                <div className="relative flex h-[52px] shrink-0 items-center border-b border-(--border) pr-5 pl-[141px]">
+                <div className="relative flex h-[52px] shrink-0 items-center border-b border-(--border) pr-4 pl-[136px]">
                   {!open && (
                     <span className="text-[14px] font-semibold text-(--foreground)">
                       {title}
@@ -445,7 +446,7 @@ export function Demo() {
                   )}
                   <div className="absolute left-1/2 -translate-x-1/2">
                     {open ? (
-                      <div className="flex gap-1.5">
+                      <div className="flex">
                         <IconButton
                           icon={ArchiveIcon}
                           label="Archive (E)"
@@ -485,7 +486,7 @@ export function Demo() {
                       />
                     )}
                   </div>
-                  <div className="ml-auto flex items-center gap-1.5">
+                  <div className="ml-auto flex items-center gap-2.5">
                     {!open && (
                       <SearchField
                         query={query}
@@ -515,6 +516,7 @@ export function Demo() {
                     now={now}
                     onStar={() => act("star", [open.id])}
                     onReply={(kind) => reply(kind, open.id)}
+                    onNotInDemo={notInDemo}
                     onClose={() => setOpenId(null)}
                   />
                 ) : (

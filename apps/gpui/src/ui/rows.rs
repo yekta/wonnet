@@ -375,25 +375,40 @@ impl RenderOnce for ChoiceRow {
             .when(self.checked, |row| row.child(icon(Symbol::Check, 14.).text_color(cx.color(FOREGROUND))))
     }
 }
-/// Tabs on a line with counts, the chosen one underlined: a split inbox's.
+/// Tabs on a line with counts, the chosen one underlined: a split inbox's. A tab hovers in a
+/// rounded fill clear of the line, as the pill tabs do.
 pub fn tab_strip(tabs: Vec<(SharedString, SharedString, u32, bool, OnClick)>, cx: &App) -> impl IntoElement + use<> {
     div().flex().items_center().children(tabs.into_iter().map(|(id, title, count, chosen, on_click)| {
         let color = if chosen { FOREGROUND } else { MUTED_FOREGROUND };
+        let group = SharedString::from(format!("{id}-tab"));
         div()
             .id(id)
+            .group(group.clone())
+            .relative()
             .flex()
             .items_center()
             .gap(px(space::XS))
             .h(px(size::ROW))
             .px(px(space::S + 1.))
-            .border_b_2()
-            .border_color(if chosen { cx.color(PRIMARY) } else { gpui::transparent_black() })
             .text_in(TextStyle::Label, color, cx)
             .cursor_pointer()
             .hover(|tab| tab.text_color(cx.color(FOREGROUND)))
             .on_click(move |event, window, cx| on_click(event, window, cx))
+            .child(
+                div()
+                    .absolute()
+                    .top(px(space::XXS))
+                    .bottom(px(space::XXS))
+                    .left(px(space::XXS / 2.))
+                    .right(px(space::XXS / 2.))
+                    .rounded(px(radius::MD))
+                    .group_hover(group, |fill| fill.bg(cx.color(BACKGROUND_ACCENT))),
+            )
             .child(div().whitespace_nowrap().child(title))
             .when(count > 0, |tab| tab.child(line(count.to_string(), TextStyle::Footnote, cx)))
+            .when(chosen, |tab| {
+                tab.child(div().absolute().left_0().right_0().bottom_0().h(px(2.)).bg(cx.color(PRIMARY)))
+            })
     }))
 }
 

@@ -89,7 +89,7 @@ fun Combobox(
         Row(
             Modifier
                 .heightIn(min = Dims.chipHeight)
-                .background(if (hovered || open) Tokens.backgroundAccent.color else Color.Transparent, RoundedCornerShape(Radius.sm))
+                .background(if (hovered || open) hoverFill.color else Color.Transparent, RoundedCornerShape(Radius.sm))
                 .padding(horizontal = Space.xxs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.s),
@@ -219,7 +219,7 @@ fun AttachmentCard(
         val shape = RoundedCornerShape(Radius.md)
         val border = if (onCard) Dims.cardRule else Tokens.border
         val previewFill = if (onCard) (if (hovered) Dims.cardAccentStronger else Dims.cardAccent) else (if (hovered) Tokens.backgroundSecondaryAccent else Tokens.backgroundSecondary)
-        val footerFill = if (onCard) (if (hovered) Dims.cardAccent else Dims.cardFill) else (if (hovered) Tokens.backgroundAccentLarger else Tokens.card)
+        val footerFill = if (onCard) (if (hovered) Dims.cardAccent else Dims.cardFill) else (if (hovered) Tokens.cardAccent else Tokens.card)
         Column(Modifier.fillMaxWidth().clip(shape).border(Dims.hairline, border.color, shape)) {
             Box(Modifier.fillMaxWidth().height(Dims.attachmentPreviewHeight).background(previewFill.color), contentAlignment = Alignment.Center) {
                 if (preview != null) {

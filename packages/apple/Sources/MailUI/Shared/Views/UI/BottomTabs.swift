@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Tabs across the bottom of the screen, each an icon over its name and count, the chosen one in
-/// the text's colour. They share the width equally, so however many there are they fit; a long
+/// the text's colour; a pressed one fills in the shape it lifts in. They share the width equally, so however many there are they fit; a long
 /// name is cut short. With `reorder`, a tab held and dragged goes to another place, and the new
 /// order is given when it is let go. The page's colour reaches under the home indicator.
 struct BottomTabs<Tab: Identifiable & Hashable>: View {
@@ -13,10 +13,12 @@ struct BottomTabs<Tab: Identifiable & Hashable>: View {
     let pick: (Tab) -> Void
     var reorder: (([Tab.ID]) -> Void)?
 
+    private static var rowInset: EdgeInsets { EdgeInsets(top: Space.xxs, leading: 0, bottom: Space.xxs, trailing: 0) }
+
     var body: some View {
         MovableList(
             items: tabs, axis: .horizontal, inset: Space.xxs, fills: true, group: { _ in reorder == nil ? nil : "tabs" },
-            rowInset: EdgeInsets(top: Space.xxs, leading: 0, bottom: Space.xxs, trailing: 0), rowRadius: Radius.md,
+            rowInset: Self.rowInset, rowRadius: Radius.md,
             clicked: pick, moved: moved
         ) { tab in
             Face(symbol: symbol(tab), title: title(tab), count: count(tab), chosen: tab.id == selected)
@@ -52,6 +54,11 @@ struct BottomTabs<Tab: Identifiable & Hashable>: View {
             .padding(.top, Space.m)
             .padding(.bottom, Space.s)
             .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: Radius.md)
+                    .fill(hovered ? Tokens.backgroundAccent.color : .clear)
+                    .padding(BottomTabs.rowInset)
+            }
             .contentShape(Rectangle())
         }
 

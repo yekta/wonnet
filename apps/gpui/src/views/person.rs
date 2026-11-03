@@ -44,9 +44,12 @@ impl PersonView {
 
 impl Render for PersonView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let page = div().id("person").size_full().overflow_y_scroll().bg(cx.color(BACKGROUND));
+        // On the sheet's or the pane's colour. It stops short of the sheet's rounded corners, so
+        // a row scrolled there doesn't cover them.
+        let page = div().id("person").size_full().overflow_y_scroll();
+        let frame = div().size_full().pb(px(radius::LG));
         if !self.loaded {
-            return page.into_any_element();
+            return frame.child(page).into_any_element();
         }
         let initials = self.person.as_ref().map(|person| person.initials.clone()).unwrap_or_else(|| {
             self.email.chars().next().map(|first| first.to_uppercase().collect()).unwrap_or_default()
@@ -112,10 +115,12 @@ impl Render for PersonView {
                     div()
                         .px(px(space::XL))
                         .pb(px(space::M - size::ROW_GAP / 2.))
-                        .child(ui::section_heading("Recent", None, cx)),
+                        .child(ui::muted_section_heading("Recent", cx)),
                 )
                 .children(rows)
         });
-        page.child(div().flex().flex_col().pb(px(space::XL)).child(header).children(recent)).into_any_element()
+        frame
+            .child(page.child(div().flex().flex_col().pb(px(space::XL - radius::LG)).child(header).children(recent)))
+            .into_any_element()
     }
 }

@@ -47,6 +47,7 @@ import app.wonnet.ui.ActionButton
 import app.wonnet.ui.Banner
 import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.ConfirmDialog
+import app.wonnet.ui.LocalOnPopover
 import app.wonnet.ui.LocalSheetOverlay
 import app.wonnet.ui.PlainButton
 import kotlinx.coroutines.delay
@@ -122,7 +123,9 @@ fun ToastView(store: MailStore) {
         ) {
             Text(shown.message, TextStyle.Label, Modifier.weight(1f, fill = false), color = Tokens.foreground.color, maxLines = 2)
             shown.action?.let { action ->
-                PlainButton(store::toastTapped) { Text(action, TextStyle.LabelStrong, color = Tokens.primary.color) }
+                CompositionLocalProvider(LocalOnPopover provides true) {
+                    PlainButton(store::toastTapped) { Text(action, TextStyle.LabelStrong, color = Tokens.primary.color) }
+                }
             }
         }
     }

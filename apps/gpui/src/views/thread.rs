@@ -299,13 +299,15 @@ impl ThreadPane {
         let unsubscribe = open.unsubscribe.then(|| {
             let store = store.clone();
             let thread = thread.clone();
-            ActionButton::new("unsubscribe", "Unsubscribe").symbol(Symbol::MailX).variant(Variant::Ghost).on_click(
-                move |_, _, cx| {
+            ActionButton::new("unsubscribe", "Unsubscribe")
+                .symbol(Symbol::MailX)
+                .variant(Variant::Ghost)
+                .surface(ui::Surface::PageCard)
+                .on_click(move |_, _, cx| {
                     store.update(cx, |store, cx| {
                         store.act(crate::models::Action::Unsubscribe, std::slice::from_ref(&thread), None, None, cx)
                     })
-                },
-            )
+                })
         });
         let blocked = open.messages.iter().any(|message| message.blocked_images);
         let star = store.clone();
@@ -346,7 +348,7 @@ impl ThreadPane {
                         .items_center()
                         .gap(px(space::M))
                         .child(div().flex_1().flex().flex_wrap().gap(px(space::XS)).children(chips))
-                        .children(unsubscribe),
+                        .children(unsubscribe.map(|button| div().mr(px(-size::BUTTON_GAP / 2.)).child(button))),
                 )
             })
             .when(blocked, |header| {
@@ -356,6 +358,7 @@ impl ThreadPane {
                     None,
                     Some(
                         ActionButton::new("load-images", "Load images")
+                            .surface(ui::Surface::PageCard)
                             .on_click(move |_, _, cx| images.update(cx, |store, cx| store.show_images(cx))),
                     ),
                     cx,
@@ -383,15 +386,10 @@ impl ThreadPane {
                 store.update(cx, |store, cx| store.toggle_fold(&message, cx))
             }
         };
-        let tap_sender = {
+        let show_person = {
             let this = this.clone();
-            let toggle = toggle.clone();
             let email = message.from_email.clone();
-            move |event: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
-                cx.stop_propagation();
-                if folded {
-                    return toggle(event, window, cx);
-                }
+            move |_: &gpui::ClickEvent, _: &mut Window, cx: &mut App| {
                 this.update(cx, |this, cx| this.show_person(email.clone(), wide, cx));
             }
         };
@@ -423,6 +421,7 @@ impl ThreadPane {
                         .size(ControlSize::Small)
                         .plain()
                         .quiet()
+                        .on_card()
                         .on_click(move |_, _, cx| {
                             original_store.update(cx, |store, cx| store.toggle_original(&original_id, cx))
                         }),
@@ -432,12 +431,14 @@ impl ThreadPane {
                     IconButton::new(SharedString::from(format!("reply-{}", message.id)), Symbol::Reply, "Reply")
                         .size(ControlSize::Small)
                         .plain()
+                        .on_card()
                         .on_click(move |_, window, cx| reply_now(window, cx)),
                 )
                 .child(
                     IconButton::new(SharedString::from(format!("more-{}", message.id)), Symbol::Ellipsis, "More")
                         .size(ControlSize::Small)
                         .plain()
+                        .on_card()
                         .menu(move |_, _| {
                             let reply_all = reply_all.clone();
                             let forward = forward.clone();
@@ -453,38 +454,50 @@ impl ThreadPane {
         let name_style = if folded { TextStyle::Body } else { TextStyle::Subheading };
         let name_color = if folded { MUTED_STRONGER_FOREGROUND } else { FOREGROUND };
         let under = if folded { message.snippet.clone() } else { message.to.clone() };
-        let head = div()
-            .id(SharedString::from(format!("head-{}", message.id)))
+        // The line is clicked as a whole, its name lit on hover. An open message's sender is a
+        // button of its own that opens the person, pulled out by its padding.
+        let line_group = SharedString::from(format!("line-{}", message.id));
+        let lit = if folded { FOREGROUND } else { EMPHASIZED_FOREGROUND };
+        let sender = div()
+            .min_w_0()
             .flex()
             .items_center()
             .gap(px(space::M))
-            .cursor_pointer()
-            .on_click(toggle.clone())
+            .child(ui::Avatar::new(&message.initials, &message.from_email, size::MESSAGE_AVATAR))
             .child(
                 div()
-                    .id(SharedString::from(format!("avatar-{}", message.id)))
-                    .on_click(tap_sender.clone())
-                    .child(ui::Avatar::new(&message.initials, &message.from_email, size::MESSAGE_AVATAR)),
-            )
-            .child(
-                div()
-                    .flex_1()
                     .min_w_0()
                     .flex()
                     .flex_col()
                     .gap(px(2.))
                     .child(
-                        div()
-                            .id(SharedString::from(format!("name-{}", message.id)))
-                            .on_click(tap_sender)
-                            .when(!folded, |name| {
-                                let email = message.from_email.clone();
-                                name.tooltip(move |_, cx| ui::Tooltip::view(email.clone(), cx))
-                            })
-                            .child(ui::line_in(message.from_name.clone(), name_style, name_color, cx)),
+                        ui::line_in(message.from_name.clone(), name_style, name_color, cx)
+                            .group_hover(line_group.clone(), |name| name.text_color(cx.color(lit))),
                     )
                     .child(ui::line(under, TextStyle::Caption, cx)),
-            )
+            );
+        let sender = if folded {
+            sender.into_any_element()
+        } else {
+            ui::PlainButton::new(SharedString::from(format!("sender-{}", message.id)), sender)
+                .flush()
+                .surface(ui::Surface::PageCard)
+                .help(message.from_email.clone())
+                .on_click(show_person)
+                .into_any_element()
+        };
+        let head = div()
+            .id(SharedString::from(format!("head-{}", message.id)))
+            .group(line_group)
+            .flex()
+            .items_center()
+            .gap(px(space::M))
+            .pt(px(space::L))
+            .when(folded, |head| head.pb(px(space::L)))
+            .cursor_pointer()
+            .on_click(toggle)
+            .child(sender)
+            .child(div().flex_1())
             .when(!message.attachments.is_empty(), |head| {
                 head.child(icon(Symbol::Paperclip, 13.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
             })
@@ -515,8 +528,7 @@ impl ThreadPane {
             .flex()
             .flex_col()
             .gap(px(space::M))
-            .py(px(space::L))
-            .when(folded, |card| card.cursor_pointer().on_click(toggle))
+            .when(!folded, |card| card.pb(px(space::L)))
             .child(
                 canvas(
                     move |bounds, _, _| {
@@ -587,6 +599,7 @@ impl ThreadPane {
                 .symbol(Symbol::Download)
                 .variant(Variant::Ghost)
                 .size(ControlSize::Small)
+                .surface(ui::Surface::PageCard)
                 .on_click(move |_, _, cx| {
                     this.update(cx, |this, cx| this.save_attachments(&message, (0..count).collect(), cx))
                 })
@@ -690,15 +703,10 @@ impl Render for ThreadPane {
         }
         if let Some(draft) = open.draft_id.clone() {
             let store = self.store.clone();
-            let again = self.store.clone();
-            let again_draft = draft.clone();
             children.push(
                 div()
-                    .id("draft-card")
                     .flex()
                     .flex_col()
-                    .cursor_pointer()
-                    .on_click(move |_, _, cx| store.update(cx, |store, cx| store.open_draft(&draft, cx)))
                     .child(ui::rule(CARD_RULE, cx))
                     .child(
                         div()
@@ -714,9 +722,11 @@ impl Render for ThreadPane {
                                     .text_in(TextStyle::Label, MUTED_STRONGER_FOREGROUND, cx)
                                     .child("A reply you started"),
                             )
-                            .child(ActionButton::new("open-draft", "Open").on_click(move |_, _, cx| {
-                                again.update(cx, |store, cx| store.open_draft(&again_draft, cx))
-                            })),
+                            .child(
+                                ActionButton::new("open-draft", "Open").surface(ui::Surface::PageCard).on_click(
+                                    move |_, _, cx| store.update(cx, |store, cx| store.open_draft(&draft, cx)),
+                                ),
+                            ),
                     )
                     .into_any_element(),
             );

@@ -202,6 +202,7 @@ struct ThreadListMac: NSViewRepresentable {
 
         @objc func scrolled() {
             schedulePrefetch()
+            table?.hoverPointer()
             guard let scroll = table?.enclosingScrollView else { return }
             let clip = scroll.contentView.bounds
             let far = clip.minY + scroll.contentInsets.top > clip.height
@@ -378,8 +379,23 @@ final class HoverTableView: NSTableView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        let index = row(at: point)
+        hover(at: event.locationInWindow)
+    }
+
+    /// Hovers the row under the pointer where it is now: a scroll moves the rows under a pointer
+    /// that stays still.
+    func hoverPointer() {
+        guard let window, window.isKeyWindow else {
+            hovered = -1
+            return
+        }
+        hover(at: window.mouseLocationOutsideOfEventStream)
+    }
+
+    /// Hovers the row at `location` in the window, and what on it is under the pointer.
+    private func hover(at location: NSPoint) {
+        let point = convert(location, from: nil)
+        let index = visibleRect.contains(point) ? row(at: point) : -1
         guard index >= 0, let view = rowView(atRow: index, makeIfNecessary: false) as? ThreadRowView,
               view.reach.contains(convert(point, to: view))
         else {

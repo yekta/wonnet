@@ -30,6 +30,7 @@ struct KeyRecorder: View {
         let key: String?
         let strokes: [String]?
         @Environment(\.hovered) private var hovered
+        @Environment(\.controlHover) private var hoverFill
 
         var body: some View {
             Group {
@@ -51,7 +52,7 @@ struct KeyRecorder: View {
 
         private var fill: Color {
             if strokes != nil { return Tokens.backgroundAccentStronger.color }
-            return hovered ? Tokens.backgroundAccent.color : .clear
+            return hovered ? hoverFill.color : .clear
         }
     }
 

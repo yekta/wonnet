@@ -120,6 +120,7 @@ fun Sidebar(store: MailStore, showSettings: () -> Unit, picked: (String) -> Unit
                     }
                 },
                 follows = { it is SidebarRow.Inside },
+                rowInset = Dims.rowGap / 2,
                 clicked = ::clicked, moved = ::moved, menu = ::menu,
             ) { row, hovered ->
                 when (row) {

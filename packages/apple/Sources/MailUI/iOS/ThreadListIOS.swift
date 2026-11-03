@@ -394,15 +394,18 @@ final class ThreadCell: UITableViewCell {
         canvas.frame = slider.bounds
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         slider.addSubview(canvas)
-        let pressed = UIView()
-        pressed.backgroundColor = Tokens.backgroundAccentLargerStronger.platform
-        selectedBackgroundView = pressed
-        let picked = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
-        let tint = UIView(frame: picked.bounds.insetBy(dx: 0, dy: Theme.rowGap / 2))
-        tint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tint.backgroundColor = Tokens.primary.opacity(Opacity.colorTint).platform
-        picked.addSubview(tint)
-        multipleSelectionBackgroundView = picked
+        selectedBackgroundView = Self.fill(Tokens.backgroundAccentLargerStronger.platform)
+        multipleSelectionBackgroundView = Self.fill(Tokens.primary.opacity(Opacity.colorTint).platform)
+    }
+
+    /// A row's fill, kept off its neighbours by `Theme.rowGap`.
+    private static func fill(_ color: UIColor) -> UIView {
+        let view = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        let inner = UIView(frame: view.bounds.insetBy(dx: 0, dy: Theme.rowGap / 2))
+        inner.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        inner.backgroundColor = color
+        view.addSubview(inner)
+        return view
     }
 
     /// The system puts its circle against the row; it is centred in the room made for it, so

@@ -3,13 +3,20 @@ import {
   PaperclipIcon,
   ReplyAllIcon,
   ReplyIcon,
-  StarIcon,
   TagIcon,
 } from "lucide-react"
 import { useState } from "react"
 import { ACCOUNTS, avatarColor, initials, longDate } from "./mail"
 import type { Message, Thread } from "./mail"
-import { AttachmentCard, Avatar, Chip, IconButton, cn } from "./ui"
+import {
+  AttachmentCard,
+  Avatar,
+  Chip,
+  IconButton,
+  PlainButton,
+  StarButton,
+  cn,
+} from "./ui"
 
 export type Reply = "reply" | "replyAll" | "forward"
 
@@ -21,12 +28,14 @@ export function ThreadView({
   onStar,
   onReply,
   onClose,
+  onNotInDemo,
 }: {
   thread: Thread
   now: Date | null
   onStar: () => void
   onReply: (kind: Reply) => void
   onClose: () => void
+  onNotInDemo: () => void
 }) {
   const me = ACCOUNTS[thread.account].email
   const [opened, setOpened] = useState(
@@ -41,7 +50,7 @@ export function ThreadView({
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <article className="mx-auto mt-4 mb-6 w-[1000px] rounded-sm border border-(--border) bg-(--card-larger) px-20 py-7">
+      <article className="mx-auto mt-4 mb-6 w-[1000px] rounded-sm border border-(--border) bg-(--card-larger) px-20 py-7 [--button-hover:var(--card-larger-accent-stronger)] [--button-ring:var(--border-card)]">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[24px] leading-tight font-semibold text-(--foreground)">
@@ -53,24 +62,7 @@ export function ThreadView({
               {me}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onStar}
-            aria-label={thread.starred ? "Unstar" : "Star"}
-            title={thread.starred ? "Unstar" : "Star"}
-            className={cn(
-              "flex size-7 items-center justify-center rounded-full hover:text-(--star)",
-              thread.starred
-                ? "text-(--star)"
-                : "text-(--muted-stronger-foreground)"
-            )}
-          >
-            <StarIcon
-              className="size-[18px]"
-              strokeWidth={1.75}
-              fill={thread.starred ? "currentColor" : "none"}
-            />
-          </button>
+          <StarButton starred={thread.starred} onClick={onStar} />
         </div>
         {thread.label && (
           <div className="mt-3">
@@ -87,6 +79,7 @@ export function ThreadView({
               now={now}
               open={opened.has(index)}
               first={index === 0}
+              onNotInDemo={onNotInDemo}
               attachment={
                 !message.mine &&
                 (index === 0 || index === thread.messages.length - 1)
@@ -104,7 +97,7 @@ export function ThreadView({
             />
           ))}
         </div>
-        <div className="mt-[22px] flex gap-1.5">
+        <div className="mt-[22px] -ml-[3px] flex">
           <IconButton
             icon={ReplyAllIcon}
             label="Reply all (A)"
@@ -135,6 +128,7 @@ function MessageView({
   first,
   attachment,
   onOpen,
+  onNotInDemo,
 }: {
   thread: Thread
   message: Message
@@ -144,6 +138,7 @@ function MessageView({
   first: boolean
   attachment?: string
   onOpen: () => void
+  onNotInDemo: () => void
 }) {
   const from = message.mine ? { name: "me", email: me } : thread.with
   const to = message.mine ? thread.with.email : me
@@ -154,22 +149,31 @@ function MessageView({
     <section
       className={cn("py-4", !first && "border-t border-(--border-card)")}
     >
-      <div className="flex cursor-default items-center gap-3" onClick={onOpen}>
+      <div
+        className="group/line flex cursor-default items-center gap-3"
+        onClick={onOpen}
+      >
         <Avatar
           initials={message.mine ? "S" : initials(from.name)}
           color={avatarColor(from.email)}
         />
         <div className="min-w-0 flex-1">
-          <p
-            className={cn(
-              "text-[14px]",
-              open
-                ? "font-semibold text-(--foreground)"
-                : "text-(--muted-foreground)"
-            )}
-          >
-            {message.mine ? "me" : from.name}
-          </p>
+          {open ? (
+            <PlainButton
+              title={from.email}
+              onClick={(event) => {
+                event.stopPropagation()
+                onNotInDemo()
+              }}
+              className="-mx-1 -my-1 w-fit py-1 text-[14px] font-semibold text-(--foreground)"
+            >
+              {from.name}
+            </PlainButton>
+          ) : (
+            <p className="text-[14px] text-(--muted-foreground) group-hover/line:text-(--foreground)">
+              {from.name}
+            </p>
+          )}
           <p className="truncate text-[12px] text-(--muted-stronger-foreground)">
             {open ? `to ${to}` : message.text}
           </p>
@@ -197,7 +201,11 @@ function MessageView({
               <p className="mb-2 text-[12px] text-(--muted-stronger-foreground)">
                 1 attachment
               </p>
-              <AttachmentCard name={attachment} size="184 KB" />
+              <AttachmentCard
+                name={attachment}
+                size="184 KB"
+                onClick={onNotInDemo}
+              />
             </div>
           )}
         </div>

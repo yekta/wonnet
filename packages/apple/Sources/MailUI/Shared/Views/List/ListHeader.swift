@@ -22,12 +22,12 @@ struct ListHeader: View {
                     .padding(.horizontal, Space.l)
                 }
                 if let filter = store.filter {
-                    Chip(title: filter == .unread ? "Unread" : "Starred", symbol: .listFilter, help: "Show everything", remove: { store.setFilter(nil) })
+                    Chip(title: filter == .unread ? "Unread" : "Starred", symbol: .listFilter, removeHelp: "Show everything", remove: { store.setFilter(nil) })
                         .padding(.trailing, Space.l)
                 }
                 if store.canEmpty {
                     ActionButton(title: "Empty \(store.mailboxName)", variant: .ghost, action: store.emptyMailbox)
-                        .padding(.trailing, Space.l)
+                        .padding(.trailing, Space.l - Theme.buttonGap / 2)
                 }
             }
             .frame(height: Self.height)

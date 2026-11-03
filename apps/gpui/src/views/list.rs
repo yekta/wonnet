@@ -188,15 +188,14 @@ impl ThreadList {
         let date_weight = if unread { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL };
         let date_color = if unread { strong } else { MUTED_STRONGER_FOREGROUND };
         let show_circle = state.checked || state.selecting;
+        // The gutter answers the pointer only while its circle can show, as on the Mac.
+        let circle_shown = state.circles || state.selecting;
         let hover_actions = !state.selecting;
         let entity = cx.entity();
 
         let lit = if state.current { BACKGROUND_ACCENT_LARGER_STRONGEST } else { BACKGROUND_ACCENT_LARGER };
-        let face_fill = match (state.checked, state.current) {
-            (true, _) => Some(cx.tint(PRIMARY, opacity::COLOR_TINT)),
-            (false, true) => Some(cx.color(lit)),
-            (false, false) => None,
-        };
+        // The open row rests lit; a checked one hovers too, under its tint.
+        let rests_lit = state.current && !state.checked;
         let subject = if row.subject.is_empty() { "(no subject)".to_string() } else { row.subject.clone() };
         let snippet = row.snippet.replace('\n', " ");
         let subject_end = subject.len();
@@ -213,7 +212,7 @@ impl ThreadList {
             .text_size(px(13.))
             .text_color(cx.color(MUTED_STRONGER_FOREGROUND))
             .child(StyledText::new(words).with_highlights([(0..subject_end, subject_style)]));
-        let actions = actions(&row, &group, index, &entity, cx);
+        let actions = actions(&row, index, state.current, &entity, cx);
         let fade_from = cx.color(lit).opacity(0.);
         let fade_to = cx.color(lit);
         let open_row = row.clone();
@@ -228,8 +227,11 @@ impl ThreadList {
             .flex()
             .items_center()
             .rounded(px(radius::SM))
-            .when_some(face_fill, |face, fill| face.bg(fill))
-            .when(face_fill.is_none(), |face| face.group_hover(group.clone(), |face| face.bg(cx.color(lit))))
+            .when(rests_lit, |face| face.bg(cx.color(lit)))
+            .when(!rests_lit, |face| face.group_hover(group.clone(), |face| face.bg(cx.color(lit))))
+            .when(state.checked, |face| {
+                face.child(div().absolute().inset_0().rounded(px(radius::SM)).bg(cx.tint(PRIMARY, opacity::COLOR_TINT)))
+            })
             .child(
                 div()
                     .absolute()
@@ -314,10 +316,7 @@ impl ThreadList {
             .flex()
             .items_center()
             .justify_center()
-            .when(!show_circle && state.circles, |gutter| {
-                gutter.invisible().group_hover(group.clone(), |gutter| gutter.visible())
-            })
-            .when(!show_circle && !state.circles, |gutter| gutter.invisible())
+            .when(!show_circle, |gutter| gutter.invisible().group_hover(group.clone(), |gutter| gutter.visible()))
             .tooltip(move |_, cx| {
                 ui::Tooltip::view(if state.checked { "Deselect".to_string() } else { select_help.clone() }, cx)
             })
@@ -331,6 +330,24 @@ impl ThreadList {
                     entity.update(cx, |list, cx| list.clicked_row(&row, Hit::Select, event, cx));
                 }
             });
+        let reach = div()
+            .id(group.clone())
+            .group(group.clone())
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .items_center()
+            .cursor_pointer()
+            .when(circle_shown, |reach| reach.child(gutter))
+            .child(face)
+            .on_click(move |event, _, cx| {
+                entity.update(cx, |list, cx| list.clicked_row(&open_row, Hit::Open, event, cx))
+            })
+            .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                let entries = menu_entity.read(cx).menu(&menu_row, cx);
+                ui::open_menu(format!("row-menu-{}", menu_row.id), entries, Some(event.position), window, cx);
+            });
         div()
             .id(SharedString::from(format!("thread-{}", row.id)))
             .h(px(size::ROW_HEIGHT))
@@ -339,23 +356,13 @@ impl ThreadList {
             .justify_center()
             .child(
                 div()
-                    .id(group.clone())
-                    .group(group.clone())
                     .w(px(state.column + 2. * size::SELECT_GUTTER))
                     .h_full()
                     .flex()
                     .items_center()
-                    .cursor_pointer()
-                    .child(gutter)
-                    .child(face)
-                    .child(div().w(px(size::SELECT_GUTTER)))
-                    .on_click(move |event, _, cx| {
-                        entity.update(cx, |list, cx| list.clicked_row(&open_row, Hit::Open, event, cx))
-                    })
-                    .on_mouse_down(MouseButton::Right, move |event, window, cx| {
-                        let entries = menu_entity.read(cx).menu(&menu_row, cx);
-                        ui::open_menu(format!("row-menu-{}", menu_row.id), entries, Some(event.position), window, cx);
-                    }),
+                    .when(!circle_shown, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none()))
+                    .child(reach)
+                    .child(div().w(px(size::SELECT_GUTTER)).flex_none()),
             )
     }
 
@@ -430,11 +437,12 @@ enum Hit {
     Open,
 }
 
-/// The hovered row's actions, from the left: archive, trash, snooze, read, star.
+/// The hovered row's actions, from the left: archive, trash, snooze, read, star. Each lights from
+/// its whole hit area; on the open row, which rests in their usual fill, a step stronger.
 fn actions(
     row: &ThreadRow,
-    group: &SharedString,
     index: usize,
+    current: bool,
     entity: &Entity<ThreadList>,
     cx: &App,
 ) -> Vec<gpui::AnyElement> {
@@ -457,23 +465,22 @@ fn actions(
             ),
         ]
     };
-    let _ = group;
+    let fill = if current { BACKGROUND_ACCENT_STRONGEST } else { BACKGROUND_ACCENT_LARGER_STRONGEST };
     kinds
         .into_iter()
         .map(|(hit, symbol, help)| {
             let star = hit == Hit::Star;
             let rest = if star && row.starred { STAR } else { MUTED_FOREGROUND };
-            let (hover_fill, hover_color) = if star {
-                (cx.tint(STAR, opacity::COLOR_TINT), STAR)
-            } else {
-                (cx.color(BACKGROUND_ACCENT_LARGER_STRONGEST), FOREGROUND)
-            };
+            let (hover_fill, hover_color) =
+                if star { (cx.tint(STAR, opacity::COLOR_TINT), STAR) } else { (cx.color(fill), FOREGROUND) };
+            let id = SharedString::from(format!("action-{index}-{help}"));
             let entity = entity.clone();
             let row = row.clone();
             let glyph =
                 if symbol == Symbol::StarFilled { icon_in(symbol, 16., cx.color(STAR)) } else { icon(symbol, 16.) };
             div()
-                .id(SharedString::from(format!("action-{index}-{help}")))
+                .id(id.clone())
+                .group(id.clone())
                 .w(px(30.))
                 .h_full()
                 .flex()
@@ -492,7 +499,7 @@ fn actions(
                         .items_center()
                         .justify_center()
                         .text_color(cx.color(rest))
-                        .hover(move |circle| circle.bg(hover_fill).text_color(cx.color(hover_color)))
+                        .group_hover(id, move |circle| circle.bg(hover_fill).text_color(cx.color(hover_color)))
                         .child(glyph),
                 )
                 .into_any_element()
@@ -547,7 +554,7 @@ fn list_header(store: &Entity<Store>, cx: &App) -> Option<impl IntoElement> {
         let clear = store.clone();
         Chip::new("filter", if filter == Filter::Unread { "Unread" } else { "Starred" })
             .symbol(Symbol::ListFilter)
-            .help("Show everything")
+            .remove_help("Show everything")
             .remove(move |_, _, cx| clear.update(cx, |store, cx| store.set_filter(None, cx)))
     });
     let empty = state.can_empty().then(|| {
@@ -568,7 +575,7 @@ fn list_header(store: &Entity<Store>, cx: &App) -> Option<impl IntoElement> {
             .border_color(cx.color(BORDER))
             .child(div().flex_1().min_w_0().px(px(space::L)).child(ui::tab_strip(tabs, cx)))
             .children(filter.map(|chip| div().pr(px(space::L)).child(chip)))
-            .children(empty.map(|button| div().pr(px(space::L)).child(button))),
+            .children(empty.map(|button| div().pr(px(space::L - size::BUTTON_GAP / 2.)).child(button))),
     )
 }
 

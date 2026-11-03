@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -211,14 +212,14 @@ fun PersonView(store: MailStore, email: String, closeSheet: () -> Unit, openThre
                 Text(name, TextStyle.Heading)
                 SelectionContainer { Text(email, TextStyle.Label, color = Tokens.mutedStrongerForeground.color) }
             }
-            ActionButton("New message", symbol = Symbol.SquarePen) {
+            ActionButton("New message", Modifier.offset(x = -Dims.buttonGap / 2), symbol = Symbol.SquarePen) {
                 closeSheet()
                 store.write(Address(person?.name?.takeIf { it.isNotEmpty() }, email))
             }
         }
         val threads = person?.threads ?: emptyList()
         if (threads.isEmpty()) return@Column
-        SectionHeading("Recent", Modifier.padding(start = Space.xl, end = Space.xl, top = Space.xxs, bottom = Space.m - Dims.rowGap / 2))
+        SectionHeading("Recent", Modifier.padding(start = Space.xl, end = Space.xl, top = Space.xxs, bottom = Space.m - Dims.rowGap / 2), muted = true)
         for (row in threads) {
             NavRow(row.subject.ifEmpty { "(no subject)" }, selected = row.id == store.conversation?.id, inset = Space.xl, onClick = { openThread(row.id) }) {
                 Text(row.date, TextStyle.Caption)
