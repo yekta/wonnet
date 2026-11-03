@@ -367,16 +367,18 @@ struct IconCircle: View {
 /// A button that is only its content: a star, a sender's name, a word in a toast. For what no
 /// other button fits; it still hovers, presses and disables as they do, and is never under
 /// the smallest control in height. `tint` is the colour it hovers in, as a wash of it; `round`
-/// hovers in a circle, for a round face.
+/// hovers in a circle, for a round face. `flush` hovers with room all round and is pulled out
+/// by it, so its content stays where it would be: a sender.
 struct PlainButton<Label: View>: View {
     var help: String?
     var tint: ThemeColor?
     var round = false
+    var flush = false
     let action: () -> Void
     @ViewBuilder let label: Label
 
     @ViewBuilder var body: some View {
-        let button = Button(action: action) { Face(label: label, tint: tint, round: round) }.buttonStyle(.press)
+        let button = Button(action: action) { Face(label: label, tint: tint, round: round, flush: flush) }.buttonStyle(.press)
         if let help {
             button.help(help).accessibilityLabel(help)
         } else {
@@ -388,19 +390,23 @@ struct PlainButton<Label: View>: View {
         let label: Label
         let tint: ThemeColor?
         let round: Bool
+        let flush: Bool
         @Environment(\.hovered) private var hovered
         @Environment(\.controlHover) private var hoverFill
 
         var body: some View {
             label
-                .padding(.horizontal, Space.xxs)
-                .frame(minWidth: ControlSize.small.height, minHeight: ControlSize.small.height)
+                .padding(.horizontal, flush ? Space.xs : Space.xxs)
+                .padding(.vertical, flush ? Space.xs : 0)
+                .frame(minWidth: flush ? nil : ControlSize.small.height, minHeight: ControlSize.small.height)
                 .background { wash.fill(hovered ? fill : .clear) }
                 .contentShape(Rectangle())
+                .padding(flush ? -Space.xs : 0)
         }
 
         private var wash: AnyShape {
-            round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Radius.sm))
+            if round { return AnyShape(Circle()) }
+            return AnyShape(RoundedRectangle(cornerRadius: flush ? Radius.md : Radius.sm))
         }
 
         private var fill: Color {

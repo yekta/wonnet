@@ -268,16 +268,22 @@ fun PlainButton(
     help: String? = null,
     tint: ThemeColor? = null,
     round: Boolean = false,
+    flush: Boolean = false,
     enabled: Boolean = true,
     content: @Composable RowScope.(hovered: Boolean) -> Unit,
 ) {
-    Pressable(onClick, modifier, enabled, help = help) { hovered ->
+    Pressable(onClick, if (flush) modifier.pullOut(Space.xs, Space.xs) else modifier, enabled, help = help) { hovered ->
         val fill = if (!hovered) Color.Transparent else tint?.opacity(Opacity.colorTint)?.color ?: hoverFill.color
+        val shape = when {
+            round -> CircleShape
+            flush -> RoundedCornerShape(Radius.md)
+            else -> RoundedCornerShape(Radius.sm)
+        }
         Row(
             Modifier
-                .defaultMinSize(ControlSize.Small.scaled, ControlSize.Small.scaled)
-                .background(fill, if (round) CircleShape else RoundedCornerShape(Radius.sm))
-                .padding(horizontal = Space.xxs),
+                .defaultMinSize(if (flush) 0.dp else ControlSize.Small.scaled, ControlSize.Small.scaled)
+                .background(fill, shape)
+                .padding(horizontal = if (flush) Space.xs else Space.xxs, vertical = if (flush) Space.xs else 0.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) { content(hovered) }

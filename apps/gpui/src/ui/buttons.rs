@@ -410,8 +410,8 @@ impl RenderOnce for IconButton {
 
 /// A button that is only its content: a star, a sender's name, a word in a toast. `tint` is the
 /// colour it hovers in, as a wash of it; `round` hovers in a circle, for a round face; `flush`
-/// is pulled out by its padding, so its content stands where it would without it, and gives
-/// way to what is beside it.
+/// hovers with room all round and is pulled out by it, so its content stands where it would
+/// without it, and gives way to what is beside it.
 #[derive(IntoElement)]
 pub struct PlainButton {
     id: SharedString,
@@ -481,11 +481,11 @@ impl RenderOnce for PlainButton {
             .items_center()
             .justify_center()
             .min_h(px(size::SMALL))
-            .px(px(space::XXS))
-            .when(!self.flush, |face| face.min_w(px(size::SMALL)))
-            .when(self.flush, |face| face.min_w_0().mx(px(-space::XXS)))
+            .when(!self.flush, |face| face.px(px(space::XXS)).min_w(px(size::SMALL)))
+            .when(self.flush, |face| face.min_w_0().p(px(space::XS)).m(px(-space::XS)))
             .when(self.round, |face| face.rounded_full())
-            .when(!self.round, |face| face.rounded(px(radius::SM)))
+            .when(!self.round && !self.flush, |face| face.rounded(px(radius::SM)))
+            .when(!self.round && self.flush, |face| face.rounded(px(radius::MD)))
             .cursor_pointer()
             .hover(move |face| face.bg(fill))
             .when_some(self.help.clone(), |face, help| face.tooltip(move |_, cx| Tooltip::view(help.clone(), cx)))

@@ -107,7 +107,7 @@ added to the component, not to the view.
 | `GlassBar`, `GlassCircle` | A bar floating over a page on the system's glass (the page's colour on a bordered capsule before iOS 26): icon buttons spread evenly across a capsule, and one action on a circle beside it; the commands under an open thread and a selection on iOS |
 | `OptionButton` | A wide button on a card, for one of a few ways to do something: a mark, what it is, a line about it and a chevron; the providers an account comes from |
 | `AppMark`, `GoogleMark` | The app's icon drawn small, and Google's G in its colours |
-| `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover, `round` makes it a circle; a sender's name |
+| `PlainButton` | Only its content, still with hover, press and disabled states, and the minimum height; `tint` colours its hover, `round` makes it a circle, `flush` gives its hover room all round and pulls it out by as much; a sender |
 | `LineButton` | A line clicked as a whole, its words lit on hover, with buttons of its own on it: a message's line in a thread |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `SelectCircle` | The circle that selects threads, filled in the primary colour with a check once selected; the Mac's rows draw it in the gutter before them |
