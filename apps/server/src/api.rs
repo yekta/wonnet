@@ -91,11 +91,11 @@ pub async fn add_jmap(
     };
     let address = jmap.address().await.map_err(|error| AppError::bad_request(error.to_string()))?.email;
     let login = serde_json::to_string(&Login { url, username })?;
-    let existing = db::account_by_login(&state.db, Provider::Jmap, &address, &login).await?;
-    let user_id = match (current, existing) {
-        (Some(user_id), _) => user_id,
-        (None, Some(account)) => account.user_id,
-        (None, None) => db::create_user(&state.db).await?,
+    let user_id = match current {
+        Some(user_id) => user_id,
+        None => crate::sign_in::user_signing_in(&state.db, Provider::Jmap, &address, &login)
+            .await?
+            .map_err(AppError::bad_request)?,
     };
     let credentials = state.sealer.seal(request.password.as_bytes());
     let account = NewAccount { user_id, provider: Provider::Jmap, address: &address, login: &login, credentials };

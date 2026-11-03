@@ -139,6 +139,13 @@ impl Server {
 
     /// Goes through Google as `email` and returns the `wonnet://auth` URL the app is sent to.
     pub async fn google_sign_in(&self, verifier: &str, ticket: Option<&str>, email: &str) -> Url {
+        let response = self.google_answer(verifier, ticket, email).await;
+        assert!(response.status().is_redirection(), "{}", response.text().await.unwrap());
+        Url::parse(response.headers()[LOCATION].to_str().unwrap()).unwrap()
+    }
+
+    /// Goes through Google as `email` and answers where the browser is sent.
+    pub async fn google_answer(&self, verifier: &str, ticket: Option<&str>, email: &str) -> reqwest::Response {
         let challenge = crate::sha256_hex(verifier.as_bytes());
         let mut start = format!("{}/auth/google/start?challenge={challenge}&state=app-state", self.base);
         if let Some(ticket) = ticket {
@@ -155,9 +162,7 @@ impl Server {
             (google.email, google.nonce) = (email.into(), query["nonce"].clone());
         }
         let callback = format!("{}/auth/google/callback?code=google-code&state={}", self.base, query["state"]);
-        let response = self.http.get(callback).send().await.unwrap();
-        assert!(response.status().is_redirection(), "{}", response.text().await.unwrap());
-        Url::parse(response.headers()[LOCATION].to_str().unwrap()).unwrap()
+        self.http.get(callback).send().await.unwrap()
     }
 
     /// Goes through Microsoft as `email`, granting `scope`, and answers where the browser is sent.

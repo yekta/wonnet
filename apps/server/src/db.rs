@@ -241,6 +241,7 @@ pub async fn live_account_ids_of(db: &PgPool, user_id: Uuid) -> sqlx::Result<Vec
         .await
 }
 
+#[cfg(test)]
 pub async fn account_by_login(
     db: &PgPool,
     provider: Provider,
@@ -255,6 +256,41 @@ pub async fn account_by_login(
     .bind(login)
     .fetch_optional(db)
     .await
+}
+
+pub enum SignInUser {
+    New,
+    Existing(Uuid),
+    /// More than one user has the mailbox, so it can't tell which to open.
+    Shared,
+    /// Its user started with another mailbox; only that one opens it.
+    Added,
+}
+
+/// Whose mail a sign-in with this mailbox alone opens: the user's first mailbox that no one
+/// else has.
+pub async fn sign_in_user(db: &PgPool, provider: Provider, address: &str, login: &str) -> sqlx::Result<SignInUser> {
+    let accounts: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT id, user_id FROM accounts WHERE provider = $1 AND address = $2 AND login = $3 AND NOT deleted",
+    )
+    .bind(provider.as_str())
+    .bind(address)
+    .bind(login)
+    .fetch_all(db)
+    .await?;
+    let [(account_id, user_id)] = accounts[..] else {
+        return Ok(if accounts.is_empty() { SignInUser::New } else { SignInUser::Shared });
+    };
+    let first: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM accounts mine WHERE user_id = $1 AND NOT deleted AND NOT EXISTS (
+             SELECT 1 FROM accounts theirs WHERE theirs.provider = mine.provider AND theirs.address = mine.address
+             AND theirs.login = mine.login AND theirs.user_id <> mine.user_id AND NOT theirs.deleted)
+         ORDER BY created_at LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(if first == Some(account_id) { SignInUser::Existing(user_id) } else { SignInUser::Added })
 }
 
 /// Gives the account the credentials its provider renewed.

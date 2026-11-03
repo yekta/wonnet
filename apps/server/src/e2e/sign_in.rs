@@ -1,6 +1,7 @@
 use mail_protocol::Provider;
 use serde_json::{Value, json};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use super::{Server, code_of};
 use crate::db;
@@ -73,6 +74,59 @@ async fn a_link_ticket_adds_a_second_account_to_the_same_user(db: PgPool) {
     let reused =
         format!("{}/auth/google/start?challenge={}&state=s&ticket={ticket}", server.base, crate::sha256_hex(b"v3"));
     assert_eq!(server.http.get(reused).send().await.unwrap().status(), 400);
+}
+
+async fn sign_in(server: &Server, verifier: &str, email: &str) -> String {
+    let code = code_of(&server.google_sign_in(verifier, None, email).await);
+    token_text(token(server, &code, verifier).await).await
+}
+
+async fn add(server: &Server, session: &str, verifier: &str, email: &str) {
+    let response = server.post("/api/link-ticket", Some(session), json!({})).await;
+    let ticket: Value = response.json().await.unwrap();
+    let code = code_of(&server.google_sign_in(verifier, ticket["ticket"].as_str(), email).await);
+    token_text(token(server, &code, verifier).await).await;
+}
+
+async fn refusal(server: &Server, verifier: &str, email: &str) -> String {
+    let response = server.google_answer(verifier, None, email).await;
+    assert_eq!(response.status(), 400);
+    response.text().await.unwrap()
+}
+
+#[sqlx::test]
+async fn a_mailbox_two_people_have_is_in_both_and_signs_neither_in(db: PgPool) {
+    let server = Server::start(db).await;
+    let ann = sign_in(&server, "v1", "ann@gmail.com").await;
+    add(&server, &ann, "v2", "team@gmail.com").await;
+    let bob = sign_in(&server, "v3", "bob@gmail.com").await;
+    add(&server, &bob, "v4", "team@gmail.com").await;
+
+    let owners: Vec<Uuid> =
+        sqlx::query_scalar("SELECT user_id FROM accounts WHERE address = 'team@gmail.com' ORDER BY created_at")
+            .fetch_all(&server.state.db)
+            .await
+            .unwrap();
+    let (ann, bob) = (server.user_of(&ann).await.unwrap(), server.user_of(&bob).await.unwrap());
+    assert_eq!(owners, vec![ann, bob]);
+
+    assert!(refusal(&server, "v5", "team@gmail.com").await.contains("used by more than one person"));
+    let again = sign_in(&server, "v6", "ann@gmail.com").await;
+    assert_eq!(server.user_of(&again).await, Some(ann));
+}
+
+#[sqlx::test]
+async fn only_the_first_mailbox_no_one_else_has_signs_its_user_in(db: PgPool) {
+    let server = Server::start(db).await;
+    let team = sign_in(&server, "v1", "team@gmail.com").await;
+    add(&server, &team, "v2", "ann@gmail.com").await;
+    assert!(refusal(&server, "v3", "ann@gmail.com").await.contains("added after another address"));
+
+    // Once someone else has the first one too, the next one signs the user in.
+    let bob = sign_in(&server, "v4", "bob@gmail.com").await;
+    add(&server, &bob, "v5", "team@gmail.com").await;
+    let ann = sign_in(&server, "v6", "ann@gmail.com").await;
+    assert_eq!(server.user_of(&ann).await, server.user_of(&team).await);
 }
 
 #[sqlx::test]
