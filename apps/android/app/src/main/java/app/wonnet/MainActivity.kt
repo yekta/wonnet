@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store.start(demo = intent.getBooleanExtra("demo", false))
+        // Recents and a restored activity bring back the intent it started with, and its old thread.
+        if (savedInstanceState != null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) intent.removeExtra(Notifier.THREAD)
         received(intent)
         setContent {
             val dark = when (store.appearance) {

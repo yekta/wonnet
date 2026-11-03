@@ -214,6 +214,12 @@ impl SettingsEntry {
         use SettingsSection::*;
         vec![
             Self::new("appearance", "Theme", General, "appearance light dark system mode sidebar keep open beside"),
+            Self::new(
+                "notifications",
+                "Notifications",
+                General,
+                "notification button action archive delete trash undo",
+            ),
             Self::new("updates", "Updates", General, "version check for updates release about"),
             Self::new("server", "Server", General, "connection connected offline sync"),
             Self::new("accounts", "Accounts", Accounts, "add remove gmail jmap fastmail colour color notifications"),

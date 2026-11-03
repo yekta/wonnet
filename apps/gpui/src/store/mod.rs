@@ -19,7 +19,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub use commands::ThreadCommand;
-pub use local::{Appearance, LocalSettings};
+pub use local::{Appearance, LocalSettings, NotificationAction};
 pub use prefs::{CustomRule, CustomSplit, SettingsEntry, SettingsSection, Snippet, label_id, uuid};
 
 use crate::core::Core;
@@ -614,12 +614,13 @@ impl Store {
 
     /// Tells of new mail from its sender, with their picture.
     fn notify(&mut self, messages: Vec<NewMailItem>, cx: &mut Context<Self>) {
+        let first_button = self.local.notification_action;
         for message in messages.into_iter().rev().take(5) {
             let photo = self.core.call::<AvatarReply>(Command::Avatar { email: message.email.to_lowercase() });
             let notifier = self.notifier.clone();
             cx.background_spawn(async move {
                 let photo = photo.await.ok().and_then(|reply| reply.path).map(std::path::PathBuf::from);
-                notifier.show(message, photo);
+                notifier.show(message, photo, first_button);
             })
             .detach();
         }
@@ -653,8 +654,19 @@ impl Store {
                 self.show_thread(&thread, cx);
                 return self.reply(ReplyKind::Reply, Some(thread), None, cx);
             }
-            Answer::Archive(thread) => (Action::Archive, thread),
+            Answer::Archive(thread) => {
+                self.notifier.show_undo(thread.clone(), "Archived.");
+                (Action::Archive, thread)
+            }
+            Answer::Trash(thread) => {
+                self.notifier.show_undo(thread.clone(), "Moved to Trash.");
+                (Action::Trash, thread)
+            }
             Answer::Read(thread) => (Action::Read, thread),
+            Answer::Undo(thread) => {
+                self.notifier.take_down_undo(&thread);
+                (Action::Inbox, thread)
+            }
         };
         let core = self.core.clone();
         cx.background_spawn(async move {

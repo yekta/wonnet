@@ -5,7 +5,10 @@ import kotlinx.coroutines.launch
 /** What a notification's button asks for. */
 sealed interface NotificationAnswer {
     data object Archive : NotificationAnswer
+    data object Trash : NotificationAnswer
     data object Read : NotificationAnswer
+    /** Back to the inbox, after Archive or Trash: the core's own undo is gone once the app is. */
+    data object Undo : NotificationAnswer
     data class Reply(val text: String) : NotificationAnswer
 }
 
@@ -15,15 +18,17 @@ sealed interface NotificationAnswer {
  */
 suspend fun MailStore.answer(answer: NotificationAnswer, thread: String) {
     runCatching { bridge.call("settle") }
-    val read = mapOf("action" to Action.Read.id, "threads" to listOf(thread))
+    suspend fun act(action: Action) = runCatching { bridge.call("act", mapOf("action" to action.id, "threads" to listOf(thread))) }
     when (answer) {
-        NotificationAnswer.Archive -> runCatching { bridge.call("act", mapOf("action" to Action.Archive.id, "threads" to listOf(thread))) }
-        NotificationAnswer.Read -> runCatching { bridge.call("act", read) }
+        NotificationAnswer.Archive -> act(Action.Archive)
+        NotificationAnswer.Trash -> act(Action.Trash)
+        NotificationAnswer.Read -> act(Action.Read)
+        NotificationAnswer.Undo -> act(Action.Inbox)
         is NotificationAnswer.Reply -> {
             val reply = runCatching {
                 bridge.call("reply_draft", mapOf("thread" to thread, "kind" to ReplyKind.Reply.id)) { DraftReply.read(it.objectOrEmpty) }
             }.getOrNull() ?: return
-            runCatching { bridge.call("act", read) }
+            act(Action.Read)
             runCatching { bridge.call("send", mapOf("draft" to reply.draft.copy(text = answer.text).toJson(), "delay" to 0)) }
         }
     }

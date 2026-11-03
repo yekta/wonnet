@@ -179,6 +179,12 @@ private struct GeneralPage: View {
             }
         }
         .id("appearance")
+        SettingsListSection("Notifications", footer: "The button a new mail's notification has next to Mark as Read and Reply. After it, the notification offers Undo.") {
+            Picker("Button", selection: $store.notificationAction) {
+                ForEach(NotificationAction.allCases) { Text($0.name).tag($0) }
+            }
+        }
+        .id("notifications")
         SettingsListSection("About") {
             LabeledContent("Version", value: Platform.version)
         }

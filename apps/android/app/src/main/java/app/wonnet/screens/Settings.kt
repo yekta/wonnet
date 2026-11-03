@@ -63,6 +63,7 @@ import app.wonnet.core.CustomSplit
 import app.wonnet.core.MailStore
 import app.wonnet.core.Mailbox
 import app.wonnet.core.NewLabel
+import app.wonnet.core.NotificationButton
 import app.wonnet.core.SettingsEntry
 import app.wonnet.core.SettingsSection
 import app.wonnet.core.Snippet
@@ -310,6 +311,14 @@ private fun PageView(store: MailStore, pages: List<Page>, back: (() -> Unit)?, p
 private fun GeneralPage(store: MailStore, anchor: (String) -> Modifier) {
     Group("Appearance", modifier = anchor("appearance")) {
         SettingsRow("Theme", trailing = { ChoiceMenu(Appearance.entries, store.appearance, { it.title }, ControlSize.Small, store::changeAppearance) })
+    }
+    Group(
+        "Notifications", "The button a new mail's notification has next to Mark as Read and Reply. After it, the notification offers Undo.",
+        anchor("notifications"),
+    ) {
+        SettingsRow("Button", trailing = {
+            ChoiceMenu(NotificationButton.entries, store.notificationButton, { it.title }, ControlSize.Small, store::changeNotificationButton)
+        })
     }
     Group("About", modifier = anchor("updates")) {
         SettingsRow("Version", value = BuildConfig.VERSION_NAME)

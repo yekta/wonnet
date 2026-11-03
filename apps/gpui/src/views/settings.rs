@@ -18,7 +18,8 @@ use super::onboarding::OnboardingView;
 use crate::keys::{self, KeyCommand};
 use crate::models::AccountView;
 use crate::store::{
-    Appearance, CustomRule, CustomSplit, LocalSettings, SettingsEntry, SettingsSection, Snippet, Store,
+    Appearance, CustomRule, CustomSplit, LocalSettings, NotificationAction, SettingsEntry, SettingsSection, Snippet,
+    Store,
 };
 use crate::theme::*;
 use crate::ui::{self, ActionButton, IconButton, Lead, MenuEntry, NavRow, SheetSize, Symbol, Variant};
@@ -291,6 +292,27 @@ impl SettingsView {
                     })
                     .collect()
             });
+        let notification_action = store.local.notification_action;
+        let action_store = self.store.clone();
+        let first_button = ActionButton::new("notification-action", notification_action.name())
+            .chevron()
+            .surface(ui::Surface::Card)
+            .menu(move |_, _| {
+                NotificationAction::ALL
+                    .into_iter()
+                    .map(|choice| {
+                        let store = action_store.clone();
+                        MenuEntry::item(choice.name(), move |_, cx| {
+                            store.update(cx, |store, cx| {
+                                store.local.notification_action = choice;
+                                store.local.save();
+                                cx.notify();
+                            })
+                        })
+                        .checked(choice == notification_action)
+                    })
+                    .collect()
+            });
         let server_symbol = if store.connection == "offline" { Symbol::WifiOff } else { Symbol::Server };
         let keep_sidebar = store.local.keep_sidebar;
         let keep_store = self.store.clone();
@@ -328,6 +350,24 @@ impl SettingsView {
                                 cx,
                             ),
                             vec![keep.into_any_element()],
+                        )
+                        .into_any_element(),
+                    ],
+                    cx,
+                ),
+            )
+            .into_any_element(),
+            self.mark(
+                "notifications",
+                ui::settings_group(
+                    "Notifications",
+                    Some(
+                        "The button a new mail's notification has next to Mark as Read and Reply. After it, the notification offers Undo.",
+                    ),
+                    vec![
+                        ui::settings_row(
+                            ui::settings_label("Button", None, Lead::None, false, cx),
+                            vec![first_button.into_any_element()],
                         )
                         .into_any_element(),
                     ],

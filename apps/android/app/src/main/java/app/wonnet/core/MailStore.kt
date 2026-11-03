@@ -111,6 +111,10 @@ class MailStore(private val context: Context) {
     var requestedThread by mutableStateOf<String?>(null)
     /** A notification's thread whose mail hasn't synced yet. */
     private var arrivingThread: String? = null
+    /** A notification's thread asked for before boot, which would put back the screen the app was left on over it. */
+    private var threadAfterBoot: String? = null
+    /** The thread asked to open last: one asked before it that opens late doesn't take its place. */
+    private var opening: String? = null
     /** Threads whose remote images were allowed. */
     var imagesShown by mutableStateOf<Set<String>>(emptySet())
     /** How far the list and the open thread are scrolled; a list made anew goes back to it. */
@@ -124,6 +128,8 @@ class MailStore(private val context: Context) {
     var undoDelay by mutableStateOf(local.getInt("undoDelay", 5))
         private set
     var appearance by mutableStateOf(Appearance.entries.firstOrNull { it.name == local.getString("appearance", "") } ?: Appearance.System)
+        private set
+    var notificationButton by mutableStateOf(NotificationButton.saved(context))
         private set
 
     /** The synced preferences, by key. */
@@ -330,6 +336,10 @@ class MailStore(private val context: Context) {
         }
         booted = true
         trackUi()
+        threadAfterBoot?.let {
+            threadAfterBoot = null
+            show(it)
+        }
     }
 
     /** The unread threads of every inbox together, for the notifications' count. */
@@ -600,6 +610,7 @@ class MailStore(private val context: Context) {
     /** One `arriving` may not be on the device yet: it opens once its mail syncs. */
     private fun open(thread: String, arriving: Boolean) {
         selected = thread
+        opening = thread
         arrivingThread = null
         row(thread)?.draftId?.let {
             openDraft(it)
@@ -615,7 +626,9 @@ class MailStore(private val context: Context) {
         }
         scope.launch {
             try {
-                conversation = openThread(thread)
+                val opened = openThread(thread)
+                if (opening != thread) return@launch
+                conversation = opened
             } catch (error: CoreError) {
                 if (!arriving || selected != thread) {
                     show(error.message)
@@ -631,6 +644,10 @@ class MailStore(private val context: Context) {
 
     /** Opens the thread of a notification, whose mail may not have synced yet. */
     fun show(thread: String) {
+        if (!booted) {
+            threadAfterBoot = thread
+            return
+        }
         open(thread, arriving = true)
         requestedThread = thread
     }
@@ -1047,6 +1064,11 @@ class MailStore(private val context: Context) {
     fun changeAppearance(appearance: Appearance) {
         this.appearance = appearance
         local.edit { putString("appearance", appearance.name) }
+    }
+
+    fun changeNotificationButton(button: NotificationButton) {
+        notificationButton = button
+        local.edit { putString(NotificationButton.KEY, button.name) }
     }
 
     // Search

@@ -39,7 +39,9 @@ extension MailStore {
         _ = try? await bridge.call("settle", as: Empty.self)
         switch answer {
         case .archive:
-            _ = try? await bridge.call("act", ["action": Action.archive.rawValue, "threads": [thread]], as: ActReply.self)
+            await actOfferingUndo(.archive, on: thread)
+        case .trash:
+            await actOfferingUndo(.trash, on: thread)
         case .read:
             _ = try? await bridge.call("act", ["action": Action.read.rawValue, "threads": [thread]], as: ActReply.self)
         case .reply(let text):
@@ -48,8 +50,19 @@ extension MailStore {
             reply.text = text
             _ = try? await bridge.call("act", ["action": Action.read.rawValue, "threads": [thread]], as: ActReply.self)
             _ = try? await bridge.call("send", ["draft": CoreBridge.object(reply), "delay": 0], as: SendReply.self)
+        case .undo:
+            _ = try? await bridge.call("act", ["action": Action.inbox.rawValue, "threads": [thread]], as: ActReply.self)
         }
         _ = try? await bridge.call("settle", as: Empty.self)
+    }
+
+    /// Archives or deletes a notification's thread and offers Undo in its place, in the core's
+    /// words, before the server has it.
+    private func actOfferingUndo(_ action: Action, on thread: String) async {
+        guard let done = try? await bridge.call("act", ["action": action.rawValue, "threads": [thread]], as: ActReply.self),
+              let message = done.message
+        else { return }
+        await Notifier.shared.offerUndo(thread, saying: message)
     }
 
     // MARK: Selection

@@ -138,6 +138,12 @@ public final class MailStore {
     var undoDelay: Int = UserDefaults.standard.object(forKey: "undoDelay") as? Int ?? 5 {
         didSet { UserDefaults.standard.set(undoDelay, forKey: "undoDelay") }
     }
+    var notificationAction = NotificationAction.saved {
+        didSet {
+            UserDefaults.standard.set(notificationAction.rawValue, forKey: "notificationAction")
+            Notifier.shared.setButtons(first: notificationAction)
+        }
+    }
     var appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
         didSet {
             UserDefaults.standard.set(appearance.rawValue, forKey: "appearance")

@@ -199,6 +199,16 @@ private struct GeneralSettings: View {
                 Switch(title: "Keep the sidebar open", isOn: $store.keepSidebar)
             }
         }
+        SettingsGroup(
+            id: "notifications", title: "Notifications",
+            detail: "The button a new mail's notification has next to Mark as Read and Reply. After it, the notification offers Undo."
+        ) {
+            SettingsRow {
+                SettingsLabel(title: "Button")
+            } trailing: {
+                ChoiceMenu(options: NotificationAction.allCases, selection: $store.notificationAction, title: \.name)
+            }
+        }
         SettingsGroup(id: "updates", title: "Updates", detail: "New versions are downloaded and installed on their own; a restart finishes them.") {
             VersionRow()
         }
