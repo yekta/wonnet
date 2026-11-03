@@ -398,6 +398,7 @@ impl Core {
         self.link = None;
         self.caught_up = false;
         self.backlog.clear();
+        self.ask_again_for_bodies_in_flight();
         let (Some(server), Some(_)) = (self.server(), self.token()) else {
             self.set_connection("signed_out", None);
             return;
@@ -531,6 +532,10 @@ impl Core {
             Command::PrintThread { thread } => self.print_thread(&thread),
             Command::Search { query, account } => return self.search(id, query, account),
             Command::Refresh => return self.refresh(id),
+            Command::CameBack => {
+                self.came_back();
+                Ok(json!({}))
+            }
             Command::Settle => return self.settle(id),
             Command::SetPushDevice { platform, token, topic, sandbox, key } => {
                 return self.set_push_device(id, DeviceRequest { platform, token, topic, sandbox, key });
@@ -561,6 +566,16 @@ impl Core {
         }
         self.spawn(tokio::time::sleep(REFRESH_WAIT), move |core, _| core.refreshed(request));
         None
+    }
+
+    fn came_back(&mut self) {
+        if self.demo || self.token().is_none() {
+            return;
+        }
+        match (&self.link, self.online()) {
+            (Some(link), true) => link.check(),
+            _ => self.connect(),
+        }
     }
 
     fn settle(&mut self, id: u64) -> Option<Result<Value>> {
@@ -937,9 +952,11 @@ impl Core {
 
     // ---------- bodies ----------
 
-    /// Asks for the bodies of the thread being opened, ahead of everything else.
+    /// Asks for the bodies of the thread being opened, ahead of everything else; offline, as
+    /// soon as the link is back.
     fn fetch_bodies_now(&mut self, ids: &[String]) {
         if !self.online() {
+            self.ask_first(ids.to_vec());
             return;
         }
         for id in ids {
@@ -947,6 +964,20 @@ impl Core {
                 self.next_request += 1;
                 self.send(ClientMessage::Body { request: self.next_request, message_id: id.clone() });
             }
+        }
+    }
+
+    /// A dropped link never answers what was asked of it.
+    fn ask_again_for_bodies_in_flight(&mut self) {
+        let dropped: Vec<String> = self.bodies_in_flight.drain().collect();
+        self.ask_first(dropped);
+    }
+
+    /// Puts these bodies ahead of every other the link asks for once it is up.
+    fn ask_first(&mut self, ids: Vec<String>) {
+        for id in ids.into_iter().rev() {
+            self.soon.retain(|queued| *queued != id);
+            self.soon.push_front(id);
         }
     }
 
@@ -1744,7 +1775,7 @@ impl Core {
             LinkEvent::Closed(error) => {
                 self.caught_up = false;
                 if self.token().is_some() {
-                    self.bodies_in_flight.clear();
+                    self.ask_again_for_bodies_in_flight();
                     self.set_connection("offline", error);
                 }
             }

@@ -505,6 +505,7 @@ public final class MailStore {
             MainActor.assumeIsolated {
                 guard let self, self.booted else { return }
                 Task {
+                    _ = try? await self.bridge.call("came_back", as: Empty.self)
                     await self.reloadMailboxes()
                     await Notifier.shared.settle(nil)
                 }
