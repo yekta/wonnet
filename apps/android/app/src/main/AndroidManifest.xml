@@ -71,6 +71,10 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+        <!-- Without it, FirebaseMessaging.register() fails and onRegistered never runs. -->
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
 
         <!-- Hands other apps the attachments the core downloaded. -->
         <provider
