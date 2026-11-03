@@ -607,6 +607,7 @@ private struct RulePage: View {
 
     var body: some View {
         let labels = store.splitLabels
+        let accounts = store.accounts
         SettingsList {
             SettingsListSection("From", footer: "Addresses, or @ and a domain for everyone there.") {
                 addressField("ann@example.com, @example.com", text: $draft.from)
@@ -619,10 +620,19 @@ private struct RulePage: View {
                     .autocorrectionDisabled()
             }
             SettingsListSection("Then") {
-                if !labels.isEmpty {
-                    Picker("Label", selection: $draft.rule.label) {
-                        Text("None").tag(String?.none)
-                        ForEach(labels, id: \.id) { label in Text(label.name).tag(Optional(label.id)) }
+                if !accounts.isEmpty {
+                    Picker("Label", selection: $draft.label) {
+                        Text("None").tag(RuleDraft.LabelChoice?.none)
+                        ForEach(labels, id: \.id) { label in Text(label.name).tag(Optional(RuleDraft.LabelChoice.existing(label.id))) }
+                        Text("New Label").tag(Optional(RuleDraft.LabelChoice.new))
+                    }
+                }
+                if draft.label == .new {
+                    TextField("Label name", text: $draft.newLabelName)
+                    if accounts.count > 1 {
+                        Picker("Account", selection: $draft.newLabelAccount) {
+                            ForEach(accounts) { account in Text(account.title).tag(Optional(account.id)) }
+                        }
                     }
                 }
                 Toggle("Skip the Inbox", isOn: $draft.rule.skipInbox)

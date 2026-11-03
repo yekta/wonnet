@@ -62,6 +62,7 @@ import app.wonnet.core.CustomRule
 import app.wonnet.core.CustomSplit
 import app.wonnet.core.MailStore
 import app.wonnet.core.Mailbox
+import app.wonnet.core.NewLabel
 import app.wonnet.core.SettingsEntry
 import app.wonnet.core.SettingsSection
 import app.wonnet.core.Snippet
@@ -560,27 +561,44 @@ private fun SplitPage(store: MailStore, start: CustomSplit, isNew: Boolean, back
     }
 }
 
+/** The label a rule puts on mail: none, one there is, or one made as the rule is saved. */
+private sealed interface RuleLabel {
+    data object None : RuleLabel
+    data class Existing(val id: String) : RuleLabel
+    data object New : RuleLabel
+}
+
 /** A rule being written: what it looks for, what it does, and for a new one whether it also does it to the mail already here. */
 @Composable
 private fun RulePage(store: MailStore, start: CustomRule, isNew: Boolean, back: () -> Unit, saving: (() -> Unit, Boolean) -> Unit) {
     var from by remember { mutableStateOf(start.from.joinToString(", ")) }
     var to by remember { mutableStateOf(start.to.joinToString(", ")) }
     var subject by remember { mutableStateOf(start.subject.joinToString(", ")) }
-    var label by remember { mutableStateOf(start.label) }
+    var label by remember { mutableStateOf<RuleLabel>(start.label?.let { RuleLabel.Existing(it) } ?: RuleLabel.None) }
+    var labelName by remember { mutableStateOf("") }
+    var labelAccount by remember { mutableStateOf(store.accounts.firstOrNull()?.id) }
     var skipInbox by remember { mutableStateOf(start.skipInbox) }
     var markRead by remember { mutableStateOf(start.markRead) }
     var applyNow by remember { mutableStateOf(true) }
+    var pending by remember { mutableStateOf(false) }
     val labels = store.splitLabels
+    val accounts = store.accounts
     val rule = start.copy(
-        from = CustomSplit.senders(from), to = CustomSplit.senders(to), subject = CustomRule.words(subject), label = label, skipInbox = skipInbox,
-        markRead = markRead,
+        from = CustomSplit.senders(from), to = CustomSplit.senders(to), subject = CustomRule.words(subject),
+        label = (label as? RuleLabel.Existing)?.id, skipInbox = skipInbox, markRead = markRead,
     )
-    LaunchedEffect(rule, applyNow) {
+    val newLabel = labelAccount?.takeIf { label == RuleLabel.New }?.let { NewLabel(it, labelName) }
+    val ready = when (label) {
+        RuleLabel.New -> newLabel != null && labelName.isNotBlank()
+        else -> rule.doesSomething
+    }
+    LaunchedEffect(rule, newLabel, applyNow, ready, pending) {
         saving({
-            store.saveRule(rule)
-            if (isNew && applyNow) store.applyRule(rule)
-            back()
-        }, rule.hasCondition && rule.doesSomething)
+            pending = true
+            store.scope.launch {
+                if (store.saveRule(rule, isNew && applyNow, newLabel)) back() else pending = false
+            }
+        }, rule.hasCondition && ready && !pending)
     }
     Group("From", "Addresses, or @ and a domain for everyone there.") {
         Box(Modifier.padding(Space.s)) { InputField(from, { from = it }, placeholder = "ann@example.com, @example.com", lines = 2, autofocus = isNew, keyboard = KeyboardType.Email) }
@@ -592,11 +610,29 @@ private fun RulePage(store: MailStore, start: CustomRule, isNew: Boolean, back: 
         Box(Modifier.padding(Space.s)) { InputField(subject, { subject = it }, placeholder = "[project], invoice") }
     }
     Group(footer = "Mail that meets every condition, any entry of one, is acted on.") {
-        if (labels.isNotEmpty()) {
-            SettingsRow("Label", trailing = {
-                ChoiceMenu(listOf<String?>(null) + labels.map { it.first }, label, { id -> labels.firstOrNull { it.first == id }?.second ?: "None" }, ControlSize.Small) { label = it }
+        if (accounts.isNotEmpty()) {
+            val choices = listOf(RuleLabel.None) + labels.map { RuleLabel.Existing(it.first) } + RuleLabel.New
+            val title = { choice: RuleLabel ->
+                when (choice) {
+                    RuleLabel.None -> "None"
+                    is RuleLabel.Existing -> labels.firstOrNull { it.first == choice.id }?.second ?: "None"
+                    RuleLabel.New -> "New Label"
+                }
+            }
+            SettingsRow("Label", trailing = { ChoiceMenu(choices, label, title, ControlSize.Small) { label = it } })
+            RowRule()
+        }
+        if (label == RuleLabel.New) {
+            SettingsRow("Name", trailing = {
+                InputField(labelName, { labelName = it }, Modifier.widthIn(max = 220.dp), placeholder = "Receipts", autofocus = true, capitalize = true)
             })
             RowRule()
+            if (accounts.size > 1) {
+                SettingsRow("Account", trailing = {
+                    ChoiceMenu(accounts.map { it.id }, labelAccount, { id -> accounts.firstOrNull { it.id == id }?.title ?: "" }, ControlSize.Small) { labelAccount = it }
+                })
+                RowRule()
+            }
         }
         SettingsRow("Skip the Inbox", trailing = { Toggle(skipInbox, { skipInbox = it }) })
         RowRule()

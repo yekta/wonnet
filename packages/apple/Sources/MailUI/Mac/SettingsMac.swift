@@ -579,6 +579,8 @@ private struct RuleSheet: View {
 
     var body: some View {
         let labels = store.splitLabels
+        let accounts = store.accounts
+        let choices: [RuleDraft.LabelChoice] = labels.map { RuleDraft.LabelChoice.existing($0.id) } + [.new]
         Sheet(title: draft.isNew ? "New rule" : "Edit rule", size: .large, background: Tokens.background) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.m) {
@@ -586,9 +588,20 @@ private struct RuleSheet: View {
                     InputField(label: "To", text: $draft.to, placeholder: "team@example.com")
                     InputField(label: "Subject contains", text: $draft.subject, placeholder: "[project], invoice")
                     Notice(text: "Addresses, or @ and a domain for everyone there; To also looks at Cc. Mail matches when it meets every field filled in.")
-                    if !labels.isEmpty {
-                        Dropdown(label: "Label", options: labels.map(\.id), selection: $draft.rule.label, none: "None") { id in
-                            labels.first { $0.id == id }?.name ?? id
+                    if !accounts.isEmpty {
+                        Dropdown(label: "Label", options: choices, selection: $draft.label, none: "None") { choice in
+                            switch choice {
+                            case .existing(let id): labels.first { $0.id == id }?.name ?? id
+                            case .new: "New label"
+                            }
+                        }
+                    }
+                    if draft.label == .new {
+                        InputField(label: "New label", text: $draft.newLabelName, placeholder: "Receipts")
+                        if accounts.count > 1 {
+                            Dropdown(label: "In", options: accounts.map(\.id), selection: $draft.newLabelAccount) { id in
+                                accounts.first { $0.id == id }?.title ?? id
+                            }
                         }
                     }
                     ToggleRow(title: "Skip the inbox", isOn: $draft.rule.skipInbox)

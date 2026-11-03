@@ -130,18 +130,33 @@ extension MailStore {
     func newRule() -> RuleDraft {
         let order = (customRules.map(\.order).max() ?? -1) + 1
         let rule = CustomRule(id: UUID().uuidString.lowercased(), from: [], to: [], subject: [], label: nil, skipInbox: false, markRead: false, order: order)
-        return RuleDraft(rule, isNew: true)
+        return RuleDraft(rule, isNew: true, account: accounts.first?.id)
     }
 
     func draft(of rule: CustomRule) -> RuleDraft {
-        RuleDraft(rule, isNew: false)
+        RuleDraft(rule, isNew: false, account: accounts.first?.id)
     }
 
-    /// Saves the rule, and applies it to the mail already here if asked.
+    /// Saves the rule, once the label it names is made, and applies it to the mail already here if asked.
     func saveRule(_ draft: RuleDraft) {
         let rule = draft.written
+        guard draft.makesLabel, let account = draft.newLabelAccount else { return keepRule(rule, applying: draft.applying) }
+        let name = draft.newLabelName.trimmingCharacters(in: .whitespaces)
+        let applying = draft.applying
+        Task {
+            do {
+                var labelled = rule
+                labelled.label = try await bridge.call("create_label", ["account": account, "name": name], as: IDReply.self).id
+                keepRule(labelled, applying: applying)
+            } catch {
+                show(error.localizedDescription)
+            }
+        }
+    }
+
+    private func keepRule(_ rule: CustomRule, applying: Bool) {
         setPreference(rule.key, rule.value)
-        guard draft.applying else { return }
+        guard applying else { return }
         Task {
             do {
                 report(try await bridge.call("apply_rule", ["rule": rule.value.any], as: ActReply.self))
@@ -262,38 +277,59 @@ extension CustomSplit {
     }
 }
 
-/// A rule as its editor holds it, its conditions as typed.
+/// A rule as its editor holds it: the conditions as typed, and its label, picked or to be made.
 struct RuleDraft: Identifiable {
+    enum LabelChoice: Hashable {
+        case existing(String)
+        case new
+    }
+
     var rule: CustomRule
     let isNew: Bool
     var from: String
     var to: String
     var subject: String
+    var label: LabelChoice?
+    var newLabelName = ""
+    var newLabelAccount: String?
     /// Also does what it does to the mail already here, once saved.
     var applying: Bool
 
     var id: String { rule.id }
 
-    init(_ rule: CustomRule, isNew: Bool) {
+    init(_ rule: CustomRule, isNew: Bool, account: String?) {
         self.rule = rule
         self.isNew = isNew
         from = rule.from.joined(separator: ", ")
         to = rule.to.joined(separator: ", ")
         subject = rule.subject.joined(separator: ", ")
+        label = rule.label.map(LabelChoice.existing)
+        newLabelAccount = account
         applying = isNew
     }
 
+    /// The rule as written, without the label still to be made.
     var written: CustomRule {
         var rule = rule
         rule.from = CustomSplit.senders(from)
         rule.to = CustomSplit.senders(to)
         rule.subject = CustomRule.words(subject)
+        if case .existing(let id) = label {
+            rule.label = id
+        } else {
+            rule.label = nil
+        }
         return rule
+    }
+
+    var makesLabel: Bool {
+        label == .new && newLabelAccount != nil && !newLabelName.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// A rule is kept once it matches something and does something.
     var canSave: Bool {
         let rule = written
-        return rule.hasCondition && (rule.label != nil || rule.skipInbox || rule.markRead)
+        guard rule.hasCondition, label != .new || makesLabel else { return false }
+        return rule.label != nil || makesLabel || rule.skipInbox || rule.markRead
     }
 }
