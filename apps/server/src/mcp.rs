@@ -46,7 +46,8 @@ confirm: true; show the user what a large change will do before confirming it. T
 nothing is deleted for good.
 
 Labels belong to one account. To sort new mail as it arrives, create_rule labels it, takes it out of the inbox or \
-marks it read; apply_to_existing runs the rule on the mail already here too.
+marks it read; apply_to_existing runs the rule on the mail already here too. To show a label or senders as a tab \
+of the inbox, create_split makes a split of it; the apps show the splits while Split Inbox is on (set_split_inbox).
 
 unsubscribe leaves mailing lists by their one-click link or by email. A list that can only be left on its web page \
 answers with the page's URL, for the user to open.
@@ -156,6 +157,15 @@ const SPECS: &[Spec] = &[
         offered: anyone,
     },
     Spec {
+        name: "list_splits",
+        title: "List splits",
+        description: "The custom splits of the inbox, the tabs the apps show beside Important and Other, and \
+            whether Split Inbox is on.",
+        schema: no_arguments,
+        annotations: reading,
+        offered: anyone,
+    },
+    Spec {
         name: "modify",
         title: "Change threads",
         description: "Archives, moves to the inbox, trashes, marks as spam, marks read or unread, stars, labels or \
@@ -208,6 +218,31 @@ const SPECS: &[Spec] = &[
         offered: organizer,
     },
     Spec {
+        name: "create_split",
+        title: "Create a split",
+        description: "Adds a tab to the inbox that takes the threads of some senders or of a label, in every app. \
+            A thread is in the first split it matches.",
+        schema: arguments::<tools::CreateSplitArgs>,
+        annotations: changing,
+        offered: organizer,
+    },
+    Spec {
+        name: "delete_split",
+        title: "Delete a split",
+        description: "Takes a tab off the inbox; its threads go back to Important or Other.",
+        schema: arguments::<tools::SplitIdArgs>,
+        annotations: changing,
+        offered: organizer,
+    },
+    Spec {
+        name: "set_split_inbox",
+        title: "Turn Split Inbox on or off",
+        description: "Splits every inbox into Important, the custom splits and Other (bulk mail), or shows it whole.",
+        schema: arguments::<tools::SplitInboxArgs>,
+        annotations: changing,
+        offered: organizer_of_every_account,
+    },
+    Spec {
         name: "unsubscribe",
         title: "Unsubscribe",
         description: "Leaves the mailing lists of senders, by one-click link or by email from the account the mail \
@@ -256,6 +291,10 @@ impl Mcp {
             "mute_thread" => tools::mute_thread(state, caller, parse(arguments)?).await,
             "create_rule" => tools::create_rule(state, caller, parse(arguments)?).await,
             "delete_rule" => tools::delete_rule(state, caller, parse(arguments)?).await,
+            "list_splits" => tools::list_splits(state, caller).await,
+            "create_split" => tools::create_split(state, caller, parse(arguments)?).await,
+            "delete_split" => tools::delete_split(state, caller, parse(arguments)?).await,
+            "set_split_inbox" => tools::set_split_inbox(state, caller, parse(arguments)?).await,
             "unsubscribe" => tools::unsubscribe(state, caller, parse(arguments)?).await,
             _ => Err(format!("There is no tool {name:?}.")),
         }

@@ -315,7 +315,7 @@ async fn codes_and_refresh_tokens_work_once(db: PgPool) {
     assert_eq!(mismatched["error"], "invalid_grant");
     let tokens: Value = server.tokens(&client_id, &code).await.json().await.unwrap();
     let access = token(&tokens, "access_token");
-    assert_eq!(server.tool_names(&access).await.len(), 6);
+    assert_eq!(server.tool_names(&access).await.len(), 7);
 
     let renewed: Value = server.refresh(&client_id, &token(&tokens, "refresh_token")).await.json().await.unwrap();
     let renewed_access = token(&renewed, "access_token");
@@ -484,6 +484,57 @@ async fn an_organizer_cleans_up_by_sender(db: PgPool) {
             .await
             .unwrap();
     assert!(preference);
+}
+
+#[sqlx::test]
+async fn an_organizer_splits_the_inbox_by_label(db: PgPool) {
+    let server = Server::start(db).await;
+    let (_, _, account) = server.gmail_user("ann@gmail.com").await;
+    mail(
+        &server,
+        &account,
+        &[
+            message("g1", "notifications@github.com", "[Org/Repo] Fix the build", &["inbox"]),
+            message("o1", "ship@track.shop.example", "Your order shipped", &["inbox"]),
+            message("p1", "cy@example.com", "Lunch?", &["inbox"]),
+        ],
+    )
+    .await;
+    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
+    let (_, tokens) = server.connect(&cookie, &ORGANIZER).await;
+    let access = token(&tokens, "access_token");
+
+    let found = server.call(&access, "search", json!({ "query": "subject:repo" })).await.unwrap();
+    assert_eq!(found["messages"].as_array().unwrap().len(), 1);
+    let others = server.call(&access, "search", json!({ "query": "-from:cy@example.com" })).await.unwrap();
+    assert_eq!(others["messages"].as_array().unwrap().len(), 2);
+
+    server.call(&access, "create_label", json!({ "account_id": account.id, "name": "Orders" })).await.unwrap();
+    let rule = server
+        .call(
+            &access,
+            "create_rule",
+            json!({ "from": ["@shop.example"], "label": "Orders", "account_id": account.id, "apply_to_existing": true }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rule["changed_messages"], 1);
+    let split = server
+        .call(&access, "create_split", json!({ "name": "Orders", "label": "Orders", "account_id": account.id }))
+        .await
+        .unwrap();
+    assert_eq!(split["split"]["label"]["name"], "Orders");
+    assert!(split["note"].is_string());
+    let on = server.call(&access, "set_split_inbox", json!({ "on": true })).await.unwrap();
+    assert_eq!(on["split_inbox"], true);
+    let splits = server.call(&access, "list_splits", json!({})).await.unwrap();
+    assert_eq!(splits["split_inbox"], true);
+    assert_eq!(splits["splits"].as_array().unwrap().len(), 1);
+
+    let id = splits["splits"][0]["id"].as_str().unwrap();
+    server.call(&access, "delete_split", json!({ "id": id })).await.unwrap();
+    let splits = server.call(&access, "list_splits", json!({})).await.unwrap();
+    assert!(splits["splits"].as_array().unwrap().is_empty());
 }
 
 async fn shared_mailbox(server: &Server, user_id: Uuid) -> AccountRow {

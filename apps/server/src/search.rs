@@ -1,7 +1,8 @@
 //! Search as in Gmail: words, "quoted phrases", -word and OR anywhere in a message, and operators
 //! for its parts: from:, to:, subject:, has:attachment, is:unread, is:starred,
 //! in:<inbox|sent|drafts|trash|spam|archive|snoozed|starred>, label:<name>, before: and after:
-//! (YYYY/MM/DD), newer_than: and older_than: (2d, 3w, 1m, 1y). An operator it doesn't know is a word.
+//! (YYYY/MM/DD), newer_than: and older_than: (2d, 3w, 1m, 1y), each negated by a leading -. An
+//! operator it doesn't know is a word.
 //! The search vector weighs the sender A, the recipients B and the subject C (see message_search).
 
 use chrono::{DateTime, Duration, Months, NaiveDate, Utc};
@@ -32,6 +33,7 @@ pub enum Filter {
     Label(String),
     Before(DateTime<Utc>),
     After(DateTime<Utc>),
+    Not(Box<Filter>),
 }
 
 pub fn parse(text: &str, now: DateTime<Utc>) -> Query {
@@ -41,6 +43,10 @@ pub fn parse(text: &str, now: DateTime<Utc>) -> Query {
         let Some((key, value)) = token.split_once(':') else {
             words.push(token);
             continue;
+        };
+        let (negated, key) = match key.strip_prefix('-') {
+            Some(key) => (true, key),
+            None => (false, key),
         };
         let value = value.trim_matches('"');
         let filter = match key.to_ascii_lowercase().as_str() {
@@ -56,6 +62,7 @@ pub fn parse(text: &str, now: DateTime<Utc>) -> Query {
             _ => None,
         };
         match filter {
+            Some(filter) if negated => query.filters.push(Filter::Not(Box::new(filter))),
             Some(filter) => query.filters.push(filter),
             None => words.push(token),
         }
@@ -86,24 +93,34 @@ pub fn narrow(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, query: Query) {
         sql.push(" AND search @@ websearch_to_tsquery('simple', ").push_bind(query.words).push(")");
     }
     for filter in query.filters {
-        match filter {
-            Filter::Matches(part) => sql.push(" AND search @@ to_tsquery('simple', ").push_bind(part).push(")"),
-            Filter::HasAttachment => sql.push(" AND attachments <> '[]'::jsonb"),
-            Filter::Unread => sql.push(" AND unread"),
-            Filter::Starred => sql.push(" AND starred"),
-            Filter::Snoozed => sql.push(" AND snoozed_until IS NOT NULL"),
-            Filter::Archived => sql.push(" AND NOT labels && ARRAY['inbox', 'trash', 'spam']"),
-            Filter::Role(role) => sql.push(" AND ").push_bind(role).push(" = ANY(labels)"),
-            Filter::Label(name) => sql
-                .push(" AND labels && ARRAY(SELECT label.id::text FROM labels AS label WHERE label.user_id = ")
-                .push_bind(user_id)
-                .push(" AND NOT label.deleted AND lower(label.name) = lower(")
-                .push_bind(name)
-                .push("))"),
-            Filter::Before(date) => sql.push(" AND date < ").push_bind(date),
-            Filter::After(date) => sql.push(" AND date >= ").push_bind(date),
-        };
+        sql.push(" AND ");
+        condition(sql, user_id, filter);
     }
+}
+
+fn condition(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, filter: Filter) {
+    match filter {
+        Filter::Matches(part) => sql.push("search @@ to_tsquery('simple', ").push_bind(part).push(")"),
+        Filter::HasAttachment => sql.push("attachments <> '[]'::jsonb"),
+        Filter::Unread => sql.push("unread"),
+        Filter::Starred => sql.push("starred"),
+        Filter::Snoozed => sql.push("snoozed_until IS NOT NULL"),
+        Filter::Archived => sql.push("NOT labels && ARRAY['inbox', 'trash', 'spam']"),
+        Filter::Role(role) => sql.push_bind(role).push(" = ANY(labels)"),
+        Filter::Label(name) => sql
+            .push("labels && ARRAY(SELECT label.id::text FROM labels AS label WHERE label.user_id = ")
+            .push_bind(user_id)
+            .push(" AND NOT label.deleted AND lower(label.name) = lower(")
+            .push_bind(name)
+            .push("))"),
+        Filter::Before(date) => sql.push("date < ").push_bind(date),
+        Filter::After(date) => sql.push("date >= ").push_bind(date),
+        Filter::Not(filter) => {
+            sql.push("NOT coalesce((");
+            condition(sql, user_id, *filter);
+            sql.push("), false)")
+        }
+    };
 }
 
 /// Splits on spaces outside quotes; quotes stay, for websearch_to_tsquery's phrases.
@@ -223,6 +240,14 @@ mod tests {
                 Filter::Before(date("2026/02/28").unwrap()),
             ]
         );
+    }
+
+    #[test]
+    fn negates_operators() {
+        let query = parse("-to:me@x.com -label:Work -is:unread -nothing:here", now());
+        assert_eq!(query.words, "-nothing:here");
+        let negated = [Filter::Matches("'me@x.com':*B".into()), Filter::Label("Work".into()), Filter::Unread];
+        assert_eq!(query.filters, negated.map(|filter| Filter::Not(Box::new(filter))));
     }
 
     #[test]

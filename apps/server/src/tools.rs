@@ -7,7 +7,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use mail_protocol::rules::RULE_KEY;
-use mail_protocol::{MessageState, Op, Rule, role};
+use mail_protocol::splits::{SPLIT_INBOX_KEY, SPLIT_KEY};
+use mail_protocol::{MessageState, Op, Rule, Split, role};
 use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -573,6 +574,32 @@ fn label_per_account(label: &str, labels: &[LabelName]) -> Result<HashMap<Uuid, 
     }
 }
 
+/// The account and id of the one label `label` names, among `account_id`'s or every reached
+/// account's. Without a label, what is made holds for every account, which takes them all.
+fn one_label(
+    caller: &Caller,
+    accounts: &[AccountRow],
+    labels: &[LabelName],
+    label: Option<&str>,
+    account_id: Option<&str>,
+) -> Result<Option<(Uuid, Uuid)>, String> {
+    let Some(label) = label else {
+        every_account(caller)?;
+        return Ok(None);
+    };
+    let in_accounts = chosen(accounts, account_id)?;
+    let candidates: Vec<LabelName> = labels
+        .iter()
+        .filter(|known| in_accounts.contains(&known.account_id))
+        .map(|known| LabelName { id: known.id, account_id: known.account_id, name: known.name.clone() })
+        .collect();
+    let per_account = label_per_account(label, &candidates)?;
+    let [(account_id, label_id)] = per_account.into_iter().collect::<Vec<_>>()[..] else {
+        return Err("More than one account has that label. Say which with account_id.".into());
+    };
+    Ok(Some((account_id, label_id)))
+}
+
 pub async fn modify(state: &AppState, caller: &Caller, args: ModifyArgs) -> Answer {
     let accounts = reached(state, caller).await?;
     let ids = chosen(&accounts, args.account_id.as_deref())?;
@@ -766,7 +793,7 @@ pub async fn list_rules(state: &AppState, caller: &Caller) -> Answer {
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub struct CreateRuleArgs {
-    /// Senders: an address, or @domain for everyone there. Any one of them matches.
+    /// Senders: an address, or @domain for everyone there and at its subdomains. Any one of them matches.
     #[serde(default)]
     pub from: Vec<String>,
     /// Recipients, To or Cc, as `from`.
@@ -805,25 +832,7 @@ pub async fn create_rule(state: &AppState, caller: &Caller, args: CreateRuleArgs
     let accounts = reached(state, caller).await?;
     let all: Vec<Uuid> = accounts.iter().map(|account| account.id).collect();
     let labels = labels_of(state, &all).await?;
-    let label = match &args.label {
-        None => {
-            every_account(caller)?;
-            None
-        }
-        Some(label) => {
-            let in_accounts = chosen(&accounts, args.account_id.as_deref())?;
-            let candidates: Vec<LabelName> = labels
-                .iter()
-                .filter(|known| in_accounts.contains(&known.account_id))
-                .map(|known| LabelName { id: known.id, account_id: known.account_id, name: known.name.clone() })
-                .collect();
-            let per_account = label_per_account(label, &candidates)?;
-            let [(account_id, label_id)] = per_account.into_iter().collect::<Vec<_>>()[..] else {
-                return Err("More than one account has that label. Say which with account_id.".into());
-            };
-            Some((account_id, label_id))
-        }
-    };
+    let label = one_label(caller, &accounts, &labels, args.label.as_deref(), args.account_id.as_deref())?;
     let existing = rules(state, caller, &labels).await?;
     let order = existing.iter().map(|(_, rule)| rule.order).max().map_or(0, |order| order + 1);
     let rule = Rule {
@@ -919,6 +928,136 @@ pub async fn delete_rule(state: &AppState, caller: &Caller, args: RuleIdArgs) ->
     }
     apply_all(state, caller, vec![Op::SetPreference { key: format!("{RULE_KEY}{}", args.id), value: None }]).await?;
     Ok(json!({ "deleted": args.id }))
+}
+
+// ---------- splits ----------
+
+/// The splits the caller may see: those with a label of a reached account, and with every
+/// account, those without one.
+async fn splits(state: &AppState, caller: &Caller, labels: &[LabelName]) -> Result<Vec<Split>, String> {
+    let rows: Vec<RuleRow> =
+        sqlx::query_as("SELECT key, value FROM preferences WHERE user_id = $1 AND key LIKE 'split:%' AND NOT deleted")
+            .bind(caller.user_id)
+            .fetch_all(&state.db)
+            .await
+            .map_err(failed)?;
+    let mut found: Vec<Split> = rows
+        .into_iter()
+        .filter_map(|row| {
+            let id = row.key.strip_prefix(SPLIT_KEY)?.to_string();
+            Some(Split { id, ..serde_json::from_value(row.value).ok()? })
+        })
+        .filter(|split| match &split.label {
+            Some(label) => labels.iter().any(|known| known.id.to_string() == *label),
+            None => caller.access.all_accounts,
+        })
+        .collect();
+    found.sort_by(|a, b| (a.order, &a.id).cmp(&(b.order, &b.id)));
+    Ok(found)
+}
+
+fn split_json(split: &Split, labels: &[LabelName]) -> Value {
+    let label = split.label.as_ref().and_then(|label| labels.iter().find(|known| known.id.to_string() == *label));
+    json!({
+        "id": split.id,
+        "name": split.name,
+        "from": split.from,
+        "label": label.map(|label| json!({ "id": label.id, "account_id": label.account_id, "name": label.name })),
+    })
+}
+
+async fn split_inbox_on(state: &AppState, caller: &Caller) -> Result<bool, String> {
+    let value: Option<Value> =
+        sqlx::query_scalar("SELECT value FROM preferences WHERE user_id = $1 AND key = $2 AND NOT deleted")
+            .bind(caller.user_id)
+            .bind(SPLIT_INBOX_KEY)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(failed)?;
+    Ok(value.and_then(|value| value.as_bool()) == Some(true))
+}
+
+pub async fn list_splits(state: &AppState, caller: &Caller) -> Answer {
+    let accounts = reached(state, caller).await?;
+    let ids: Vec<Uuid> = accounts.iter().map(|account| account.id).collect();
+    let labels = labels_of(state, &ids).await?;
+    let splits = splits(state, caller, &labels).await?;
+    Ok(json!({
+        "split_inbox": split_inbox_on(state, caller).await?,
+        "splits": splits.iter().map(|split| split_json(split, &labels)).collect::<Vec<_>>(),
+    }))
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct CreateSplitArgs {
+    /// The tab's name, e.g. GitHub.
+    pub name: String,
+    /// Senders whose threads it takes: an address, or @domain for everyone there and at its subdomains.
+    #[serde(default)]
+    pub from: Vec<String>,
+    /// A label whose threads it takes: its id, or its name with account_id. Without one it holds for
+    /// every account.
+    pub label: Option<String>,
+    /// The account whose label `label` names.
+    pub account_id: Option<String>,
+}
+
+pub async fn create_split(state: &AppState, caller: &Caller, args: CreateSplitArgs) -> Answer {
+    let name = args.name.trim();
+    if name.is_empty() {
+        return Err("Give the split a name.".into());
+    }
+    let from: Vec<String> =
+        args.from.iter().map(|entry| entry.trim().to_lowercase()).filter(|entry| !entry.is_empty()).collect();
+    if from.is_empty() && args.label.is_none() {
+        return Err("Give the split senders or a label to take.".into());
+    }
+    let accounts = reached(state, caller).await?;
+    let all: Vec<Uuid> = accounts.iter().map(|account| account.id).collect();
+    let labels = labels_of(state, &all).await?;
+    let label = one_label(caller, &accounts, &labels, args.label.as_deref(), args.account_id.as_deref())?;
+    let existing = splits(state, caller, &labels).await?;
+    let order = existing.iter().map(|split| split.order).max().map_or(0, |order| order + 1);
+    let id = Uuid::new_v4().to_string();
+    let split =
+        Split { id, name: name.to_string(), from, label: label.map(|(_, label_id)| label_id.to_string()), order };
+    let op = Op::SetPreference { key: format!("{SPLIT_KEY}{}", split.id), value: Some(json!(split)) };
+    apply_all(state, caller, vec![op]).await?;
+    let mut answer = json!({ "split": split_json(&split, &labels) });
+    if !split_inbox_on(state, caller).await? {
+        answer["note"] = json!("Split Inbox is off, so the apps don't show splits yet. set_split_inbox turns it on.");
+    }
+    Ok(answer)
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SplitIdArgs {
+    pub id: String,
+}
+
+pub async fn delete_split(state: &AppState, caller: &Caller, args: SplitIdArgs) -> Answer {
+    let accounts = reached(state, caller).await?;
+    let ids: Vec<Uuid> = accounts.iter().map(|account| account.id).collect();
+    let labels = labels_of(state, &ids).await?;
+    let splits = splits(state, caller, &labels).await?;
+    if !splits.iter().any(|split| split.id == args.id) {
+        return Err("No such split. list_splits lists them.".into());
+    }
+    apply_all(state, caller, vec![Op::SetPreference { key: format!("{SPLIT_KEY}{}", args.id), value: None }]).await?;
+    Ok(json!({ "deleted": args.id }))
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SplitInboxArgs {
+    /// true splits every inbox into Important, the custom splits and Other; false shows it whole.
+    pub on: bool,
+}
+
+pub async fn set_split_inbox(state: &AppState, caller: &Caller, args: SplitInboxArgs) -> Answer {
+    every_account(caller)?;
+    let op = Op::SetPreference { key: SPLIT_INBOX_KEY.into(), value: args.on.then_some(json!(true)) };
+    apply_all(state, caller, vec![op]).await?;
+    Ok(json!({ "split_inbox": args.on }))
 }
 
 // ---------- unsubscribing ----------

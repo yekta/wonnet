@@ -17,13 +17,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use chrono::{DateTime, TimeZone};
+use mail_protocol::splits::{SPLIT_INBOX_KEY, SPLIT_KEY};
 use mail_protocol::{
     Account, Address, Attachment, Body, Draft, Identity, Label, Message, MessageState, Op, Preference, Recipients,
-    Rule, SavedDraft, role,
+    Rule, SavedDraft, Split, role,
 };
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params, params_from_iter};
-use serde::Deserialize;
 use serde_json::Value;
 
 use crate::api::{AccountView, Filter, LabelChip, Mailbox, NewMail, Person, SplitTab, ThreadPage, ThreadRow};
@@ -161,37 +161,8 @@ pub struct Applied {
     pub arrived: Vec<Arrived>,
 }
 
-/// A custom split of the inbox, from its `split:<id>` preference.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Split {
-    #[serde(skip)]
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub from: Vec<String>,
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub order: i64,
-}
-
-impl Split {
-    /// Whether a message (its sender and labels) puts its thread in this split. The user's own
-    /// mail is no sender of it.
-    fn matches(&self, sender: &str, labels: &[String], me: &HashSet<String>) -> bool {
-        let from = !me.contains(sender)
-            && self.from.iter().map(|pattern| pattern.trim().to_lowercase()).any(|pattern| {
-                match pattern.starts_with('@') {
-                    true => sender.ends_with(&pattern),
-                    false => sender == pattern,
-                }
-            });
-        from || self.label.as_ref().is_some_and(|label| labels.contains(label))
-    }
-}
-
 pub fn is_split_key(key: &str) -> bool {
-    key == "split_inbox" || key.starts_with("split:")
+    key == SPLIT_INBOX_KEY || key.starts_with(SPLIT_KEY)
 }
 
 /// What recomputing a thread needs to know besides its messages.
@@ -1750,7 +1721,7 @@ fn save_draft(tx: &Transaction, id: &str, draft: Option<&Draft>, updated: i64) -
 }
 
 fn splits_in(db: &Connection) -> Result<Option<Vec<Split>>> {
-    if preference_in(db, "split_inbox")?.and_then(|on| on.as_bool()) != Some(true) {
+    if preference_in(db, SPLIT_INBOX_KEY)?.and_then(|on| on.as_bool()) != Some(true) {
         return Ok(None);
     }
     let mut statement =
@@ -1760,7 +1731,7 @@ fn splits_in(db: &Connection) -> Result<Option<Vec<Split>>> {
     for row in rows {
         let (key, value) = row?;
         let Ok(mut split) = serde_json::from_str::<Split>(&value) else { continue };
-        split.id = key["split:".len()..].to_string();
+        split.id = key[SPLIT_KEY.len()..].to_string();
         splits.push(split);
     }
     splits.sort_by(|a, b| (a.order, &a.id).cmp(&(b.order, &b.id)));
