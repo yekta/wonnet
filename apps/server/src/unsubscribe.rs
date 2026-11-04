@@ -28,7 +28,7 @@ static ONE_CLICK: LazyLock<reqwest::Client> = LazyLock::new(|| {
 });
 
 /// Resolves names as the system does, and refuses one that points anywhere but the internet.
-struct PublicOnly;
+pub struct PublicOnly;
 
 impl Resolve for PublicOnly {
     fn resolve(&self, name: Name) -> Resolving {
@@ -44,7 +44,7 @@ impl Resolve for PublicOnly {
 }
 
 /// Not loopback, private, link-local, shared (CGNAT), unspecified, multicast or reserved.
-fn public(ip: IpAddr) -> bool {
+pub fn public(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => {
             let [first, second, ..] = ip.octets();
