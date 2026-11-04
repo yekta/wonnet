@@ -11,6 +11,20 @@ use uuid::Uuid;
 
 use crate::db::{ACCOUNT_COLUMNS, AccountRow, DraftRow, LabelRow, MESSAGE_COLUMNS, MessageRow, PreferenceRow};
 
+/// The floor, when a client's cursor means it must get every change again: the cursor is from
+/// before the floor, or above any rev given out, as after the database came back from a backup.
+/// Its catch-up then ends at the floor or above, so it starts over only once.
+pub async fn restart(db: &PgPool, cursor: i64) -> sqlx::Result<Option<i64>> {
+    if cursor == 0 {
+        return Ok(None);
+    }
+    let (floor, highest): (i64, i64) =
+        sqlx::query_as("SELECT COALESCE((SELECT max(rev) FROM rev_floor), 0), (SELECT last_value FROM revs)")
+            .fetch_one(db)
+            .await?;
+    Ok((cursor < floor || cursor > highest).then_some(floor))
+}
+
 pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64, ahead: i64) -> sqlx::Result<ServerMessage> {
     let ahead = ahead.max(cursor);
     let mut tx = db.begin().await?;

@@ -223,3 +223,28 @@ async fn preferences_and_drafts_sync_and_leave_tombstones(db: PgPool) {
     assert!(drafts.len() == 1 && drafts[0].deleted);
     assert_eq!(read(next).await, (vec![], vec![], next));
 }
+
+#[sqlx::test]
+async fn a_cursor_the_database_never_gave_out_starts_over_once(db: PgPool) {
+    let server = Server::start(db.clone()).await;
+    let user = db::create_user(&db).await.unwrap();
+    let account = NewAccount {
+        user_id: user,
+        provider: Provider::Jmap,
+        address: "ann@example.com",
+        login: "ann@example.com",
+        credentials: vec![],
+    };
+    let account = db::account(&db, db::upsert_account(&db, account).await.unwrap()).await.unwrap().unwrap();
+    db::upsert_messages(&db, &account, &[remote(0), remote(1)]).await.unwrap();
+    let (_, _, current, _) = changes(&server, user, 0).await;
+    let floor: i64 = sqlx::query_scalar("SELECT rev FROM rev_floor").fetch_one(&db).await.unwrap();
+
+    // A new app and one that is up to date carry on where they are.
+    assert_eq!(crate::changes::restart(&db, 0).await.unwrap(), None);
+    assert_eq!(crate::changes::restart(&db, current).await.unwrap(), None);
+    assert_eq!(crate::changes::restart(&db, floor).await.unwrap(), None);
+    // One that saw revs from before the floor, or revs this database never gave out, starts over.
+    assert_eq!(crate::changes::restart(&db, 5).await.unwrap(), Some(floor));
+    assert_eq!(crate::changes::restart(&db, current + 1_000).await.unwrap(), Some(floor));
+}
