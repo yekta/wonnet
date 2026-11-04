@@ -46,7 +46,7 @@ pub fn prune_outgoing() {
     });
 }
 
-/// The app's icon as a file, for the system's notifications; written the first time.
+/// The app's icon as a file, for the desktop entry that notifications name; written the first time.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn icon_path() -> PathBuf {
     let path = data_dir().join("wonnet.png");

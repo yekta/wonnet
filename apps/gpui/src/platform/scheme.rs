@@ -9,6 +9,10 @@ pub fn register() {
     });
 }
 
+/// The desktop entry that opens the links, which notifications name as the app's.
+#[cfg(target_os = "linux")]
+pub const DESKTOP_ENTRY: &str = "wonnet-links";
+
 #[cfg(target_os = "windows")]
 fn register_now() -> std::io::Result<()> {
     use winreg::RegKey;
@@ -35,13 +39,13 @@ fn register_now() -> std::io::Result<()> {
     let applications = dirs::data_dir().unwrap_or_else(std::env::temp_dir).join("applications");
     std::fs::create_dir_all(&applications)?;
     let entry = format!(
-        "[Desktop Entry]\nType=Application\nName=Wonnet\nExec=\"{}\" %u\nIcon=wonnet\nNoDisplay=true\nTerminal=false\nMimeType=x-scheme-handler/wonnet;\n",
-        exe.display()
+        "[Desktop Entry]\nType=Application\nName=Wonnet\nExec=\"{}\" %u\nIcon={}\nNoDisplay=true\nTerminal=false\nMimeType=x-scheme-handler/wonnet;\n",
+        exe.display(),
+        super::icon_path().display()
     );
-    std::fs::write(applications.join("wonnet-links.desktop"), entry)?;
-    let _ = std::process::Command::new("xdg-mime")
-        .args(["default", "wonnet-links.desktop", "x-scheme-handler/wonnet"])
-        .status();
+    let file = format!("{DESKTOP_ENTRY}.desktop");
+    std::fs::write(applications.join(&file), entry)?;
+    let _ = std::process::Command::new("xdg-mime").args(["default", &file, "x-scheme-handler/wonnet"]).status();
     let _ = std::process::Command::new("update-desktop-database").arg(&applications).status();
     Ok(())
 }

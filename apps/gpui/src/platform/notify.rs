@@ -219,8 +219,8 @@ impl Notifier {
             .appname("Wonnet")
             .summary(&message.from)
             .body(&text(&message))
-            .icon(&file_uri(&super::icon_path()))
             .hint(notify_rust::Hint::Category("email.arrived".into()))
+            .hint(notify_rust::Hint::DesktopEntry(super::scheme::DESKTOP_ENTRY.into()))
             .action("default", "Open")
             .action(first_button(first), first.name())
             .action("read", "Mark as Read")
@@ -249,7 +249,7 @@ impl Notifier {
         notification
             .appname("Wonnet")
             .summary(done)
-            .icon(&file_uri(&super::icon_path()))
+            .hint(notify_rust::Hint::DesktopEntry(super::scheme::DESKTOP_ENTRY.into()))
             .hint(notify_rust::Hint::SuppressSound(true))
             .timeout(UNDO_SHOWN)
             .action("default", "Open")
