@@ -1,3 +1,38 @@
+diff --git a/src/elements/div.rs b/src/elements/div.rs
+index 11f0b72..26bcf53 100644
+--- a/src/elements/div.rs
++++ b/src/elements/div.rs
+@@ -2913,17 +2913,24 @@ impl Interactivity {
+                     .cloned()
+             });
+             let current_view = window.current_view();
++            // An element without an id keeps no hover state, so it compares with what it painted.
++            let restyles_on_hover = self.hover_style.is_some();
++            let painted_hovered = hitbox.is_hovered(window);
+ 
+             window.on_mouse_event(move |_: &MouseMoveEvent, phase, window, cx| {
++                if phase != DispatchPhase::Capture || !restyles_on_hover {
++                    return;
++                }
+                 let hovered = hitbox.is_hovered(window);
+-                let was_hovered = hover_state
+-                    .as_ref()
+-                    .is_some_and(|state| state.borrow().element);
+-                if phase == DispatchPhase::Capture && hovered != was_hovered {
+-                    if let Some(hover_state) = &hover_state {
+-                        hover_state.borrow_mut().element = hovered;
++                let Some(hover_state) = &hover_state else {
++                    if hovered != painted_hovered {
+                         cx.notify(current_view);
+                     }
++                    return;
++                };
++                if hovered != hover_state.borrow().element {
++                    hover_state.borrow_mut().element = hovered;
++                    cx.notify(current_view);
+                 }
+             });
+         }
 diff --git a/src/gpui.rs b/src/gpui.rs
 index 2328e95..f69fcdb 100644
 --- a/src/gpui.rs
@@ -259,7 +294,7 @@ index 0000000..90401ea
 +    }
 +}
 diff --git a/src/window.rs b/src/window.rs
-index c559412..59636d6 100644
+index c559412..c74928a 100644
 --- a/src/window.rs
 +++ b/src/window.rs
 @@ -1257,6 +1257,7 @@ pub struct Window {
@@ -270,7 +305,16 @@ index c559412..59636d6 100644
      next_hitbox_id: HitboxId,
      pub(crate) next_tooltip_id: TooltipId,
      pub(crate) tooltip_bounds: Option<TooltipBounds>,
-@@ -2161,6 +2162,7 @@ impl Window {
+@@ -1268,6 +1269,8 @@ pub struct Window {
+     default_prevented: bool,
+     mouse_position: Point<Pixels>,
+     mouse_hit_test: HitTest,
++    /// The pointer left the window, so nothing in it is hovered until it comes back.
++    pointer_outside: bool,
+     modifiers: Modifiers,
+     capslock: Capslock,
+     scale_factor: f32,
+@@ -2161,6 +2164,7 @@ impl Window {
              focused_text_input: None,
              rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
              next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
@@ -278,7 +322,15 @@ index c559412..59636d6 100644
              next_frame_callbacks,
              next_hitbox_id: HitboxId(0),
              next_tooltip_id: TooltipId::default(),
-@@ -3524,6 +3526,14 @@ impl Window {
+@@ -2172,6 +2176,7 @@ impl Window {
+             default_prevented: true,
+             mouse_position,
+             mouse_hit_test: HitTest::default(),
++            pointer_outside: false,
+             modifiers,
+             capslock,
+             scale_factor,
+@@ -3524,6 +3529,14 @@ impl Window {
          self.layout_engine.as_mut().unwrap().clear();
          self.text_system().finish_frame();
          self.next_frame.finish(&mut self.rendered_frame);
@@ -293,7 +345,7 @@ index c559412..59636d6 100644
  
          self.invalidator.set_phase(DrawPhase::Focus);
          let previous_focus_path = self.rendered_frame.focus_path();
-@@ -3624,7 +3634,13 @@ impl Window {
+@@ -3624,7 +3637,13 @@ impl Window {
          let _foreground_turn = profiler::journal::foreground_turn();
          #[cfg(feature = "profiler")]
          let present_start = Instant::now();
@@ -308,7 +360,19 @@ index c559412..59636d6 100644
          #[cfg(feature = "profiler")]
          self.window_profiler.record_present(
              present_start,
-@@ -5092,9 +5108,11 @@ impl Window {
+@@ -3755,7 +3774,10 @@ impl Window {
+             tooltip_element = self.prepaint_tooltip(cx);
+         }
+ 
+-        self.mouse_hit_test = self.next_frame.hit_test(self.mouse_position);
++        self.mouse_hit_test = match self.pointer_outside {
++            true => HitTest::default(),
++            false => self.next_frame.hit_test(self.mouse_position),
++        };
+ 
+         // Now actually paint the elements.
+         #[cfg(feature = "profiler")]
+@@ -5092,9 +5114,11 @@ impl Window {
              frame_index,
          };
  
@@ -320,7 +384,7 @@ index c559412..59636d6 100644
                  Ok(Some((
                      data.size(frame_index),
                      Cow::Borrowed(
-@@ -5106,6 +5124,9 @@ impl Window {
+@@ -5106,6 +5130,9 @@ impl Window {
              .expect("Callback above only returns Some");
  
          let visible_bounds_snapped = self.snap_bounds(visible_bounds);
@@ -330,3 +394,40 @@ index c559412..59636d6 100644
  
          let sub_tile = if visible_bounds == image_bounds {
              tile
+@@ -5658,11 +5685,13 @@ impl Window {
+             // API for the mouse position can only occur on the main thread.
+             PlatformInput::MouseMove(mouse_move) => {
+                 self.mouse_position = mouse_move.position;
++                self.pointer_outside = false;
+                 self.modifiers = mouse_move.modifiers;
+                 PlatformInput::MouseMove(mouse_move)
+             }
+             PlatformInput::MouseDown(mouse_down) => {
+                 self.mouse_position = mouse_down.position;
++                self.pointer_outside = false;
+                 self.modifiers = mouse_down.modifiers;
+                 PlatformInput::MouseDown(mouse_down)
+             }
+@@ -5676,6 +5705,10 @@ impl Window {
+             }
+             PlatformInput::MouseExited(mouse_exited) => {
+                 self.modifiers = mouse_exited.modifiers;
++                if !self.pointer_outside {
++                    self.pointer_outside = true;
++                    self.refresh();
++                }
+                 PlatformInput::MouseExited(mouse_exited)
+             }
+             PlatformInput::ModifiersChanged(modifiers_changed) => {
+@@ -5972,7 +6005,10 @@ impl Window {
+     }
+ 
+     fn dispatch_mouse_event(&mut self, event: &dyn Any, cx: &mut App) {
+-        let hit_test = self.rendered_frame.hit_test(self.mouse_position());
++        let hit_test = match self.pointer_outside {
++            true => HitTest::default(),
++            false => self.rendered_frame.hit_test(self.mouse_position()),
++        };
+         if hit_test != self.mouse_hit_test {
+             self.mouse_hit_test = hit_test;
+             self.reset_cursor_style(cx);
