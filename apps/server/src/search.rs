@@ -75,6 +75,13 @@ pub async fn run(db: &PgPool, user_id: Uuid, account: Option<Uuid>, text: &str) 
     if let Some(account) = account {
         sql.push(" AND account_id = ").push_bind(account);
     }
+    narrow(&mut sql, user_id, query);
+    sql.push(" ORDER BY date DESC LIMIT ").push_bind(LIMIT);
+    sql.build_query_scalar().fetch_all(db).await
+}
+
+/// Adds what `query` asks of a message to a query on `messages`.
+pub fn narrow(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, query: Query) {
     if !query.words.is_empty() {
         sql.push(" AND search @@ websearch_to_tsquery('simple', ").push_bind(query.words).push(")");
     }
@@ -97,8 +104,6 @@ pub async fn run(db: &PgPool, user_id: Uuid, account: Option<Uuid>, text: &str) 
             Filter::After(date) => sql.push(" AND date >= ").push_bind(date),
         };
     }
-    sql.push(" ORDER BY date DESC LIMIT ").push_bind(LIMIT);
-    sql.build_query_scalar().fetch_all(db).await
 }
 
 /// Splits on spaces outside quotes; quotes stay, for websearch_to_tsquery's phrases.

@@ -220,7 +220,7 @@ impl Session {
     }
 }
 
-async fn body(state: &AppState, user_id: Uuid, message_id: &str) -> anyhow::Result<mail_protocol::Body> {
+pub async fn body(state: &AppState, user_id: Uuid, message_id: &str) -> anyhow::Result<mail_protocol::Body> {
     let id: Uuid = message_id.parse()?;
     let Some(message) = db::message(&state.db, user_id, id).await? else {
         anyhow::bail!("no such message");

@@ -1,3 +1,4 @@
+mod access;
 mod api;
 mod avatars;
 mod changes;
@@ -8,9 +9,12 @@ mod e2e;
 mod error;
 mod google;
 mod hub;
+mod mcp;
 mod microsoft;
 mod mime;
+mod oauth;
 mod ops;
+mod pages;
 mod providers;
 mod push;
 mod rules;
@@ -20,7 +24,9 @@ mod search;
 mod seed;
 mod sign_in;
 mod sync;
+mod tools;
 mod unsubscribe;
+mod web;
 mod workers;
 
 use std::sync::Arc;
@@ -30,9 +36,11 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::HeaderValue;
 use axum::http::header::{REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS};
+use axum::middleware;
 use axum::routing::{delete, get, post};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
+use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
@@ -69,9 +77,31 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 
+/// What MCP clients call, some of them from a browser: the metadata, registration, tokens and
+/// `/mcp`. They take bearer tokens, never cookies, so any origin may.
+fn for_agents(state: &AppState) -> Router<AppState> {
+    let mcp = Router::new()
+        .route_service("/mcp", mcp::service(state.clone()))
+        .layer(middleware::from_fn_with_state(state.clone(), mcp::authenticate));
+    Router::new()
+        .route("/.well-known/oauth-authorization-server", get(oauth::server_metadata))
+        .route("/.well-known/oauth-protected-resource", get(oauth::resource_metadata))
+        .route("/.well-known/oauth-protected-resource/mcp", get(oauth::resource_metadata))
+        .route("/oauth/register", post(oauth::register))
+        .route("/oauth/token", post(oauth::token))
+        .merge(mcp)
+        .layer(CorsLayer::permissive())
+}
+
 fn router(state: AppState) -> Router {
     let header = |name, value| SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value));
     Router::new()
+        .merge(for_agents(&state))
+        .route("/oauth/authorize", get(web::authorize).post(web::decide))
+        .route("/connected-apps", get(web::connected_apps))
+        .route("/connected-apps/revoke", post(web::revoke))
+        .route("/web/jmap", post(web::jmap_sign_in))
+        .route("/web/sign-out", post(web::sign_out))
         .route("/healthz", get(|| async { "ok" }))
         .route("/auth/google/start", get(sign_in::google_start))
         .route("/auth/google/callback", get(sign_in::google_callback))

@@ -6,6 +6,7 @@ mod attachments;
 mod avatars;
 mod changes;
 mod first_sync;
+mod mcp;
 mod push;
 mod rules;
 mod search;
