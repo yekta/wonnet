@@ -219,14 +219,14 @@ impl Notifier {
             .appname("Wonnet")
             .summary(&message.from)
             .body(&text(&message))
-            .icon(&super::icon_path().display().to_string())
+            .icon(&file_uri(&super::icon_path()))
             .hint(notify_rust::Hint::Category("email.arrived".into()))
             .action("default", "Open")
             .action(first_button(first), first.name())
             .action("read", "Mark as Read")
             .action("reply", "Reply");
-        if let Some(photo) = photo.as_ref().and_then(|photo| photo.to_str()) {
-            notification.image_path(photo);
+        if let Some(photo) = photo {
+            notification.image_path(&file_uri(&photo));
         }
         let Ok(handle) = notification.show() else { return };
         let id = handle.id();
@@ -249,7 +249,7 @@ impl Notifier {
         notification
             .appname("Wonnet")
             .summary(done)
-            .icon(&super::icon_path().display().to_string())
+            .icon(&file_uri(&super::icon_path()))
             .hint(notify_rust::Hint::SuppressSound(true))
             .timeout(UNDO_SHOWN)
             .action("default", "Open")
@@ -275,6 +275,12 @@ impl Notifier {
             undos.remove(thread);
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+fn file_uri(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy();
+    format!("file://{}", path.split('/').map(encode).collect::<Vec<_>>().join("/"))
 }
 
 #[cfg(target_os = "linux")]
@@ -502,6 +508,12 @@ mod tests {
         }
         assert_eq!(Answer::from_link("wonnet://notification?do=delete&thread=x"), None);
         assert_eq!(Answer::from_link("wonnet://signed-in?code=x"), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gives_files_as_uris() {
+        assert_eq!(super::file_uri(std::path::Path::new("/home/a b/ä.png")), "file:///home/a%20b/%C3%A4.png");
     }
 
     #[test]
