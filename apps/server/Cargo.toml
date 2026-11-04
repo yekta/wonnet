@@ -18,6 +18,7 @@ hickory-resolver = "0.26"
 html5ever = "0.40"
 image = { version = "0.25", default-features = false, features = ["gif", "ico", "jpeg", "png", "webp"] }
 lol_html = "3"
+maud = "0.27"
 mail-builder.workspace = true
 mail-parser.workspace = true
 percent-encoding = "2"
@@ -25,12 +26,13 @@ psl = "2"
 resvg = { version = "0.48", default-features = false }
 reqwest = { workspace = true, features = ["http2"] }
 ring = "0.17"
+rmcp = { version = "3.8", default-features = false, features = ["server", "transport-streamable-http-server"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros", "migrate", "chrono", "uuid", "json"] }
 tokio.workspace = true
-tower-http = { version = "0.7", features = ["trace", "set-header"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "set-header"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url = "2"
