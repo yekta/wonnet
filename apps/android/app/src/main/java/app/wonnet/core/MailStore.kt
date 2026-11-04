@@ -131,6 +131,9 @@ class MailStore(private val context: Context) {
         private set
     var notificationButton by mutableStateOf(NotificationButton.saved(context))
         private set
+    /** The open mail shows beside the list, where the screen is wide enough for both. */
+    var readingPane by mutableStateOf(local.getBoolean("readingPane", false))
+        private set
 
     /** The synced preferences, by key. */
     var preferences by mutableStateOf<Map<String, JsonElement>>(emptyMap())
@@ -1065,6 +1068,11 @@ class MailStore(private val context: Context) {
     fun changeAppearance(appearance: Appearance) {
         this.appearance = appearance
         local.edit { putString("appearance", appearance.name) }
+    }
+
+    fun changeReadingPane(on: Boolean) {
+        readingPane = on
+        local.edit { putBoolean("readingPane", on) }
     }
 
     fun changeNotificationButton(button: NotificationButton) {

@@ -129,6 +129,8 @@ pub mod size {
     pub const POPUP_WIDTH: f32 = 380.0;
     pub const SIDEBAR_END: f32 = 48.0;
     pub const ROW_HEIGHT: f32 = 48.0;
+    /// A row of the list in its column beside the open mail: senders, subject and snippet.
+    pub const ROW_HEIGHT_COMPACT: f32 = 76.0;
     pub const ACCOUNT_BAR: f32 = 2.0;
     pub const SELECT_GUTTER: f32 = 36.0;
     pub const SELECT_CIRCLE: f32 = 18.0;
@@ -149,6 +151,11 @@ pub mod size {
     pub const BODY_INDENT: f32 = 46.0;
     /// A wide window shows the sender clicked beside the thread.
     pub const PANE_FROM: f32 = 1100.0;
+    /// The page width from which the open mail can show beside the list.
+    pub const READING_FROM: f32 = 1000.0;
+    pub const LIST_COLUMN: f32 = 400.0;
+    /// The thread card's inset when the thread shares the page with the list.
+    pub const CARD_INSET_NARROW: f32 = 32.0;
     pub const PANE_WIDTH: f32 = 280.0;
 }
 

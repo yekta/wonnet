@@ -103,10 +103,11 @@ import kotlin.math.roundToInt
 /**
  * A thread, with what can be done to it along the bottom. A swipe across it turns to the thread
  * beside it in the list, which is drawn there ahead of it: to the left the one under it, to the
- * right the one over it, as Newton's did.
+ * right the one over it, as Newton's did. Without `dismiss` it sits beside the list, with no way
+ * back; `leave` runs when it goes while its thread is still open.
  */
 @Composable
-fun ThreadScreenStack(store: MailStore, opened: String, dismiss: () -> Unit) {
+fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, leave: () -> Unit = {}) {
     var thread by remember(opened) { mutableStateOf(opened) }
     val slide = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -115,11 +116,12 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: () -> Unit) {
 
     LaunchedEffect(store.sides) { store.peekAround() }
     LaunchedEffect(opened) {
+        val gone = dismiss ?: return@LaunchedEffect
         // The thread is read after the page is pushed; once shown, it going away takes the page with it.
         var shown = false
         snapshotFlow { store.conversation?.id }.collect { open ->
             if (open == null) {
-                if (shown) dismiss()
+                if (shown) gone()
                 return@collect
             }
             if (!shown && open != opened) return@collect
@@ -128,12 +130,12 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: () -> Unit) {
         }
     }
     DisposableEffect(Unit) {
-        onDispose { if (store.conversation?.id == current) store.close() }
+        onDispose { if (store.conversation?.id == current) leave() }
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.background.color)) {
     Box(Modifier.statusBarsPadding()) {
-        HeaderBar(leading = { IconButton(Symbol.ArrowLeft, "Back", circled = false, onClick = dismiss) })
+        HeaderBar(leading = { dismiss?.let { IconButton(Symbol.ArrowLeft, "Back", circled = false, onClick = it) } })
     }
     BoxWithConstraints(Modifier.weight(1f)) {
         val width = with(density) { maxWidth.toPx() }
@@ -194,7 +196,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: () -> Unit) {
                         if (conversation == null) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                         } else {
-                            ThreadPage(store, conversation, live = side == 0 && open?.id == id)
+                            ThreadPage(store, conversation, live = side == 0 && open?.id == id, beside = dismiss == null)
                         }
                     }
                 }
@@ -211,7 +213,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: () -> Unit) {
  * them tucked into one line with their count, as Gmail does. It opens on the first unread message.
  */
 @Composable
-private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boolean) {
+private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boolean, beside: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -259,7 +261,7 @@ private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boole
             Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = Dims.barHeight + Space.xxl * 2),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            PageCard(Modifier.widthIn(max = Dims.cardWidth).fillMaxWidth().padding(vertical = Space.s)) {
+            PageCard(Modifier.widthIn(max = Dims.cardWidth).fillMaxWidth().padding(horizontal = if (beside) Space.l else 0.dp, vertical = Space.s)) {
                 Column(Modifier.padding(horizontal = Dims.cardInset, vertical = Space.xxl)) {
                     Header(store, conversation)
                     val tucked = tucked(store, conversation, showsTucked)

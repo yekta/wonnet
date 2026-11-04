@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
@@ -42,8 +43,11 @@ import app.wonnet.theme.Dims
 import app.wonnet.theme.LocalDark
 import app.wonnet.theme.Opacity
 import app.wonnet.theme.ShadowSize
+import app.wonnet.theme.Symbol
 import app.wonnet.theme.Tokens
 import app.wonnet.theme.shadow
+import app.wonnet.ui.EmptyState
+import app.wonnet.ui.Rule
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -57,27 +61,43 @@ sealed interface Route {
 
 /**
  * The drawer with the mailboxes, under the mailbox on screen and the pages opened over it,
- * starting where the app was left. Back goes back a page, then closes the drawer.
+ * starting where the app was left. Back goes back a page, then closes the drawer. On a wide
+ * screen with the reading pane on, the open thread sits beside the list instead.
  */
 @Composable
-fun Shell(store: MailStore) {
+fun Shell(store: MailStore) = BoxWithConstraints(Modifier.fillMaxSize()) {
+    // maxWidth misses a change of density alone, which keeps the constraints' pixels.
+    val width = with(LocalDensity.current) { constraints.maxWidth.toDp() }
+    val pane = store.readingPane && width >= Dims.readingFrom
+    val paneNow by rememberUpdatedState(pane)
     var path by remember {
-        mutableStateOf((if (store.searchRows == null) emptyList() else listOf<Route>(Route.Search)) + listOfNotNull(store.conversation?.let { Route.Thread(it.id) }))
+        mutableStateOf((if (store.searchRows == null) emptyList() else listOf<Route>(Route.Search)) + listOfNotNull(store.conversation?.takeIf { !pane }?.let { Route.Thread(it.id) }))
     }
     var drawerOpen by remember { mutableStateOf(false) }
     val list = rememberListState(store)
+    val push = { route: Route -> if (!pane || route !is Route.Thread) path = path + route }
 
     LaunchedEffect(store.requestedThread) {
         val thread = store.requestedThread ?: return@LaunchedEffect
         store.requestedThread = null
         drawerOpen = false
-        path = listOf(Route.Thread(thread))
+        path = if (pane) emptyList() else listOf(Route.Thread(thread))
     }
     // Another mailbox closes the pages over the one before; the pages restored at the start stay.
     LaunchedEffect(Unit) { snapshotFlow { store.baseMailbox }.drop(1).collect { path = emptyList() } }
     LaunchedEffect(path) {
         // Leaving the search page ends the search.
         if (Route.Search !in path && store.searchQuery.isNotEmpty()) store.endSearch()
+    }
+    // The open thread moves between the pane and a page over the list as the screen changes.
+    LaunchedEffect(pane) {
+        if (!pane) {
+            val open = store.conversation ?: return@LaunchedEffect
+            if (path.none { it is Route.Thread }) path = path + Route.Thread(open.id)
+            return@LaunchedEffect
+        }
+        path = path.filter { it !is Route.Thread }
+        snapshotFlow { store.selection.isNotEmpty() }.collect { if (it) store.close() }
     }
 
     // The hardware keyboard's / opens the search.
@@ -86,8 +106,15 @@ fun Shell(store: MailStore) {
 
     BackHandler(path.isNotEmpty()) { path = path.dropLast(1) }
     BackHandler(path.isEmpty() && store.selection.isNotEmpty()) { store.selection = emptySet() }
+    BackHandler(pane && store.conversation != null) { store.close() }
     BackHandler(drawerOpen) { drawerOpen = false }
 
+    val lists: @Composable () -> Unit = {
+        MailboxScreen(store, list, openDrawer = { drawerOpen = true }, push = push)
+        AnimatedVisibility(Route.Search in path, Modifier.zIndex(1f), enter = slideInHorizontally(tween(220)) { it }, exit = slideOutHorizontally(tween(200)) { it }) {
+            SearchScreen(store, back = { path = path.filter { it != Route.Search } }, push = push)
+        }
+    }
     Drawer(
         open = drawerOpen,
         enabled = path.isEmpty() && store.selection.isEmpty(),
@@ -102,18 +129,28 @@ fun Shell(store: MailStore) {
             })
         },
     ) {
-        Box(Modifier.fillMaxSize()) {
-            MailboxScreen(store, list, openDrawer = { drawerOpen = true }, push = { path = path + it })
-            val search = Route.Search in path
-            AnimatedVisibility(search, Modifier.zIndex(1f), enter = slideInHorizontally(tween(220)) { it }, exit = slideOutHorizontally(tween(200)) { it }) {
-                SearchScreen(store, back = { path = path.filter { it != Route.Search } }, push = { path = path + it })
+        if (pane) {
+            Row(Modifier.fillMaxSize()) {
+                Box(Modifier.width(Dims.listColumn).fillMaxHeight()) { lists() }
+                Rule(vertical = true)
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    val open = store.conversation
+                    if (open == null) EmptyState(Symbol.MailOpen, "No conversation open") else ThreadScreenStack(store, open.id, dismiss = null)
+                }
             }
+            return@Drawer
+        }
+        Box(Modifier.fillMaxSize()) {
+            lists()
             val thread = path.lastOrNull() as? Route.Thread
             AnimatedVisibility(thread != null, Modifier.zIndex(2f), enter = slideInHorizontally(tween(220)) { it }, exit = slideOutHorizontally(tween(200)) { it }) {
                 val shown = remember { mutableStateOf(thread) }
                 if (thread != null) shown.value = thread
                 shown.value?.let { route ->
-                    ThreadScreenStack(store, route.id, dismiss = { path = path.filter { it !is Route.Thread } })
+                    ThreadScreenStack(
+                        store, route.id, dismiss = { path = path.filter { it !is Route.Thread } },
+                        leave = { if (!paneNow) store.close() },
+                    )
                 }
             }
         }

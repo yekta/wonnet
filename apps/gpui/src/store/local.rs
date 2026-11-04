@@ -56,6 +56,8 @@ pub struct LocalSettings {
     pub settings_sidebar: f32,
     /// The sidebar stays open beside the mail, which makes room for it, instead of over it.
     pub keep_sidebar: bool,
+    /// The open mail shows beside the list, where the window is wide enough for both.
+    pub reading_pane: bool,
     #[serde(skip)]
     path: Option<PathBuf>,
 }
@@ -68,6 +70,7 @@ impl Default for LocalSettings {
             notification_action: NotificationAction::Archive,
             settings_sidebar: crate::theme::size::SIDEBAR_WIDTH,
             keep_sidebar: false,
+            reading_pane: false,
             path: None,
         }
     }

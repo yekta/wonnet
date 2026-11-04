@@ -939,13 +939,32 @@ impl Render for MailWindow {
 }
 
 impl MailWindow {
-    /// The list, the thread over it, the bar on top, and the sidebar over them all or beside them.
+    /// The list, the thread over it or beside it, the bar on top, and the sidebar over them all or
+    /// beside them.
     fn mail(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let store = self.store.read(cx);
         let open = store.conversation.is_some();
+        let reading_pane = store.reading_pane(window);
         let (over, beside) = (store.sidebar_over(), store.sidebar_beside());
         let bar = topbar::top_bar(self, window, cx);
-        let page = if open { self.thread.clone().into_any_element() } else { self.list.clone().into_any_element() };
+        let page = match (reading_pane, open) {
+            (true, _) => div()
+                .size_full()
+                .flex()
+                .child(
+                    div()
+                        .w(px(size::LIST_COLUMN))
+                        .h_full()
+                        .flex_none()
+                        .border_r_1()
+                        .border_color(cx.color(BORDER))
+                        .child(self.list.clone()),
+                )
+                .child(div().flex_1().min_w_0().h_full().child(self.thread.clone()))
+                .into_any_element(),
+            (false, true) => self.thread.clone().into_any_element(),
+            (false, false) => self.list.clone().into_any_element(),
+        };
         let store = self.store.clone();
         let page = div().flex_1().min_h_0().child(page);
         let page = match beside {

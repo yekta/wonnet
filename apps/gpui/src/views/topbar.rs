@@ -110,7 +110,7 @@ pub fn top_bar(
 ) -> impl IntoElement + use<> {
     let store = window_view.store.clone();
     let state = store.read(cx);
-    let open = state.conversation.clone();
+    let open = state.conversation.clone().filter(|_| !state.reading_pane(window));
     let selecting = open.is_none() && !state.selection.is_empty();
     let toggle = store.clone();
     let mut leading: Vec<AnyElement> = vec![
@@ -258,7 +258,7 @@ fn search_field(window_view: &MailWindow, cx: &mut Context<MailWindow>) -> impl 
 }
 
 /// What can be done to the open thread: archive, trash, snooze, label, mark unread, and more.
-fn thread_actions(store: &Entity<Store>, thread: &str, cx: &App) -> impl IntoElement + use<> {
+pub fn thread_actions(store: &Entity<Store>, thread: &str, cx: &App) -> impl IntoElement + use<> {
     let state = store.read(cx);
     let threads = vec![thread.to_string()];
     let buttons = [

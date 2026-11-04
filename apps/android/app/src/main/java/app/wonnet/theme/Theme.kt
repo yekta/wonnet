@@ -117,6 +117,9 @@ object Dims {
     val floatingButtonSmall = 40.dp
     /** A screen at least this wide is laid out as a tablet's: the settings beside their sections. */
     val wide = 700.dp
+    /** A screen at least this wide can show the open mail beside the list, in a column `listColumn` wide. */
+    val readingFrom = 1000.dp
+    val listColumn = 400.dp
 
     /**
      * The card that fills the page: the thread's messages, a message being written. It floats on

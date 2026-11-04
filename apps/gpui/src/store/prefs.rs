@@ -213,7 +213,12 @@ impl SettingsEntry {
     pub fn all() -> Vec<SettingsEntry> {
         use SettingsSection::*;
         vec![
-            Self::new("appearance", "Theme", General, "appearance light dark system mode sidebar keep open beside"),
+            Self::new(
+                "appearance",
+                "Theme",
+                General,
+                "appearance light dark system mode sidebar keep open beside reading pane split list mail",
+            ),
             Self::new(
                 "notifications",
                 "Notifications",

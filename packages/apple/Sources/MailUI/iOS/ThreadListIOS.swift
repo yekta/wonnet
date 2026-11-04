@@ -13,6 +13,8 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
     let checked: Set<String>
     /// Whether holding a row selects it.
     var selectable = false
+    /// The row whose thread shows beside the list, lit.
+    var current: String?
     /// False while the rows are the mailbox before; when they are the new one's, the list goes to the top.
     let ready: Bool
     /// Whether the list comes back to where it was left; the search's results don't.
@@ -73,7 +75,9 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         context.coordinator.refresh = refresh
         context.coordinator.farDown = farDown
         context.coordinator.head?.rootView = header()
-        context.coordinator.update(rows: rows, editing: editing, checked: checked, ready: ready, headerHeight: headerHeight, loadingMore: loadingMore)
+        context.coordinator.update(
+            rows: rows, editing: editing, checked: checked, current: current, ready: ready, headerHeight: headerHeight, loadingMore: loadingMore
+        )
         context.coordinator.goToTop(toTop)
     }
 
@@ -102,6 +106,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         private var holding = false
         private var rows: [ThreadRow] = []
         private var texts: [String: (ThreadRow, RowText)] = [:]
+        private var current: String?
         private var ready = true
         private var prefetch: DispatchWorkItem?
         /// Keeps the list where it was left, across the app being made anew.
@@ -121,8 +126,10 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
             foot.addSubview(loadingFoot.view)
         }
 
-        func update(rows: [ThreadRow], editing: Bool, checked: Set<String>, ready: Bool, headerHeight: CGFloat, loadingMore: Bool) {
+        func update(rows: [ThreadRow], editing: Bool, checked: Set<String>, current: String?, ready: Bool, headerHeight: CGFloat, loadingMore: Bool) {
             guard let table else { return }
+            let relit = current != self.current ? [self.current, current] : []
+            self.current = current
             if loadingMore != self.loadingMore {
                 self.loadingMore = loadingMore
                 loadingFoot.view.isHidden = !loadingMore
@@ -156,6 +163,11 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
                 if !paths.isEmpty { table.reconfigureRows(at: paths) }
             } else {
                 table.reloadData()
+            }
+            if !relit.isEmpty {
+                let visible = Set(table.indexPathsForVisibleRows ?? [])
+                let paths = rows.indices.filter { relit.contains(rows[$0].id) }.map { IndexPath(row: $0, section: 0) }.filter(visible.contains)
+                if !paths.isEmpty { table.reconfigureRows(at: paths) }
             }
             if switched { keeper?.top() }
             if table.isEditing != editing { table.setEditing(editing, animated: true) }
@@ -219,7 +231,7 @@ struct ThreadListIOS<Header: View>: UIViewRepresentable {
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
             let cell = tableView.dequeueReusableCell(withIdentifier: ThreadCell.identifier, for: indexPath)
             let row = rows[indexPath.row]
-            (cell as? ThreadCell)?.configure(row: row, text: text(for: row), swiper: swiper)
+            (cell as? ThreadCell)?.configure(row: row, text: text(for: row), current: row.id == current, swiper: swiper)
             return cell
         }
 
@@ -425,11 +437,12 @@ final class ThreadCell: UITableViewCell {
 
     required init?(coder: NSCoder) { nil }
 
-    func configure(row: ThreadRow, text: RowText, swiper: RowSwiper?) {
+    func configure(row: ThreadRow, text: RowText, current: Bool, swiper: RowSwiper?) {
         self.row = row
         self.swiper = swiper
         canvas.row = row
         canvas.text = text
+        canvas.current = current
         canvas.selecting = isEditing
         canvas.setNeedsDisplay()
         if !tray.isHidden { tray.show(swipe.commands, for: row) }
@@ -507,9 +520,15 @@ private final class RowCanvas: UIView {
     /// The list is selecting: the row stands beside its circle, and its account's bar is a
     /// row's own, apart from the bars above and below.
     var selecting = false
+    /// Its thread shows beside the list.
+    var current = false
 
     override func draw(_ rect: CGRect) {
         guard let row, let text else { return }
+        if current {
+            Tokens.backgroundAccentLarger.platform.setFill()
+            UIRectFill(bounds.insetBy(dx: 0, dy: Theme.rowGap / 2))
+        }
         Theme.accountColor(row.color).platform.setFill()
         let width = Theme.iosAccountBarWidth
         if selecting {
