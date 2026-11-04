@@ -161,6 +161,9 @@ pub struct Applied {
     pub arrived: Vec<Arrived>,
 }
 
+/// The tab after Other that shows every thread of the inbox, whatever its split.
+const ALL_SPLIT: &str = "inbox:all";
+
 pub fn is_split_key(key: &str) -> bool {
     key == SPLIT_INBOX_KEY || key.starts_with(SPLIT_KEY)
 }
@@ -188,10 +191,12 @@ pub fn parse_mailbox(mailbox: &str) -> Option<(String, Option<String>)> {
 }
 
 /// The label and account a mailbox's threads are kept under. With Split Inbox on, the inbox
-/// shows its Important split; with it off, a split shows the whole inbox.
+/// shows its Important split and `inbox:all` the whole inbox; with it off, a split shows the
+/// whole inbox.
 fn resolve(mailbox: &str, split: bool) -> Option<(String, Option<String>)> {
     let (label, account) = parse_mailbox(mailbox)?;
     let label = match split {
+        _ if label == ALL_SPLIT => role::INBOX.to_string(),
         false if label.starts_with("inbox:") => role::INBOX.to_string(),
         true if label == role::INBOX => "inbox:important".to_string(),
         _ => label,
@@ -821,6 +826,7 @@ impl Store {
             false => Vec::new(),
         };
         let in_unread = label == UNREAD;
+        let in_all = parse_mailbox(mailbox).is_some_and(|(asked, _)| asked == ALL_SPLIT);
         let (label, filter, unread) = unread_of(label, filter, kept);
         let (from, count) = match drafts.is_empty() {
             true => (offset, limit),
@@ -834,17 +840,18 @@ impl Store {
             rows = rows.into_iter().skip(offset).take(limit).collect();
         }
         let tabs = match &splits {
-            Some(splits) if !in_unread && (label == role::INBOX || label.starts_with("inbox:")) => {
-                let mut tabs = vec![("important".to_string(), "Important".to_string())];
-                tabs.extend(splits.iter().map(|split| (split.id.clone(), split.name.clone())));
-                tabs.push(("other".into(), "Other".into()));
+            Some(splits) if !in_unread && (in_all || label.starts_with("inbox:")) => {
+                let mut tabs = vec![("inbox:important".to_string(), "Important".to_string())];
+                tabs.extend(splits.iter().map(|split| (format!("inbox:{}", split.id), split.name.clone())));
+                tabs.push(("inbox:other".into(), "Other".into()));
+                tabs.push((ALL_SPLIT.into(), "All".into()));
                 let prefix = account.as_ref().map(|account| format!("{account}/")).unwrap_or_default();
                 let mut list = Vec::new();
-                for (id, name) in tabs {
-                    let label = format!("inbox:{id}");
+                for (tab, name) in tabs {
+                    let label = if tab == ALL_SPLIT { role::INBOX.to_string() } else { tab.clone() };
                     let total = self.count(&label, account.as_deref(), None, None)? as u32;
                     let unread = self.count(&label, account.as_deref(), Some(Filter::Unread), None)? as u32;
-                    list.push(SplitTab { mailbox: format!("{prefix}{label}"), name, unread, total });
+                    list.push(SplitTab { mailbox: format!("{prefix}{tab}"), name, unread, total });
                 }
                 list
             }

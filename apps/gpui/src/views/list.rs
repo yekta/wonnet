@@ -573,7 +573,15 @@ fn list_header(store: &Entity<Store>, cx: &App) -> Option<impl IntoElement> {
             .max_w(px(size::CARD_WIDTH))
             .border_b_1()
             .border_color(cx.color(BORDER))
-            .child(div().flex_1().min_w_0().px(px(space::L)).child(ui::tab_strip(tabs, cx)))
+            .child(
+                div()
+                    .id("split-tabs")
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_x_scroll()
+                    .px(px(space::L))
+                    .child(ui::tab_strip(tabs, cx)),
+            )
             .children(filter.map(|chip| div().pr(px(space::L)).child(chip)))
             .children(empty.map(|button| div().pr(px(space::L - size::BUTTON_GAP / 2.)).child(button))),
     )

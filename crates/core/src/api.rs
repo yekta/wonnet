@@ -5,7 +5,7 @@
 //! `trash` for every account together; `<account>/<mailbox>` for one account; `<account>/label/<label>` for a
 //! label. With Split Inbox on, an inbox's splits are `inbox:important`, `inbox:other` and
 //! `inbox:<split id>` (and `<account>/inbox:other`, ...); a thread is in one split only, and an
-//! inbox's own id shows Important.
+//! inbox's own id shows Important. `inbox:all` is the last tab, every thread of the inbox.
 //!
 //! The synced preferences (`Preferences`, `SetPreference`), by key:
 //! - `split_inbox`: `true` splits the inbox into Important, the custom splits, and Other (mail

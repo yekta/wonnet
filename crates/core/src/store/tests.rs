@@ -313,8 +313,11 @@ fn the_inbox_splits_into_important_custom_splits_and_other() {
             ("inbox:trips".into(), "Trips".into(), 1, 1),
             ("inbox:team".into(), "Team".into(), 1, 1),
             ("inbox:other".into(), "Other".into(), 1, 1),
+            ("inbox:all".into(), "All".into(), 4, 4),
         ]
     );
+    assert_eq!(ids(&page(&store, "inbox:all")).len(), 4);
+    assert_eq!(page(&store, "a/inbox:all").splits[4].mailbox, "a/inbox:all");
     assert_eq!(ids(&page(&store, "a/inbox:important")), ["a:t3"]);
     assert_eq!(page(&store, "a/inbox:team").splits[2].mailbox, "a/inbox:team");
     assert_eq!(ids(&page(&store, "inbox:trips")), ["a:t4"]);

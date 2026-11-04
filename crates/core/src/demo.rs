@@ -459,10 +459,12 @@ mod tests {
         let count = |mailbox: &str| page(mailbox).total;
         assert_eq!(count("inbox"), 6, "a split inbox shows Important");
         let splits: Vec<(String, u32)> = page("inbox").splits.into_iter().map(|tab| (tab.name, tab.total)).collect();
-        assert_eq!(splits, [("Important".into(), 6), ("Team".into(), 5), ("Other".into(), 5)]);
+        assert_eq!(splits, [("Important".into(), 6), ("Team".into(), 5), ("Other".into(), 5), ("All".into(), 16)]);
         assert_eq!(count("drafts"), 1);
         assert_eq!(page("drafts").rows[0].draft_id.as_deref(), Some("demo-draft"));
-        assert_eq!(page("demo-work/inbox").splits.iter().map(|tab| tab.total).sum::<u32>(), 8);
+        let work: Vec<u32> = page("demo-work/inbox").splits.iter().map(|tab| tab.total).collect();
+        assert_eq!(work.iter().rev().skip(1).sum::<u32>(), 8);
+        assert_eq!(work.last(), Some(&8), "All is every split's threads");
         assert_eq!(count("snoozed"), 1);
         assert_eq!(count("sent"), 4);
         assert_eq!(count("demo-home/label/travel"), 2);
