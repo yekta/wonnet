@@ -125,6 +125,8 @@ enum Theme {
 
     /// A thread row on the Mac: one line.
     static let macRowHeight: CGFloat = 48
+    /// A thread row on the Mac in the column beside the open mail: senders, subject, snippet.
+    static let macCompactRowHeight: CGFloat = 76
     /// A thread row on iOS: sender, subject, snippet.
     static let iosRowHeight: CGFloat = 88
     /// How far a pull from the top of the iOS list goes to refresh, and the room held open while it does.
@@ -148,8 +150,14 @@ enum Theme {
     static let cardRule = Tokens.borderCard
     static let cardAccent = Tokens.cardLargerAccent
     static let cardAccentStronger = Tokens.cardLargerAccentStronger
+    /// The page width from which the open mail can show beside the list.
+    static let readingFrom: CGFloat = 1000
+    /// The list's column beside the open mail.
+    static let listColumn: CGFloat = 400
     #if os(macOS)
     static let cardInset: CGFloat = 80
+    /// The card's inset where the page is narrower than the card grows.
+    static let cardInsetNarrow: CGFloat = Space.xxl + Space.xxs
     static let cardRadius: CGFloat = Radius.sm
     /// Between the card and the window's edges.
     static let cardMargin = EdgeInsets(top: Space.l, leading: Space.xl + 4, bottom: Space.l, trailing: Space.xl + 4)

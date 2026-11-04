@@ -26,7 +26,8 @@ enum Platform {
     #else
     static let scale: CGFloat = 1.15
     static let strongSelection = true
-    @MainActor static var device: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
+    @MainActor static var pad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    @MainActor static var device: String { pad ? "iPad" : "iPhone" }
     #endif
 
     static func open(_ url: URL) {

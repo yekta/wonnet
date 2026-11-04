@@ -198,6 +198,11 @@ private struct GeneralSettings: View {
             } trailing: {
                 Switch(title: "Keep the sidebar open", isOn: $store.keepSidebar)
             }
+            SettingsRow {
+                SettingsLabel(title: "Show mail beside the list", detail: "The open mail sits next to the list when the window is wide enough.")
+            } trailing: {
+                Switch(title: "Show mail beside the list", isOn: $store.readingPane)
+            }
         }
         SettingsGroup(
             id: "notifications", title: "Notifications",

@@ -72,6 +72,7 @@ extension MailStore {
             selection.remove(thread)
         } else {
             selection.insert(thread)
+            close()
         }
         selectionAnchor = thread
         selected = thread
@@ -88,6 +89,7 @@ extension MailStore {
             return
         }
         selection.formUnion(list[min(from, to)...max(from, to)].map(\.id))
+        close()
         selected = thread
     }
 

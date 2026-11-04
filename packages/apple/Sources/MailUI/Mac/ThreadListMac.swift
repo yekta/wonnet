@@ -18,6 +18,8 @@ struct ThreadListMac: NSViewRepresentable {
     let topInset: CGFloat
     /// False under an open thread: the list keeps its place, and gives up the keyboard.
     let shown: Bool
+    /// Beside the open mail: each row on three lines, in a column of the list's own width.
+    let compact: Bool
     /// False while the rows are the mailbox before; when they are the new one's, the list goes to the top.
     let ready: Bool
     /// The next page is being read: a row at the foot says so.
@@ -66,7 +68,9 @@ struct ThreadListMac: NSViewRepresentable {
         if scroll.contentInsets.top != topInset { pad(scroll) }
         if scroll.isHidden == shown { scroll.isHidden = !shown }
         context.coordinator.farDown = farDown
-        context.coordinator.update(rows: rows, selected: selected, checked: checked, hoverCircles: hoverCircles, ready: ready, loadingMore: loadingMore)
+        context.coordinator.update(
+            rows: rows, selected: selected, checked: checked, hoverCircles: hoverCircles, compact: compact, ready: ready, loadingMore: loadingMore
+        )
         context.coordinator.goToTop(toTop)
     }
 
@@ -95,6 +99,7 @@ struct ThreadListMac: NSViewRepresentable {
         private var selected: String?
         private var checked: Set<String> = []
         private var hoverCircles = true
+        private var compact = false
         private var ready = true
         private var loadingMore = false
         private var prefetch: DispatchWorkItem?
@@ -111,8 +116,11 @@ struct ThreadListMac: NSViewRepresentable {
             selected = store.selected
         }
 
-        func update(rows: [ThreadRow], selected: String?, checked: Set<String>, hoverCircles: Bool, ready: Bool, loadingMore: Bool) {
+        func update(rows: [ThreadRow], selected: String?, checked: Set<String>, hoverCircles: Bool, compact: Bool, ready: Bool, loadingMore: Bool) {
             guard let table else { return }
+            let reshaped = compact != self.compact
+            self.compact = compact
+            if reshaped { table.rowHeight = compact ? Theme.macCompactRowHeight : Theme.macRowHeight }
             let moved = selected != self.selected
             let picked = checked != self.checked || hoverCircles != self.hoverCircles
             self.hoverCircles = hoverCircles
@@ -124,7 +132,7 @@ struct ThreadListMac: NSViewRepresentable {
             self.ready = ready
             let footChanged = loadingMore != self.loadingMore
             self.loadingMore = loadingMore
-            if let changed {
+            if let changed, !reshaped {
                 for index in changed {
                     guard let view = table.rowView(atRow: index, makeIfNecessary: false) as? ThreadRowView else { continue }
                     configure(view, at: index)
@@ -147,7 +155,7 @@ struct ThreadListMac: NSViewRepresentable {
                     view.hoverCircle = hoverCircles
                 }
             }
-            if moved, let selected, selected != clickedRow, store.conversation == nil,
+            if moved || reshaped, let selected, selected != clickedRow, store.conversation == nil || compact,
                let index = rows.firstIndex(where: { $0.id == selected }) {
                 table.scrollRowToVisible(index)
             }
@@ -179,7 +187,7 @@ struct ThreadListMac: NSViewRepresentable {
             let row = rows[index]
             view.configure(
                 row: row, text: text(for: row), current: row.id == selected, checked: checked.contains(row.id),
-                selecting: !checked.isEmpty, hoverCircle: hoverCircles, hovering: table?.hovered == index,
+                selecting: !checked.isEmpty, hoverCircle: hoverCircles, compact: compact, hovering: table?.hovered == index,
                 selectHelp: store.keyHelp("Select", "select")
             )
         }
@@ -412,7 +420,8 @@ final class HoverTableView: NSTableView {
 }
 
 /// One thread on one line: the account's bar, unread dot, senders, subject and snippet, the star
-/// if starred, date; before it, in the gutter, the circle that selects it.
+/// if starred, date; before it, in the gutter, the circle that selects it. Compact, beside the open
+/// mail, on three lines as iOS draws it.
 final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     enum Hit {
         case select, star, archive, trash, snooze, read, none
@@ -427,6 +436,7 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     /// Hovering the row shows its circle. Without it, the gutter is left alone until rows are selected.
     var hoverCircle = true { didSet { if hoverCircle != oldValue { needsDisplay = true } } }
     private var selectHelp = "Select"
+    private var compact = false
     var hovering = false {
         didSet {
             guard hovering != oldValue else { return }
@@ -441,10 +451,21 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     private static let sendersWidth: CGFloat = 190
     private static let iconSide: CGFloat = 16
     private static let starSide: CGFloat = 14
+    /// A compact row's lines: from the top of its face to the first, and each one's height.
+    private static let compactTop: CGFloat = 9
+    private static let compactLine: CGFloat = 19
+    private static let compactIconSide: CGFloat = 13
     /// The least room the date takes, so the stars and the line's ends line up from row to row.
     private static let dateColumn = ceil(NSAttributedString(string: "Yesterday", attributes: [.font: Platform.face(RowText.dateSize, .semibold)]).size().width)
 
-    func configure(row: ThreadRow, text: RowText, current: Bool, checked: Bool, selecting: Bool, hoverCircle: Bool, hovering: Bool, selectHelp: String) {
+    func configure(
+        row: ThreadRow, text: RowText, current: Bool, checked: Bool, selecting: Bool, hoverCircle: Bool, compact: Bool, hovering: Bool,
+        selectHelp: String
+    ) {
+        if compact != self.compact {
+            self.compact = compact
+            placeToolTip()
+        }
         self.row = row
         self.text = text
         self.isCurrent = current
@@ -459,8 +480,11 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     override var isFlipped: Bool { true }
 
     /// Where the row is drawn: the column's width, centred, with the page's margin and a gutter
-    /// either side.
+    /// either side; compact, the list's width after the gutter.
     var column: NSRect {
+        guard !compact else {
+            return NSRect(x: Theme.macSelectGutter, y: 0, width: max(bounds.width - Theme.macSelectGutter - Space.s, 0), height: bounds.height)
+        }
         let width = max(min(bounds.width - 48 - 2 * Theme.macSelectGutter, Theme.cardWidth), 0)
         return NSRect(x: ((bounds.width - width) / 2).rounded(), y: 0, width: width, height: bounds.height)
     }
@@ -478,6 +502,10 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        placeToolTip()
+    }
+
+    private func placeToolTip() {
         removeAllToolTips()
         addToolTip(gutter, owner: self, userData: nil)
     }
@@ -548,6 +576,10 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
         let left = column.minX
         let middle = bounds.height / 2
         drawSelectCircle(middle: middle)
+        guard !compact else {
+            drawCompact(row, text)
+            return
+        }
         if row.unread {
             Tokens.primary.platform.setFill()
             NSBezierPath(ovalIn: NSRect(x: left + 18, y: middle - 3.5, width: 7, height: 7)).fill()
@@ -569,8 +601,48 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             Self.drawLine(text.date, x: dateX, width: trailing - dateX + 2, middle: middle)
             return
         }
-        let actionsStart = (actions.last?.2.minX ?? trailing) - Space.l
         Self.drawLine(text.line, x: x, width: lineWidth, middle: middle, fadingBefore: actionsStart)
+        drawActions(row)
+    }
+
+    /// Where the hovered actions start, the line fading out before them.
+    private var actionsStart: CGFloat {
+        (actions.last?.2.minX ?? trailing) - Space.l
+    }
+
+    /// Senders and the star, the subject and a paperclip, the snippet and the date.
+    private func drawCompact(_ row: ThreadRow, _ text: RowText) {
+        let x = column.minX + Self.sendersX
+        let end = trailing
+        let side = Self.compactIconSide
+        let middles = (0..<3).map { face.minY + Self.compactTop + Self.compactLine * (CGFloat($0) + 0.5) }
+        if row.unread {
+            Tokens.primary.platform.setFill()
+            NSBezierPath(ovalIn: NSRect(x: column.minX + 18, y: middles[0] - 3.5, width: 7, height: 7)).fill()
+        }
+        guard hovering, !isSelecting else {
+            let starred = row.starred && row.draftId == nil
+            Self.drawLine(text.senders, x: x, width: (starred ? end - side - Space.s : end) - x, middle: middles[0])
+            if starred {
+                Self.drawSymbol(.starFilled, in: NSRect(x: end - side, y: middles[0] - side / 2, width: side, height: side), color: Tokens.star.platform)
+            }
+            Self.drawLine(text.subject, x: x, width: (row.attachment ? end - side - Space.s : end) - x, middle: middles[1])
+            if row.attachment {
+                let clip = NSRect(x: end - side, y: middles[1] - side / 2, width: side, height: side)
+                Self.drawSymbol(.paperclip, in: clip, color: Tokens.mutedStrongerForeground.platform)
+            }
+            let dateWidth = ceil(text.date.size().width)
+            Self.drawLine(text.snippet, x: x, width: end - dateWidth - Space.s - x, middle: middles[2])
+            Self.drawLine(text.date, x: end - dateWidth, width: dateWidth + 2, middle: middles[2])
+            return
+        }
+        for (line, middle) in zip([text.senders, text.subject, text.snippet], middles) {
+            Self.drawLine(line, x: x, width: end - x, middle: middle, fadingBefore: actionsStart)
+        }
+        drawActions(row)
+    }
+
+    private func drawActions(_ row: ThreadRow) {
         for (kind, symbol, rect) in actions {
             let lit = hoveredHit == kind
             let isStar = kind == .star

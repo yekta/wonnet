@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{
-    App, ClickEvent, Context, Entity, HighlightStyle, MouseButton, ScrollStrategy, SharedString, StyledText, Task,
+    App, ClickEvent, Context, Div, Entity, HighlightStyle, MouseButton, ScrollStrategy, SharedString, StyledText, Task,
     UniformListScrollHandle, Window, div, linear_color_stop, linear_gradient, point, px, uniform_list,
 };
 
@@ -141,8 +141,12 @@ impl ThreadList {
         let selecting = !store.selection.is_empty();
         let circles = store.select_circles();
         let loading = store.loading_more && store.search_rows.is_none();
-        let width = store.page_width(window);
-        let column = (width - 48. - 2. * size::SELECT_GUTTER).clamp(0., size::CARD_WIDTH);
+        let width = store.list_width(window);
+        let compact = store.reading_pane(window);
+        let column = match compact {
+            true => width - size::SELECT_GUTTER - space::S,
+            false => (width - 48. - 2. * size::SELECT_GUTTER).clamp(0., size::CARD_WIDTH),
+        };
         let select_help = store.key_help("Select", "select");
         let shown: Vec<Option<(ThreadRow, RowState)>> = range
             .clone()
@@ -154,6 +158,7 @@ impl ThreadList {
                         selecting,
                         circles,
                         column,
+                        compact,
                     };
                     (row.clone(), state)
                 })
@@ -192,6 +197,7 @@ impl ThreadList {
         let circle_shown = state.circles || state.selecting;
         let hover_actions = !state.selecting;
         let entity = cx.entity();
+        let height = if state.compact { size::ROW_HEIGHT_COMPACT } else { size::ROW_HEIGHT };
 
         let lit = if state.current { BACKGROUND_ACCENT_LARGER_STRONGEST } else { BACKGROUND_ACCENT_LARGER };
         // The open row rests lit; a checked one hovers too, under its tint.
@@ -218,12 +224,59 @@ impl ThreadList {
         let open_row = row.clone();
         let menu_row = row.clone();
         let menu_entity = entity.clone();
+        let content = match state.compact {
+            true => compact_text(&row, starred, &group, hover_actions, cx).into_any_element(),
+            false => div()
+                .flex()
+                .items_center()
+                .size_full()
+                .min_w_0()
+                .pl(px(36.))
+                .pr(px(space::L))
+                .font_family(FONT)
+                .child(
+                    div()
+                        .w(px(190.))
+                        .flex_none()
+                        .truncate()
+                        .text_size(px(13.))
+                        .font_weight(if unread { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
+                        .text_color(cx.color(strong))
+                        .child(row.senders.clone()),
+                )
+                .child(div().w(px(38.)).flex_none().pl(px(14.)).when(row.attachment, |slot| {
+                    slot.child(icon(Symbol::Paperclip, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+                }))
+                .child(line)
+                .child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(space::M))
+                        .pl(px(space::L))
+                        .when(hover_actions, |end| end.group_hover(group.clone(), |end| end.invisible()))
+                        .when(starred, |end| end.child(icon_in(Symbol::StarFilled, 14., cx.color(STAR))))
+                        .child(
+                            div()
+                                .min_w(px(58.))
+                                .flex()
+                                .justify_end()
+                                .whitespace_nowrap()
+                                .text_size(px(12.))
+                                .font_weight(date_weight)
+                                .text_color(cx.color(date_color))
+                                .child(row.date.clone()),
+                        ),
+                )
+                .into_any_element(),
+        };
         let face = div()
             .relative()
             .flex_1()
             .min_w_0()
             .overflow_hidden()
-            .h(px(size::ROW_HEIGHT - size::ROW_GAP))
+            .h(px(height - size::ROW_GAP))
             .flex()
             .items_center()
             .rounded(px(radius::SM))
@@ -243,53 +296,10 @@ impl ThreadList {
                     .bg(cx.color(account_color(&row.color))),
             )
             .when(unread, |face| {
-                face.child(div().absolute().left(px(18.)).size(px(7.)).rounded_full().bg(cx.color(PRIMARY)))
+                let dot = div().absolute().left(px(18.)).size(px(7.)).rounded_full().bg(cx.color(PRIMARY));
+                face.child(if state.compact { dot.top(px(COMPACT_PAD + 6.)) } else { dot })
             })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .size_full()
-                    .min_w_0()
-                    .pl(px(36.))
-                    .pr(px(space::L))
-                    .font_family(FONT)
-                    .child(
-                        div()
-                            .w(px(190.))
-                            .flex_none()
-                            .truncate()
-                            .text_size(px(13.))
-                            .font_weight(if unread { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
-                            .text_color(cx.color(strong))
-                            .child(row.senders.clone()),
-                    )
-                    .child(div().w(px(38.)).flex_none().pl(px(14.)).when(row.attachment, |slot| {
-                        slot.child(icon(Symbol::Paperclip, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
-                    }))
-                    .child(line)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .gap(px(space::M))
-                            .pl(px(space::L))
-                            .when(hover_actions, |end| end.group_hover(group.clone(), |end| end.invisible()))
-                            .when(starred, |end| end.child(icon_in(Symbol::StarFilled, 14., cx.color(STAR))))
-                            .child(
-                                div()
-                                    .min_w(px(58.))
-                                    .flex()
-                                    .justify_end()
-                                    .whitespace_nowrap()
-                                    .text_size(px(12.))
-                                    .font_weight(date_weight)
-                                    .text_color(cx.color(date_color))
-                                    .child(row.date.clone()),
-                            ),
-                    ),
-            )
+            .child(content)
             .when(hover_actions, |face| {
                 face.child(
                     div()
@@ -348,22 +358,16 @@ impl ThreadList {
                 let entries = menu_entity.read(cx).menu(&menu_row, cx);
                 ui::open_menu(format!("row-menu-{}", menu_row.id), entries, Some(event.position), window, cx);
             });
-        div()
-            .id(SharedString::from(format!("thread-{}", row.id)))
-            .h(px(size::ROW_HEIGHT))
-            .w_full()
-            .flex()
-            .justify_center()
-            .child(
-                div()
-                    .w(px(state.column + 2. * size::SELECT_GUTTER))
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .when(!circle_shown, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none()))
-                    .child(reach)
-                    .child(div().w(px(size::SELECT_GUTTER)).flex_none()),
-            )
+        div().id(SharedString::from(format!("thread-{}", row.id))).h(px(height)).w_full().flex().justify_center().child(
+            div()
+                .w(px(state.column + if state.compact { size::SELECT_GUTTER } else { 2. * size::SELECT_GUTTER }))
+                .h_full()
+                .flex()
+                .items_center()
+                .when(!circle_shown, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none()))
+                .child(reach)
+                .when(!state.compact, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none())),
+        )
     }
 
     /// What a right-click on the row offers: for the selection when the row is in it.
@@ -424,6 +428,8 @@ struct RowState {
     selecting: bool,
     circles: bool,
     column: f32,
+    /// In the column beside the open mail: three lines instead of one.
+    compact: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -604,6 +610,10 @@ impl Render for ThreadList {
         }
         let header = list_header(&self.store, cx);
         let has_header = header.is_some();
+        let header_inset = match self.store.read(cx).reading_pane(window) {
+            true => (size::SELECT_GUTTER, space::S),
+            false => (space::XL + 4. + size::SELECT_GUTTER, space::XL + 4. + size::SELECT_GUTTER),
+        };
         let scroll = self.scroll.clone();
         let list =
             uniform_list("threads", count, cx.processor(|this, range, window, cx| this.render_rows(range, window, cx)))
@@ -623,7 +633,8 @@ impl Render for ThreadList {
                         .flex()
                         .justify_center()
                         .pt(px(space::L))
-                        .px(px(space::XL + 4. + size::SELECT_GUTTER))
+                        .pl(px(header_inset.0))
+                        .pr(px(header_inset.1))
                         .child(header),
                 )
             })
@@ -645,6 +656,81 @@ impl Render for ThreadList {
                 )
             })
     }
+}
+
+/// From the top of a compact row to its first line.
+const COMPACT_PAD: f32 = 9.;
+
+/// A row's words in the column beside the open mail, as the phones have them: senders and the
+/// star, the subject and a paperclip, the snippet and the date.
+fn compact_text(row: &ThreadRow, starred: bool, group: &SharedString, hover_actions: bool, cx: &App) -> Div {
+    let unread = row.unread;
+    let strong = if unread { FOREGROUND } else { MUTED_FOREGROUND };
+    let weight = |bold| if bold { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL };
+    let subject = if row.subject.is_empty() { "(no subject)".to_string() } else { row.subject.clone() };
+    let text_line = || div().flex().items_center().gap(px(space::S)).min_w_0().h(px(19.));
+    div()
+        .flex()
+        .flex_col()
+        .justify_start()
+        .size_full()
+        .min_w_0()
+        .pt(px(COMPACT_PAD))
+        .pl(px(36.))
+        .pr(px(space::L))
+        .font_family(FONT)
+        .child(
+            text_line()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(13.))
+                        .font_weight(if unread { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
+                        .text_color(cx.color(strong))
+                        .child(row.senders.clone()),
+                )
+                .when(starred, |line| line.child(icon_in(Symbol::StarFilled, 13., cx.color(STAR)))),
+        )
+        .child(
+            text_line()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(13.))
+                        .font_weight(weight(unread))
+                        .text_color(cx.color(strong))
+                        .child(subject),
+                )
+                .when(row.attachment, |line| {
+                    line.child(icon(Symbol::Paperclip, 13.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+                }),
+        )
+        .child(
+            text_line()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(13.))
+                        .text_color(cx.color(MUTED_STRONGER_FOREGROUND))
+                        .child(row.snippet.replace('\n', " ")),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .whitespace_nowrap()
+                        .text_size(px(12.))
+                        .font_weight(weight(unread))
+                        .text_color(cx.color(if unread { strong } else { MUTED_STRONGER_FOREGROUND }))
+                        .when(hover_actions, |date| date.group_hover(group.clone(), |date| date.invisible()))
+                        .child(row.date.clone()),
+                ),
+        )
 }
 
 /// An empty mailbox's calm line.

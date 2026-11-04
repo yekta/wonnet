@@ -428,6 +428,25 @@ impl Store {
         if self.sidebar_beside() { width - crate::theme::size::SIDEBAR_WIDTH } else { width }
     }
 
+    /// The open mail shows beside the list: asked for, and the page has room for both.
+    pub fn reading_pane(&self, window: &gpui::Window) -> bool {
+        self.local.reading_pane && self.page_width(window) >= crate::theme::size::READING_FROM
+    }
+
+    pub fn list_width(&self, window: &gpui::Window) -> f32 {
+        match self.reading_pane(window) {
+            true => crate::theme::size::LIST_COLUMN,
+            false => self.page_width(window),
+        }
+    }
+
+    pub fn thread_width(&self, window: &gpui::Window) -> f32 {
+        match self.reading_pane(window) {
+            true => self.page_width(window) - crate::theme::size::LIST_COLUMN,
+            false => self.page_width(window),
+        }
+    }
+
     pub fn ui_state(&self) -> UiState {
         UiState {
             mailbox: self.mailbox.clone(),

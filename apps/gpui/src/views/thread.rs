@@ -649,7 +649,9 @@ impl ThreadPane {
 
 impl Render for ThreadPane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(open) = self.store.read(cx).conversation.clone() else { return div().size_full().into_any_element() };
+        let Some(open) = self.store.read(cx).conversation.clone() else {
+            return ui::empty_state(Symbol::MailOpen, "No conversation open", cx).into_any_element();
+        };
         if self.shown.as_ref() != Some(&open.id) {
             self.store_changed(cx);
         }
@@ -665,7 +667,10 @@ impl Render for ThreadPane {
             self.store.update(cx, |store, _| store.note_thread_scroll(offset));
         }
         let store = self.store.read(cx);
-        let wide = store.page_width(window) >= size::PANE_FROM;
+        let reading_pane = store.reading_pane(window);
+        let width = store.thread_width(window);
+        let wide = width >= size::PANE_FROM;
+        let inset = if width >= size::CARD_WIDTH { size::CARD_INSET } else { size::CARD_INSET_NARROW };
         let (tucked, starts) = self.tucked(&open, store);
         let last = open.messages.last().map(|message| message.id.clone());
         let mut children: Vec<gpui::AnyElement> = vec![self.header(&open, cx).into_any_element()];
@@ -746,7 +751,8 @@ impl Render for ThreadPane {
                 .child(reply("forward", Symbol::Forward, "Forward", ReplyKind::Forward))
                 .into_any_element(),
         );
-        // A press outside the card closes the thread; one inside goes on to select its text.
+        // A press outside the card closes the thread, unless it shows beside the list; one inside
+        // goes on to select its text.
         let inside = Rc::new(Cell::new(false));
         let pressed = inside.clone();
         let close = self.store.clone();
@@ -758,7 +764,7 @@ impl Render for ThreadPane {
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                if !inside.replace(false) {
+                if !inside.replace(false) && !reading_pane {
                     close.update(cx, |store, cx| store.close(cx))
                 }
             })
@@ -768,7 +774,7 @@ impl Render for ThreadPane {
                         .id("thread-card")
                         .w_full()
                         .max_w(px(size::CARD_WIDTH))
-                        .px(px(size::CARD_INSET))
+                        .px(px(inset))
                         .py(px(space::XXL))
                         .on_mouse_down(MouseButton::Left, move |_, _, _| pressed.set(true))
                         .flex()
@@ -795,6 +801,19 @@ impl Render for ThreadPane {
                     }),
                 ))
         });
-        div().size_full().flex().bg(cx.color(BACKGROUND)).child(page).children(pane).into_any_element()
+        let body = div().flex_1().min_h_0().w_full().flex().child(page).children(pane);
+        let actions = reading_pane.then(|| {
+            div()
+                .flex_none()
+                .h(px(size::BAR))
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .border_b_1()
+                .border_color(cx.color(BORDER))
+                .child(super::topbar::thread_actions(&self.store, &open.id, cx))
+        });
+        div().size_full().flex().flex_col().bg(cx.color(BACKGROUND)).children(actions).child(body).into_any_element()
     }
 }

@@ -76,7 +76,8 @@ enum Route: Hashable {
 }
 
 /// The drawer with the mailboxes, over the navigation stack of the mailbox on screen and the
-/// pages opened over it, starting where the app was left.
+/// pages opened over it, starting where the app was left. On a wide iPad the open thread can
+/// show beside the stack instead of over it.
 struct IOSShell: View {
     @Environment(MailStore.self) private var store
     @State private var path: [Route]
@@ -87,19 +88,28 @@ struct IOSShell: View {
     }
 
     var body: some View {
-        DrawerView(isOpen: $drawerOpen, enabled: path.isEmpty && store.selection.isEmpty) {
+        let beside = store.besideList
+        DrawerView(isOpen: $drawerOpen, enabled: path.isEmpty && store.selection.isEmpty && !(beside && store.conversation != nil)) {
             SidebarView(showSettings: showSettings, picked: { _ in close() })
                 .environment(store)
         } content: {
-            NavigationStack(path: $path) {
-                MailboxScreen(path: $path, openDrawer: { drawerOpen = true })
-                    .navigationDestination(for: Route.self) { route in
-                        switch route {
-                        case .search: SearchScreen(path: $path)
-                        case .thread(let thread): ThreadScreenIOS(thread: thread)
+            HStack(spacing: 0) {
+                NavigationStack(path: $path) {
+                    MailboxScreen(path: $path, openDrawer: { drawerOpen = true })
+                        .navigationDestination(for: Route.self) { route in
+                            switch route {
+                            case .search: SearchScreen(path: $path)
+                            case .thread(let thread): ThreadScreenIOS(thread: thread)
+                            }
                         }
-                    }
+                }
+                .frame(width: beside ? Theme.listColumn : nil)
+                if beside {
+                    Rule(vertical: true)
+                    ReadingPane()
+                }
             }
+            .onGeometryChange(for: Bool.self, of: { $0.size.width >= Theme.readingFrom }) { wide in store.pageWide = wide && Platform.pad }
             .tint(Tokens.primary.color)
             .environment(store)
         }
@@ -107,7 +117,18 @@ struct IOSShell: View {
             guard let thread else { return }
             store.requestedThread = nil
             drawerOpen = false
-            path = [.thread(thread)]
+            path = store.besideList ? [] : [.thread(thread)]
+        }
+        .onChange(of: store.besideList) { _, beside in
+            guard beside else {
+                if let open = store.conversation?.id, !path.contains(.thread(open)) { path.append(.thread(open)) }
+                return
+            }
+            path.removeAll { $0 != .search }
+        }
+        .onChange(of: store.selection.isEmpty) { _, empty in
+            guard !empty, store.besideList else { return }
+            store.close()
         }
         .onChange(of: store.baseMailbox) { path = [] }
         .onChange(of: path) { _, path in
@@ -144,7 +165,8 @@ struct MailboxScreen: View {
         // The table stays through a change of mailbox, with the empty state over it when there
         // is nothing to show, so it isn't made anew and the page never goes blank between.
         ThreadListIOS(
-            store: store, rows: store.rows, editing: editing, checked: store.selection, selectable: true, ready: store.listReady,
+            store: store, rows: store.rows, editing: editing, checked: store.selection, selectable: true,
+            current: store.besideList ? store.conversation?.id : nil, ready: store.listReady,
             loadingMore: store.loadingMore, headerHeight: ListHeader.shows(store) ? ListHeader.height : 0,
             bottomInset: FloatingButton.side + Space.l * 2,
             refresh: store.checkMail, farDown: { farDown = $0 }, toTop: toTop,
@@ -203,11 +225,25 @@ struct MailboxScreen: View {
     }
 }
 
-/// Opens a thread as a page over the list; a draft opens in compose instead.
+/// Opens a thread as a page over the list, or beside it; a draft opens in compose instead.
 @MainActor private func openThread(_ thread: String, path: Binding<[Route]>, store: MailStore) {
     let draft = store.row(thread)?.draftId != nil
     store.open(thread)
-    if !draft { path.wrappedValue.append(.thread(thread)) }
+    guard !draft, !store.besideList else { return }
+    path.wrappedValue.append(.thread(thread))
+}
+
+/// The open thread beside the list, or a calm line while none is.
+private struct ReadingPane: View {
+    @Environment(MailStore.self) private var store
+
+    var body: some View {
+        if let open = store.conversation {
+            ThreadScreenIOS(thread: open.id, beside: true)
+        } else {
+            EmptyState(symbol: .mailOpen, message: "No conversation open").background(Tokens.background.color)
+        }
+    }
 }
 
 /// Search as a page of its own: back and the field in the bar, the matches under them.
@@ -220,7 +256,8 @@ struct SearchScreen: View {
 
     var body: some View {
         ThreadListIOS(
-            store: store, rows: store.searchRows ?? [], editing: false, checked: [], ready: true, keepsScroll: false,
+            store: store, rows: store.searchRows ?? [], editing: false, checked: [],
+            current: store.besideList ? store.conversation?.id : nil, ready: true, keepsScroll: false,
             headerHeight: 0, refresh: store.searchAgain, farDown: { farDown = $0 }, toTop: toTop,
             open: { thread in openThread(thread, path: $path, store: store) },
             header: { EmptyView() }
@@ -334,7 +371,8 @@ struct CommandBar: View {
 }
 
 /// A thread, with what can be done to it along the bottom. A swipe across it turns to the
-/// thread beside it in the list, which is drawn there ahead of it.
+/// thread beside it in the list, which is drawn there ahead of it. `beside` the list it is the
+/// reading pane, not a page: it neither goes back nor closes the thread.
 struct ThreadScreenIOS: View {
     private static let settle = Animation.easeOut(duration: 0.25)
     private static let gap = Space.l
@@ -346,9 +384,11 @@ struct ThreadScreenIOS: View {
     /// How far a swipe has the pages aside.
     @State private var slide: CGFloat = 0
     @State private var width: CGFloat = 0
+    private let beside: Bool
 
-    init(thread: String) {
+    init(thread: String, beside: Bool = false) {
         _thread = State(initialValue: thread)
+        self.beside = beside
     }
 
     var body: some View {
@@ -375,11 +415,16 @@ struct ThreadScreenIOS: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true) }
         .task(id: store.sides) { await store.peekAround() }
         .onChange(of: store.conversation?.id) { _, open in
-            guard let open else { return dismiss() }
+            guard let open else {
+                if !beside { dismiss() }
+                return
+            }
             thread = open
         }
         .onDisappear {
-            if store.conversation?.id == thread { store.close() }
+            // Taken off the stack as the thread moves into the pane, it stays open.
+            guard !beside, !store.besideList, store.conversation?.id == thread else { return }
+            store.close()
         }
     }
 

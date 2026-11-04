@@ -315,6 +315,20 @@ impl SettingsView {
             });
         let server_symbol = if store.connection == "offline" { Symbol::WifiOff } else { Symbol::Server };
         let keep_sidebar = store.local.keep_sidebar;
+        let reading_pane = store.local.reading_pane;
+        let reading_store = self.store.clone();
+        let reading = ui::switch(
+            "reading-pane",
+            reading_pane,
+            move |on, _, cx| {
+                reading_store.update(cx, |store, cx| {
+                    store.local.reading_pane = on;
+                    store.local.save();
+                    cx.notify();
+                })
+            },
+            cx,
+        );
         let keep_store = self.store.clone();
         let keep = ui::switch(
             "keep-sidebar",
@@ -350,6 +364,17 @@ impl SettingsView {
                                 cx,
                             ),
                             vec![keep.into_any_element()],
+                        )
+                        .into_any_element(),
+                        ui::settings_row(
+                            ui::settings_label(
+                                "Show mail beside the list",
+                                Some("The open mail sits next to the list when the window is wide enough.".into()),
+                                Lead::None,
+                                false,
+                                cx,
+                            ),
+                            vec![reading.into_any_element()],
                         )
                         .into_any_element(),
                     ],

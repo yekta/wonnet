@@ -16,6 +16,7 @@ impl Store {
     pub fn toggle_selection(&mut self, thread: &str, cx: &mut Context<Self>) {
         if !self.selection.remove(thread) {
             self.selection.insert(thread.to_string());
+            self.conversation = None;
         }
         self.selection_anchor = Some(thread.to_string());
         self.selected = Some(thread.to_string());
@@ -33,6 +34,7 @@ impl Store {
         };
         let range: Vec<String> = list[from.min(to)..=from.max(to)].iter().map(|row| row.id.clone()).collect();
         self.selection.extend(range);
+        self.conversation = None;
         self.selected = Some(thread.to_string());
         cx.notify();
     }

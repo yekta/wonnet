@@ -127,6 +127,14 @@ public final class MailStore {
             sidebarOpen = keepSidebar
         }
     }
+    /// The open mail shows beside the list where the page is wide enough for both (Mac, iPad).
+    var readingPane = UserDefaults.standard.bool(forKey: "readingPane") {
+        didSet { UserDefaults.standard.set(readingPane, forKey: "readingPane") }
+    }
+    /// The page is at least `Theme.readingFrom` wide, as the window's views measure it.
+    var pageWide = false
+    /// The open mail shows beside the list now, instead of over it.
+    var besideList: Bool { readingPane && pageWide }
     /// How far the list and the open thread are scrolled, as their views report it; a view made
     /// anew goes back to it. A thread not scrolled yet has no offset: it opens on its message.
     @ObservationIgnored var listOffset: CGFloat = 0
@@ -874,8 +882,12 @@ public final class MailStore {
             #if os(macOS)
             open(next)
             #else
-            conversation = nil
-            selected = next
+            guard besideList else {
+                conversation = nil
+                selected = next
+                return
+            }
+            open(next)
             #endif
         } else if let selected, leaving.contains(selected) {
             self.selected = neighbour(of: selected, leaving: leaving)

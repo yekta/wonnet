@@ -22,7 +22,7 @@ struct ThreadScreen: View {
     var body: some View {
         GeometryReader { window in
             HStack(spacing: 0) {
-                thread(height: window.size.height)
+                thread(size: window.size)
                 if showsPane(width: window.size.width), let email = paneEmail {
                     Rule(vertical: true)
                     PersonView(email: email, openThread: store.open)
@@ -82,19 +82,34 @@ struct ThreadScreen: View {
         message == conversation.messages.first?.id ? Self.top : message
     }
 
-    private func thread(height: CGFloat) -> some View {
+    /// Narrower beside the list, where the card can't grow to its width.
+    private func cardInset(width: CGFloat) -> CGFloat {
+        #if os(macOS)
+        guard store.besideList, width < Theme.cardWidth else { return Theme.cardInset }
+        return Theme.cardInsetNarrow
+        #else
+        return Theme.cardInset
+        #endif
+    }
+
+    private func thread(size: CGSize) -> some View {
         // Read as the view is made: its scroll view may report its first layout before it appears.
         let offset = live ? store.threadOffset : nil
         let id = conversation.id
         return ScrollViewReader { proxy in
             ScrollView {
-                page
+                page(inset: cardInset(width: size.width))
                     .padding(Theme.cardMargin)
-                    .frame(maxWidth: .infinity, minHeight: height, alignment: .top)
+                    .frame(maxWidth: .infinity, minHeight: size.height, alignment: .top)
                     .id(Self.top)
                     #if os(macOS)
                     // The page around the card: a click there closes the thread, as Newton's did.
-                    .background { Tokens.background.color.onTapGesture(perform: store.close) }
+                    .background {
+                        Tokens.background.color.onTapGesture {
+                            guard !store.besideList else { return }
+                            store.close()
+                        }
+                    }
                     #endif
                     .background(ScrollKept(restore: offset ?? 0) { [store] scrolled in
                         guard store.conversation?.id == id else { return }
@@ -122,7 +137,7 @@ struct ThreadScreen: View {
         .id(id)
     }
 
-    private var page: some View {
+    private func page(inset: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             let tucked = tucked
@@ -151,7 +166,7 @@ struct ThreadScreen: View {
             }
             replies
         }
-        .padding(.horizontal, Theme.cardInset)
+        .padding(.horizontal, inset)
         .padding(.vertical, Space.xxl)
         .frame(maxWidth: Theme.cardWidth)
         .pageCard()

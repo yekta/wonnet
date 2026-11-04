@@ -160,7 +160,7 @@ private struct MacPages: View {
         .background(Tokens.background.color)
     }
 
-    /// The list, and the thread open over it.
+    /// The list, and the thread open over it, or beside it where the page is wide enough.
     private var page: some View {
         ZStack {
             Tokens.background.color
@@ -168,37 +168,63 @@ private struct MacPages: View {
             // stays through a change of mailbox too, with the empty state over it when there is
             // nothing to show, so the table isn't made anew and the page never goes blank between.
             let header = ListHeader.shows(store)
-            VStack(spacing: 0) {
-                // The list scrolls the whole page; only its header stays put above it.
-                if header {
-                    ListHeader()
-                        .frame(maxWidth: Theme.cardWidth)
-                        .padding(.top, Space.l)
-                        .padding(.horizontal, Space.xl + 4 + Theme.macSelectGutter)
+            let beside = store.besideList
+            let listShown = beside || store.conversation == nil
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    // The list scrolls the whole page; only its header stays put above it.
+                    if header {
+                        ListHeader()
+                            .frame(maxWidth: Theme.cardWidth)
+                            .padding(.top, Space.l)
+                            .padding(.leading, beside ? Theme.macSelectGutter : Space.xl + 4 + Theme.macSelectGutter)
+                            .padding(.trailing, beside ? Space.s : Space.xl + 4 + Theme.macSelectGutter)
+                    }
+                    ThreadListMac(
+                        store: store, rows: store.visibleRows, selected: store.selected, checked: store.selection,
+                        hoverCircles: store.selectCircles,
+                        topInset: header ? 0 : Space.l, shown: listShown, compact: beside, ready: store.listReady,
+                        loadingMore: store.loadingMore && store.searchRows == nil,
+                        farDown: { farDown = $0 }, toTop: toTop
+                    )
+                    .overlay {
+                        if store.listEmpty { EmptyList() }
+                    }
+                    .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
                 }
-                ThreadListMac(
-                    store: store, rows: store.visibleRows, selected: store.selected, checked: store.selection,
-                    hoverCircles: store.selectCircles,
-                    topInset: header ? 0 : Space.l, shown: store.conversation == nil, ready: store.listReady,
-                    loadingMore: store.loadingMore && store.searchRows == nil,
-                    farDown: { farDown = $0 }, toTop: toTop
-                )
-                .overlay {
-                    if store.listEmpty { EmptyList() }
+                .frame(width: beside ? Theme.listColumn : nil)
+                .opacity(listShown ? 1 : 0)
+                .allowsHitTesting(listShown)
+                if beside {
+                    Rule(vertical: true)
+                    pane
                 }
-                .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
             }
-            .opacity(store.conversation == nil ? 1 : 0)
-            .allowsHitTesting(store.conversation == nil)
-            if let conversation = store.conversation {
+            if !beside, let conversation = store.conversation {
                 ThreadScreen(conversation: conversation)
             }
+        }
+        .onGeometryChange(for: Bool.self, of: { $0.size.width >= Theme.readingFrom }) { store.pageWide = $0 }
+    }
+
+    /// The open thread beside the list, with its actions above it.
+    @ViewBuilder private var pane: some View {
+        if let conversation = store.conversation {
+            VStack(spacing: 0) {
+                ThreadActions(thread: conversation.id)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Theme.barHeight)
+                    .rule(.bottom)
+                ThreadScreen(conversation: conversation)
+            }
+        } else {
+            EmptyState(symbol: .mailOpen, message: "No conversation open")
         }
     }
 }
 
 /// The mailbox's name, its tabs, search and compose above the list; back and the thread's
-/// actions above a thread. The menu, and back beside it, are the toolbar's.
+/// actions above a thread over the list. The menu, and back beside it, are the toolbar's.
 struct MacTopBar: View {
     @Environment(MailStore.self) private var store
     let focusSearch: Int
@@ -208,9 +234,14 @@ struct MacTopBar: View {
     /// reports it; a usual value until it has.
     @State private var pastMenu: CGFloat = 133
 
+    /// The thread over the list; one beside it leaves the bar to the mailbox.
+    private var open: Conversation? {
+        store.besideList ? nil : store.conversation
+    }
+
     var body: some View {
         Group {
-            if store.conversation == nil, !store.selection.isEmpty {
+            if open == nil, !store.selection.isEmpty {
                 HeaderBar(leadingInset: leadingInset) {
                     SelectionCount()
                 } trailing: {
@@ -218,17 +249,17 @@ struct MacTopBar: View {
                 }
             } else {
                 HeaderBar(leadingInset: leadingInset) {
-                    if store.conversation == nil {
+                    if open == nil {
                         MailboxTitle()
                     }
                 } center: {
-                    if let open = store.conversation {
+                    if let open {
                         ThreadActions(thread: open.id)
                     } else {
                         MailboxTabs()
                     }
                 } trailing: {
-                    if store.conversation == nil {
+                    if open == nil {
                         SearchField(
                             placeholder: "Search", text: $query, style: .bar, autofocus: false, focusTrigger: focusSearch,
                             submit: { store.search(query) }, escape: store.endSearch, clear: store.endSearch
@@ -247,7 +278,7 @@ struct MacTopBar: View {
                         IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)
                             .background(ToolbarEdge { pastMenu = $0 })
                         // Over the open sidebar, only the menu, which closes it.
-                        if store.conversation != nil, !store.sidebarOpen || store.keepSidebar {
+                        if open != nil, !store.sidebarOpen || store.keepSidebar {
                             IconButton(symbol: .arrowLeft, help: "Back (Esc)") { store.close() }
                         }
                     }

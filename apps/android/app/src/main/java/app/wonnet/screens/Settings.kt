@@ -52,6 +52,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -309,8 +311,16 @@ private fun PageView(store: MailStore, pages: List<Page>, back: (() -> Unit)?, p
 
 @Composable
 private fun GeneralPage(store: MailStore, anchor: (String) -> Modifier) {
+    val wide = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() } >= Dims.wide
     Group("Appearance", modifier = anchor("appearance")) {
         SettingsRow("Theme", trailing = { ChoiceMenu(Appearance.entries, store.appearance, { it.title }, ControlSize.Small, store::changeAppearance) })
+        if (wide) {
+            RowRule()
+            SettingsRow(
+                "Show Mail Beside the List", detail = "The open mail sits next to the list when the window is wide enough.",
+                trailing = { Toggle(store.readingPane, store::changeReadingPane) },
+            )
+        }
     }
     Group(
         "Notifications", "The button a new mail's notification has next to Mark as Read and Reply. After it, the notification offers Undo.",
