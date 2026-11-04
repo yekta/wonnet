@@ -219,15 +219,15 @@ impl Notifier {
             .appname("Wonnet")
             .summary(&message.from)
             .body(&text(&message))
+            .icon(&super::icon_path().display().to_string())
             .hint(notify_rust::Hint::Category("email.arrived".into()))
             .action("default", "Open")
             .action(first_button(first), first.name())
             .action("read", "Mark as Read")
             .action("reply", "Reply");
-        match photo.as_ref().and_then(|photo| photo.to_str()) {
-            Some(photo) => notification.image_path(photo),
-            None => notification.icon(&super::icon_path().display().to_string()),
-        };
+        if let Some(photo) = photo.as_ref().and_then(|photo| photo.to_str()) {
+            notification.image_path(photo);
+        }
         let Ok(handle) = notification.show() else { return };
         let id = handle.id();
         self.noted(&message.thread, id);
