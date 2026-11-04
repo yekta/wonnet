@@ -9,7 +9,7 @@ pub const RULE_KEY: &str = "rule:";
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Rule {
-    /// Senders: an address, or `@domain` for everyone there.
+    /// Senders: an address, or `@domain` for everyone there and at its subdomains.
     pub from: Vec<String>,
     /// Recipients, To or Cc, as `from`.
     pub to: Vec<String>,
@@ -52,13 +52,16 @@ fn holds(entries: &[String], test: impl Fn(&str) -> bool) -> bool {
     entries.is_empty() || entries.iter().any(|entry| test(entry))
 }
 
-/// `pattern` is lower case already.
-fn address_matches(pattern: &str, address: &str) -> bool {
+/// `pattern` is lower case already. `@domain` takes the domain and its subdomains.
+pub fn address_matches(pattern: &str, address: &str) -> bool {
     let address = address.trim().to_lowercase();
-    match pattern.starts_with('@') {
-        true => address.ends_with(pattern),
-        false => address == pattern,
-    }
+    let Some(domain) = pattern.strip_prefix('@') else {
+        return address == pattern;
+    };
+    let Some((_, at)) = address.rsplit_once('@') else {
+        return false;
+    };
+    !domain.is_empty() && (at == domain || at.strip_suffix(domain).is_some_and(|sub| sub.ends_with('.')))
 }
 
 #[cfg(test)]
@@ -88,10 +91,12 @@ mod tests {
     }
 
     #[test]
-    fn a_domain_is_not_part_of_an_address() {
+    fn a_domain_takes_its_subdomains_but_not_part_of_a_name() {
         let domain = Rule { from: vec!["@hub.com".into()], ..rule() };
         assert!(domain.matches("x@hub.com", &[], ""));
         assert!(!domain.matches("x@github.com", &[], ""));
+        assert!(domain.matches("x@mail.hub.com", &[], ""));
+        assert!(!domain.matches("x@mail.github.com", &[], ""));
         let address = Rule { from: vec!["x@hub.com".into()], ..rule() };
         assert!(!address.matches("ax@hub.com", &[], ""));
     }

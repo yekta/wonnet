@@ -12,7 +12,8 @@
 //!   that is `bulk`).
 //! - `split:<id>`: a custom split, `{"name": "Team", "from": ["ann@x.com", "@x.com"],
 //!   "label": "<label id>" | null, "order": 0}`. A thread is in it when a message's sender matches
-//!   `from` (an address, or a domain written `@x.com`) or a message has `label`.
+//!   `from` (an address, or a domain written `@x.com`, which takes its subdomains too) or a
+//!   message has `label` (`mail_protocol::Split`).
 //! - `signature:<account id>`: text put under what is written from that account. Without one,
 //!   the identity's own signature from the provider is used.
 //! - `snippet:<id>`: `{"name": "Thanks", "text": "Thanks {first_name}!"}`.
