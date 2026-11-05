@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use super::{Batch, Reauth, Refused, Synced, html_text, one_line, unescape};
-use crate::db::{self, AccountRow, RemoteMessage};
+use crate::db::{self, AccountRow, Relabel, RemoteMessage};
 use crate::mime::File;
 use crate::{AppState, mime};
 
@@ -133,6 +133,120 @@ struct Header {
     value: String,
 }
 
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct HistoryPage {
+    #[serde(default)]
+    history: Vec<History>,
+    history_id: Option<String>,
+    next_page_token: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct History {
+    #[serde(default)]
+    messages_added: Vec<Changed>,
+    #[serde(default)]
+    messages_deleted: Vec<Changed>,
+    #[serde(default)]
+    labels_added: Vec<Changed>,
+    #[serde(default)]
+    labels_removed: Vec<Changed>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Changed {
+    message: MessageRef,
+    /// The labels added or removed, not all the message has.
+    #[serde(default)]
+    label_ids: Vec<String>,
+}
+
+/// What the history says changed. New mail is fetched whole; a change of labels is written as
+/// it is, since fetching every message marked read at once would take hours of the quota.
+#[derive(Default)]
+struct Changes {
+    /// New messages, oldest first.
+    added: Vec<String>,
+    /// Each message's labels added (true) or removed (false), the last change of each kept.
+    marks: HashMap<String, HashMap<String, bool>>,
+    deleted: Vec<String>,
+    latest: String,
+}
+
+impl Changes {
+    fn add(&mut self, entry: History) {
+        self.added.extend(entry.messages_added.into_iter().map(|item| item.message.id));
+        for (items, on) in [(entry.labels_added, true), (entry.labels_removed, false)] {
+            for item in items {
+                let marks = self.marks.entry(item.message.id).or_default();
+                marks.extend(item.label_ids.into_iter().map(|label| (label, on)));
+            }
+        }
+        self.deleted.extend(entry.messages_deleted.into_iter().map(|item| item.message.id));
+    }
+
+    /// The label changes of messages that weren't added or deleted meanwhile. One moved between
+    /// Gmail's tabs is fetched again instead, for whether it is bulk.
+    fn relabels(&mut self, labels: &HashMap<String, Uuid>) -> Vec<Relabel> {
+        let settled: HashSet<String> = self.deleted.iter().chain(&self.added).cloned().collect();
+        let mut relabels = Vec::new();
+        for (id, marks) in std::mem::take(&mut self.marks) {
+            if settled.contains(&id) {
+                continue;
+            }
+            if marks.keys().any(|label| BULK_CATEGORIES.contains(&label.as_str())) {
+                self.added.push(id);
+                continue;
+            }
+            let mut relabel = Relabel { provider_id: id, ..Default::default() };
+            for (label, on) in marks {
+                match (mark(&label, labels), on) {
+                    (Mark::Label(label), true) => relabel.add.push(label),
+                    (Mark::Label(label), false) => relabel.remove.push(label),
+                    (Mark::Unread, _) => relabel.unread = Some(on),
+                    (Mark::Starred, _) => relabel.starred = Some(on),
+                    (Mark::Bulk | Mark::Other, _) => {}
+                }
+            }
+            relabels.push(relabel);
+        }
+        relabels
+    }
+
+    /// The new messages still there, newest first, each once.
+    fn newest_first(&self) -> Vec<String> {
+        let mut seen: HashSet<&str> = self.deleted.iter().map(String::as_str).collect();
+        self.added.iter().rev().filter(|id| seen.insert(id.as_str())).cloned().collect()
+    }
+}
+
+/// What one of Gmail's label ids is to the server.
+enum Mark {
+    /// A role or a custom label's id.
+    Label(String),
+    Unread,
+    Starred,
+    Bulk,
+    Other,
+}
+
+fn mark(label: &str, labels: &HashMap<String, Uuid>) -> Mark {
+    match label {
+        "INBOX" => Mark::Label(role::INBOX.to_string()),
+        "SENT" => Mark::Label(role::SENT.to_string()),
+        "DRAFT" => Mark::Label(role::DRAFTS.to_string()),
+        "TRASH" => Mark::Label(role::TRASH.to_string()),
+        "SPAM" => Mark::Label(role::SPAM.to_string()),
+        "UNREAD" => Mark::Unread,
+        "STARRED" => Mark::Starred,
+        _ if BULK_CATEGORIES.contains(&label) => Mark::Bulk,
+        other => labels.get(other).map_or(Mark::Other, |id| Mark::Label(id.to_string())),
+    }
+}
+
 #[derive(Deserialize, Default, serde::Serialize)]
 struct SyncState {
     history_id: Option<String>,
@@ -224,7 +338,7 @@ impl Gmail {
     ) -> anyhow::Result<T> {
         let url = format!("{}{path}", self.api);
         let what = format!("{method} {path}");
-        self.execute(&what, units(&method, path), || {
+        self.execute(&what, units(&method, path, query), || {
             let request = self.http.request(method.clone(), &url).query(query);
             match body {
                 Some(body) => request.json(body),
@@ -326,10 +440,11 @@ impl Gmail {
                 db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
             }
             Some(history_id) => match self.history(&history_id).await {
-                Ok((changed, deleted, latest)) => {
-                    self.fetch_and_store(state, account, &labels, &changed).await?;
-                    db::delete_messages(&state.db, account, &deleted).await?;
-                    sync.history_id = Some(latest);
+                Ok(mut changes) => {
+                    db::relabel_messages(&state.db, account, &changes.relabels(&labels)).await?;
+                    db::delete_messages(&state.db, account, &changes.deleted).await?;
+                    self.fetch_and_store(state, account, &labels, &changes.newest_first()).await?;
+                    sync.history_id = Some(changes.latest);
                 }
                 Err(error) if error.is::<NotFound>() => {
                     tracing::info!("Gmail history of {} expired, syncing again", account.address);
@@ -431,42 +546,25 @@ impl Gmail {
         }
     }
 
-    /// What changed after `history_id`: messages to fetch again, messages gone, the latest id.
-    async fn history(&self, history_id: &str) -> anyhow::Result<(Vec<String>, Vec<String>, String)> {
-        let mut changed = HashSet::new();
-        let mut deleted = HashSet::new();
+    /// What changed after `history_id`, and the latest history id.
+    async fn history(&self, history_id: &str) -> anyhow::Result<Changes> {
+        let mut changes = Changes { latest: history_id.to_string(), ..Default::default() };
         let mut page: Option<String> = None;
-        let mut latest = history_id.to_string();
         loop {
             let mut parameters = vec![("startHistoryId", history_id.to_string()), ("maxResults", "500".to_string())];
             if let Some(token) = &page {
                 parameters.push(("pageToken", token.clone()));
             }
-            let response: Value = self.get("/history", &parameters).await?;
-            for entry in response["history"].as_array().into_iter().flatten() {
-                for key in ["messagesAdded", "labelsAdded", "labelsRemoved"] {
-                    for item in entry[key].as_array().into_iter().flatten() {
-                        if let Some(id) = item["message"]["id"].as_str() {
-                            changed.insert(id.to_string());
-                        }
-                    }
-                }
-                for item in entry["messagesDeleted"].as_array().into_iter().flatten() {
-                    if let Some(id) = item["message"]["id"].as_str() {
-                        deleted.insert(id.to_string());
-                    }
-                }
+            let response: HistoryPage = self.get("/history", &parameters).await?;
+            response.history.into_iter().for_each(|entry| changes.add(entry));
+            if let Some(id) = response.history_id {
+                changes.latest = id;
             }
-            if let Some(id) = response["historyId"].as_str() {
-                latest = id.to_string();
-            }
-            page = response["nextPageToken"].as_str().map(String::from);
+            page = response.next_page_token;
             if page.is_none() {
-                break;
+                return Ok(changes);
             }
         }
-        changed.retain(|id| !deleted.contains(id));
-        Ok((changed.into_iter().collect(), deleted.into_iter().collect(), latest))
     }
 
     async fn fetch_and_store(
@@ -611,13 +709,15 @@ impl Gmail {
 }
 
 /// What a request costs of the user's quota, from Gmail's table.
-fn units(method: &Method, path: &str) -> u32 {
+fn units(method: &Method, path: &str, query: &[(&str, String)]) -> u32 {
+    let whole = query.iter().any(|(key, value)| *key == "format" && matches!(value.as_str(), "full" | "raw"));
     match path {
         "/profile" | "/settings/sendAs" => 1,
         "/labels" if method == Method::GET => 1,
         "/history" => 2,
         "/messages/batchModify" | "/messages/batchDelete" => 50,
         "/watch" => 100,
+        _ if method == Method::GET && path.starts_with("/messages/") && whole => 60,
         _ if method == Method::GET && path.starts_with("/messages/") => 20,
         _ => 5,
     }
@@ -649,23 +749,18 @@ fn remote(message: GmailMessage, labels: &HashMap<String, Uuid>) -> RemoteMessag
         .map(|payload| payload.headers.into_iter().map(|header| (header.name, header.value)).collect())
         .unwrap_or_default();
     let headers = mime::headers(&lines);
-    let mut unread = false;
-    let mut starred = false;
+    let (mut unread, mut starred, mut bulk) = (false, false, headers.bulk);
     let mut normalized = Vec::new();
     for label in &message.label_ids {
-        match label.as_str() {
-            "INBOX" => normalized.push(role::INBOX.to_string()),
-            "SENT" => normalized.push(role::SENT.to_string()),
-            "DRAFT" => normalized.push(role::DRAFTS.to_string()),
-            "TRASH" => normalized.push(role::TRASH.to_string()),
-            "SPAM" => normalized.push(role::SPAM.to_string()),
-            "UNREAD" => unread = true,
-            "STARRED" => starred = true,
-            other => normalized.extend(labels.get(other).map(Uuid::to_string)),
+        match mark(label, labels) {
+            Mark::Label(label) => normalized.push(label),
+            Mark::Unread => unread = true,
+            Mark::Starred => starred = true,
+            Mark::Bulk => bulk = true,
+            Mark::Other => {}
         }
     }
     let date = message.internal_date.and_then(|date| date.parse().ok()).or(headers.date).unwrap_or(0);
-    let bulk = headers.bulk || message.label_ids.iter().any(|label| BULK_CATEGORIES.contains(&label.as_str()));
     let attachments = match headers.multipart_mixed {
         true => vec![Attachment { name: String::new(), mime: String::new(), size: 0 }],
         false => Vec::new(),

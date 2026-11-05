@@ -743,6 +743,47 @@ pub async fn upsert_messages(db: &PgPool, account: &AccountRow, messages: &[Remo
     Ok(())
 }
 
+/// Labels a provider added to and took from a message, without the rest of it.
+#[derive(Debug, Default, PartialEq)]
+pub struct Relabel {
+    pub provider_id: String,
+    pub add: Vec<String>,
+    pub remove: Vec<String>,
+    pub unread: Option<bool>,
+    pub starred: Option<bool>,
+}
+
+const RELABEL_MESSAGES: &str = "WITH changed AS (
+        SELECT m.id, COALESCE(c.unread, m.unread) AS unread, COALESCE(c.starred, m.starred) AS starred,
+            ARRAY(SELECT DISTINCT label FROM unnest(m.labels || ARRAY(SELECT jsonb_array_elements_text(c.add))) label
+                WHERE NOT c.remove ? label ORDER BY label) AS labels
+        FROM jsonb_to_recordset($2) AS c(provider_id TEXT, add JSONB, remove JSONB, unread BOOLEAN, starred BOOLEAN)
+        JOIN messages m ON m.account_id = $1 AND m.provider_id = c.provider_id
+        WHERE NOT m.deleted AND NOT EXISTS (SELECT 1 FROM provider_ops WHERE provider_ops.message_id = m.id))
+    UPDATE messages SET labels = changed.labels, unread = changed.unread, starred = changed.starred, rev = nextval('revs')
+    FROM changed
+    WHERE messages.id = changed.id AND (messages.unread <> changed.unread OR messages.starred <> changed.starred
+        OR ARRAY(SELECT unnest(messages.labels) ORDER BY 1) <> changed.labels)";
+
+/// Writes label changes the provider reported to the messages the server has. As in
+/// `upsert_messages`, a message with changes the provider doesn't have yet is left alone, and one
+/// that ends up as it was keeps its rev, so echoes of the apps' own changes reach no one.
+pub async fn relabel_messages(db: &PgPool, account: &AccountRow, changes: &[Relabel]) -> sqlx::Result<()> {
+    for chunk in changes.chunks(1000) {
+        let rows: Vec<Value> = chunk
+            .iter()
+            .map(|change| {
+                json!({ "provider_id": change.provider_id, "add": change.add, "remove": change.remove,
+                    "unread": change.unread, "starred": change.starred })
+            })
+            .collect();
+        let mut tx = UserTx::begin(db, account.user_id).await?;
+        sqlx::query(RELABEL_MESSAGES).bind(account.id).bind(Json(rows)).execute(&mut *tx.tx).await?;
+        tx.commit().await?;
+    }
+    Ok(())
+}
+
 /// Changes the messages as `op` does to the state they are in, and queues it for their providers.
 pub async fn apply_op(tx: &mut UserTx, messages: &[(Uuid, MessageState)], op: &Op) -> sqlx::Result<()> {
     if messages.is_empty() {

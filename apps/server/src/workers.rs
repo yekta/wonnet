@@ -235,7 +235,7 @@ pub(crate) async fn flush_ops(state: &AppState, account: &AccountRow, connection
         let rows: Vec<(i64, serde_json::Value, String, i32)> = sqlx::query_as(
             "SELECT provider_ops.id, provider_ops.op, messages.provider_id, provider_ops.attempts
              FROM provider_ops JOIN messages ON messages.id = provider_ops.message_id
-             WHERE provider_ops.account_id = $1 ORDER BY provider_ops.id LIMIT 500",
+             WHERE provider_ops.account_id = $1 ORDER BY provider_ops.id LIMIT 1000",
         )
         .bind(account.id)
         .fetch_all(&state.db)
