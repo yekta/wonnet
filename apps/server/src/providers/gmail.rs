@@ -133,15 +133,6 @@ struct Header {
     value: String,
 }
 
-/// One page of Gmail's history: mail to fetch, labels changed on mail it had, mail gone.
-struct HistoryPage {
-    added: Vec<String>,
-    relabeled: Vec<(String, HashMap<String, bool>)>,
-    deleted: Vec<String>,
-    next: String,
-    more: bool,
-}
-
 #[derive(Deserialize, Default, serde::Serialize)]
 struct SyncState {
     history_id: Option<String>,
@@ -334,8 +325,12 @@ impl Gmail {
                 sync.refresh = Refresh::default();
                 db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
             }
-            Some(history_id) => match self.catch_up(state, account, &labels, history_id, &mut sync).await {
-                Ok(()) => {}
+            Some(history_id) => match self.history(&history_id).await {
+                Ok((changed, deleted, latest)) => {
+                    self.fetch_and_store(state, account, &labels, &changed).await?;
+                    db::delete_messages(&state.db, account, &deleted).await?;
+                    sync.history_id = Some(latest);
+                }
                 Err(error) if error.is::<NotFound>() => {
                     tracing::info!("Gmail history of {} expired, syncing again", account.address);
                     sync.history_id = None;
@@ -436,81 +431,42 @@ impl Gmail {
         }
     }
 
-    /// Goes through what changed after `history_id` a page at a time, keeping where each page
-    /// ended, so a pass cut short carries on. Labels changed on mail the server has are changed in
-    /// place; only new mail is fetched.
-    async fn catch_up(
-        &self,
-        state: &AppState,
-        account: &AccountRow,
-        labels: &HashMap<String, Uuid>,
-        mut history_id: String,
-        sync: &mut SyncState,
-    ) -> anyhow::Result<()> {
-        loop {
-            let page = self.history(&history_id).await?;
-            let changes: Vec<db::Relabel> =
-                page.relabeled.into_iter().map(|(id, changed)| relabel(id, changed, labels)).collect();
-            let unknown = db::relabel_messages(&state.db, account, &changes).await?;
-            let fetch: Vec<String> = page.added.into_iter().chain(unknown).collect();
-            self.fetch_and_store(state, account, labels, &fetch).await?;
-            db::delete_messages(&state.db, account, &page.deleted).await?;
-            history_id = page.next;
-            sync.history_id = Some(history_id.clone());
-            db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-            if !page.more {
-                return Ok(());
-            }
-        }
-    }
-
-    /// One page of what changed after `history_id`, and the id the next page starts after.
-    async fn history(&self, history_id: &str) -> anyhow::Result<HistoryPage> {
-        let parameters = [("startHistoryId", history_id.to_string()), ("maxResults", PAGE.to_string())];
-        let response: Value = self.get("/history", &parameters).await?;
-        let mut added = Vec::new();
-        let mut relabeled: Vec<(String, HashMap<String, bool>)> = Vec::new();
+    /// What changed after `history_id`: messages to fetch again, messages gone, the latest id.
+    async fn history(&self, history_id: &str) -> anyhow::Result<(Vec<String>, Vec<String>, String)> {
+        let mut changed = HashSet::new();
         let mut deleted = HashSet::new();
-        let mut last = None;
-        for entry in response["history"].as_array().into_iter().flatten() {
-            last = entry["id"].as_str().or(last);
-            for item in entry["messagesAdded"].as_array().into_iter().flatten() {
-                added.extend(item["message"]["id"].as_str().map(String::from));
+        let mut page: Option<String> = None;
+        let mut latest = history_id.to_string();
+        loop {
+            let mut parameters = vec![("startHistoryId", history_id.to_string()), ("maxResults", "500".to_string())];
+            if let Some(token) = &page {
+                parameters.push(("pageToken", token.clone()));
             }
-            for (key, present) in [("labelsAdded", true), ("labelsRemoved", false)] {
-                for item in entry[key].as_array().into_iter().flatten() {
-                    let Some(id) = item["message"]["id"].as_str() else { continue };
-                    let index = match relabeled.iter().position(|(other, _)| other == id) {
-                        Some(index) => index,
-                        None => {
-                            relabeled.push((id.to_string(), HashMap::new()));
-                            relabeled.len() - 1
+            let response: Value = self.get("/history", &parameters).await?;
+            for entry in response["history"].as_array().into_iter().flatten() {
+                for key in ["messagesAdded", "labelsAdded", "labelsRemoved"] {
+                    for item in entry[key].as_array().into_iter().flatten() {
+                        if let Some(id) = item["message"]["id"].as_str() {
+                            changed.insert(id.to_string());
                         }
-                    };
-                    for label in item["labelIds"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                        relabeled[index].1.insert(label.to_string(), present);
+                    }
+                }
+                for item in entry["messagesDeleted"].as_array().into_iter().flatten() {
+                    if let Some(id) = item["message"]["id"].as_str() {
+                        deleted.insert(id.to_string());
                     }
                 }
             }
-            for item in entry["messagesDeleted"].as_array().into_iter().flatten() {
-                deleted.extend(item["message"]["id"].as_str().map(String::from));
+            if let Some(id) = response["historyId"].as_str() {
+                latest = id.to_string();
+            }
+            page = response["nextPageToken"].as_str().map(String::from);
+            if page.is_none() {
+                break;
             }
         }
-        let latest = response["historyId"].as_str().unwrap_or(history_id);
-        let more = response["nextPageToken"].is_string() && last.is_some();
-        let next = match more {
-            true => last.unwrap_or(latest),
-            false => latest,
-        };
-        let added: HashSet<String> = added.into_iter().filter(|id| !deleted.contains(id)).collect();
-        relabeled.retain(|(id, _)| !added.contains(id) && !deleted.contains(id));
-        Ok(HistoryPage {
-            added: added.into_iter().collect(),
-            relabeled,
-            deleted: deleted.into_iter().collect(),
-            next: next.to_string(),
-            more,
-        })
+        changed.retain(|id| !deleted.contains(id));
+        Ok((changed.into_iter().collect(), deleted.into_iter().collect(), latest))
     }
 
     async fn fetch_and_store(
@@ -686,37 +642,6 @@ impl std::fmt::Display for NotFound {
 }
 
 impl std::error::Error for NotFound {}
-
-/// Gmail's labels a history page added (true) or removed (false), as the server keeps them.
-fn relabel(provider_id: String, changed: HashMap<String, bool>, labels: &HashMap<String, Uuid>) -> db::Relabel {
-    let mut relabel = db::Relabel { provider_id, ..Default::default() };
-    for (label, present) in changed {
-        let role = match label.as_str() {
-            "UNREAD" => {
-                relabel.unread = Some(present);
-                continue;
-            }
-            "STARRED" => {
-                relabel.starred = Some(present);
-                continue;
-            }
-            "INBOX" => role::INBOX.to_string(),
-            "SENT" => role::SENT.to_string(),
-            "DRAFT" => role::DRAFTS.to_string(),
-            "TRASH" => role::TRASH.to_string(),
-            "SPAM" => role::SPAM.to_string(),
-            other => {
-                let Some(id) = labels.get(other) else { continue };
-                id.to_string()
-            }
-        };
-        match present {
-            true => relabel.added.push(role),
-            false => relabel.removed.push(role),
-        }
-    }
-    relabel
-}
 
 fn remote(message: GmailMessage, labels: &HashMap<String, Uuid>) -> RemoteMessage {
     let lines: Vec<(String, String)> = message
