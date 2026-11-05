@@ -4,6 +4,8 @@ import SwiftUI
 /// or Spam.
 struct ListHeader: View {
     @Environment(MailStore.self) private var store
+    /// Before the first tab and after the last control; the Mac lines them up with its rows instead.
+    var edgeInset = Space.l
 
     static let height = 38 * Platform.scale
 
@@ -19,15 +21,16 @@ struct ListHeader: View {
                         tabs: store.splits, selected: chosenSplit, title: \.name, count: \.unread,
                         pick: { store.select(mailbox: $0.mailbox) }
                     )
-                    .padding(.horizontal, Space.l)
+                    .padding(.leading, edgeInset)
+                    .padding(.trailing, Space.l)
                 }
                 if let filter = store.filter {
                     Chip(title: filter == .unread ? "Unread" : "Starred", symbol: .listFilter, removeHelp: "Show everything", remove: { store.setFilter(nil) })
-                        .padding(.trailing, Space.l)
+                        .padding(.trailing, edgeInset)
                 }
                 if store.canEmpty {
                     ActionButton(title: "Empty \(store.mailboxName)", variant: .ghost, action: store.emptyMailbox)
-                        .padding(.trailing, Space.l - Theme.buttonGap / 2)
+                        .padding(.trailing, max(edgeInset - Theme.buttonGap / 2, 0))
                 }
             }
             .frame(height: Self.height)

@@ -66,10 +66,16 @@ struct MacRoot: View {
                     .withoutSystemGlass()
                 }
             }
-            .frame(minWidth: 860, minHeight: 520)
+            .frame(minWidth: minWidth, minHeight: 520)
+            .background(WindowWidening(toWidth: minWidth))
             .ignoresSafeArea()
             .windowToolbarUnderTopBar()
             .mailSheets(store)
+    }
+
+    /// A sidebar kept open takes its width from the window, never from the mail beside it.
+    private var minWidth: CGFloat {
+        860 + (store.keepSidebar && store.sidebarOpen ? Theme.sidebarWidth : 0)
     }
 }
 
@@ -174,16 +180,20 @@ private struct MacPages: View {
                 VStack(spacing: 0) {
                     // The list scrolls the whole page; only its header stays put above it.
                     if header {
-                        ListHeader()
-                            .frame(maxWidth: Theme.cardWidth)
-                            .padding(.top, Space.l)
-                            .padding(.leading, beside ? Theme.macSelectGutter : Space.xl + 4 + Theme.macSelectGutter)
-                            .padding(.trailing, beside ? Space.s : Space.xl + 4 + Theme.macSelectGutter)
+                        // Beside the open mail, edge to edge as on the phones.
+                        if beside {
+                            ListHeader()
+                        } else {
+                            ListHeader(edgeInset: 0)
+                                .frame(maxWidth: Theme.cardWidth)
+                                .padding(.top, Space.l)
+                                .padding(.horizontal, Space.xl + 4 + Theme.macSelectGutter)
+                        }
                     }
                     ThreadListMac(
                         store: store, rows: store.visibleRows, selected: store.selected, checked: store.selection,
                         hoverCircles: store.selectCircles,
-                        topInset: header ? 0 : Space.l, shown: listShown, compact: beside, ready: store.listReady,
+                        topInset: beside ? 0 : header ? Space.s : Space.l, shown: listShown, compact: beside, ready: store.listReady,
                         loadingMore: store.loadingMore && store.searchRows == nil,
                         farDown: { farDown = $0 }, toTop: toTop
                     )
@@ -296,7 +306,11 @@ struct MacTopBar: View {
 
     /// Past the toolbar's buttons, in the leading side alone, so the center stays in the middle of the
     /// window. The title starts where back's circle does, half a button gap past the menu's margin.
-    private var leadingInset: CGFloat { pastMenu + Theme.buttonGap / 2 - Space.l }
+    /// A sidebar kept open holds the buttons, so the bar starts at its own edge.
+    private var leadingInset: CGFloat {
+        guard !(store.keepSidebar && store.sidebarOpen) else { return 0 }
+        return pastMenu + Theme.buttonGap / 2 - Space.l
+    }
 
     /// Its words when there is room, its icon alone when there is not.
     private var compose: some View {

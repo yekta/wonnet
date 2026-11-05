@@ -22,6 +22,28 @@ extension ToolbarContent {
     }
 }
 
+/// Widens the window to `width` when it is narrower, keeping it on its screen: SwiftUI's minimum
+/// only holds a window that is resized, and the page would overflow one that is already narrower.
+struct WindowWidening: NSViewRepresentable {
+    let toWidth: CGFloat
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        let width = toWidth
+        // After the update, when the view is in its window.
+        Task { @MainActor in
+            guard let window = view.window, !window.styleMask.contains(.fullScreen), window.frame.width < width else { return }
+            var frame = window.frame
+            frame.size.width = width
+            if let screen = window.screen?.visibleFrame {
+                frame.origin.x = max(min(frame.minX, screen.maxX - width), screen.minX)
+            }
+            window.setFrame(frame, display: true, animate: true)
+        }
+    }
+}
+
 /// Behind a button in the window's toolbar: tells where the button ends, in points from the
 /// window's left edge, so the top bar under the toolbar can line its controls up with it. Measured
 /// again when full screen hides the window's buttons and moves it.

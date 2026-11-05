@@ -386,7 +386,6 @@ pub fn fill(store: &mut Store, now: i64) -> Result<()> {
         }
     }
     let preferences = [
-        ("split_inbox", json!(true)),
         ("split:team", json!({ "name": "Team", "from": ["@acme.example"], "label": null, "order": 0 })),
         ("signature:demo-home", json!("Sam")),
         ("snippet:thanks", json!({ "name": "Thanks", "text": "Thanks {first_name}!" })),
@@ -457,19 +456,28 @@ mod tests {
 
         let page = |mailbox: &str| store.thread_page(mailbox, 0, 100, None, &[], &Utc::now()).unwrap();
         let count = |mailbox: &str| page(mailbox).total;
-        assert_eq!(count("inbox"), 6, "a split inbox shows Important");
-        let splits: Vec<(String, u32)> = page("inbox").splits.into_iter().map(|tab| (tab.name, tab.total)).collect();
-        assert_eq!(splits, [("Important".into(), 6), ("Team".into(), 5), ("Other".into(), 5), ("All".into(), 16)]);
+        assert_eq!(count("inbox"), 16, "the inbox starts unsplit");
+        assert!(page("inbox").splits.is_empty());
         assert_eq!(count("drafts"), 1);
         assert_eq!(page("drafts").rows[0].draft_id.as_deref(), Some("demo-draft"));
-        let work: Vec<u32> = page("demo-work/inbox").splits.iter().map(|tab| tab.total).collect();
-        assert_eq!(work.iter().rev().skip(1).sum::<u32>(), 8);
-        assert_eq!(work.last(), Some(&8), "All is every split's threads");
         assert_eq!(count("snoozed"), 1);
         assert_eq!(count("sent"), 4);
         assert_eq!(count("demo-home/label/travel"), 2);
         assert_eq!(count("trash"), 1);
         assert!(store.body("demo-1-0").unwrap().html.is_some());
         assert_eq!(store.meta("token").as_deref(), Some("demo"));
+
+        let on = mail_protocol::Op::SetPreference {
+            key: mail_protocol::splits::SPLIT_INBOX_KEY.into(),
+            value: Some(json!(true)),
+        };
+        store.apply_local("split-on", &on).unwrap();
+        let page = |mailbox: &str| store.thread_page(mailbox, 0, 100, None, &[], &Utc::now()).unwrap();
+        assert_eq!(page("inbox").total, 6, "a split inbox shows Important");
+        let splits: Vec<(String, u32)> = page("inbox").splits.into_iter().map(|tab| (tab.name, tab.total)).collect();
+        assert_eq!(splits, [("Important".into(), 6), ("Team".into(), 5), ("Other".into(), 5), ("All".into(), 16)]);
+        let work: Vec<u32> = page("demo-work/inbox").splits.iter().map(|tab| tab.total).collect();
+        assert_eq!(work.iter().rev().skip(1).sum::<u32>(), 8);
+        assert_eq!(work.last(), Some(&8), "All is every split's threads");
     }
 }

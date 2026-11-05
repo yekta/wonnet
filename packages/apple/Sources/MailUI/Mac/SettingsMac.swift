@@ -193,11 +193,13 @@ private struct GeneralSettings: View {
             } trailing: {
                 ChoiceMenu(options: Appearance.allCases, selection: $store.appearance, title: \.name)
             }
+            SettingsDivider()
             SettingsRow {
                 SettingsLabel(title: "Keep the sidebar open", detail: "Beside the mail, which makes room for it, instead of over it.")
             } trailing: {
                 Switch(title: "Keep the sidebar open", isOn: $store.keepSidebar)
             }
+            SettingsDivider()
             SettingsRow {
                 SettingsLabel(title: "Show mail beside the list", detail: "The open mail sits next to the list when the window is wide enough.")
             } trailing: {
