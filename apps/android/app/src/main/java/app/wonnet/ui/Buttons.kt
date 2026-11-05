@@ -102,7 +102,9 @@ fun ButtonFace(
     val background = when (variant) {
         ButtonVariant.Primary -> (if (hovered) Tokens.primary.opacity(Opacity.lit) else Tokens.primary).color
         ButtonVariant.Success -> (if (hovered) Tokens.success.opacity(Opacity.lit) else Tokens.success).color
-        else -> if (hovered) hoverFill.color else Color.Transparent
+        ButtonVariant.Outline -> if (hovered) Tokens.primary.opacity(Opacity.colorTint).color else Color.Transparent
+        ButtonVariant.Destructive -> if (hovered) Tokens.destructive.opacity(Opacity.colorTint).color else Color.Transparent
+        ButtonVariant.Ghost -> if (hovered) hoverFill.color else Color.Transparent
     }
     val border = when (variant) {
         ButtonVariant.Outline -> Tokens.primary.opacity(Opacity.colorBorder).color

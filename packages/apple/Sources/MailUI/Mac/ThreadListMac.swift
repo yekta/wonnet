@@ -419,8 +419,8 @@ final class HoverTableView: NSTableView {
     }
 }
 
-/// One thread on one line: the account's bar, unread dot, senders, subject and snippet, the star
-/// if starred, date; before it, in the gutter, the circle that selects it. Compact, beside the open
+/// One thread on one line: the account's bar, unread dot, senders, the star and a paperclip,
+/// subject and snippet, date; before it, in the gutter, the circle that selects it. Compact, beside the open
 /// mail, on three lines as iOS draws it.
 final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     enum Hit {
@@ -455,7 +455,7 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     private static let compactTop: CGFloat = 9
     private static let compactLine: CGFloat = 19
     private static let compactIconSide: CGFloat = 13
-    /// The least room the date takes, so the stars and the line's ends line up from row to row.
+    /// The least room the date takes, so the lines end in step from row to row.
     private static let dateColumn = ceil(NSAttributedString(string: "Yesterday", attributes: [.font: Platform.face(RowText.dateSize, .semibold)]).size().width)
 
     func configure(
@@ -617,20 +617,24 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             Tokens.primary.platform.setFill()
             NSBezierPath(ovalIn: NSRect(x: left + 18, y: middle - 3.5, width: 7, height: 7)).fill()
         }
-        Self.drawLine(text.senders, x: left + Self.sendersX, width: Self.sendersWidth, middle: middle)
-        var x = left + Self.sendersX + Self.sendersWidth + 14
-        if row.attachment {
-            Self.drawSymbol(.paperclip, in: NSRect(x: x, y: middle - 7, width: 14, height: 14), color: Tokens.mutedStrongerForeground.platform)
+        // The star, then the paperclip before it, in the slot before the subject, so stars and
+        // subjects line up from row to row; the senders give way to a second icon.
+        let slot = left + Self.sendersX + Self.sendersWidth + 14
+        let starred = row.starred && row.draftId == nil
+        let icons: [(Symbol, ThemeColor)] = (starred ? [(.starFilled, Tokens.star)] : [])
+            + (row.attachment ? [(.paperclip, Tokens.mutedStrongerForeground)] : [])
+        for (index, (symbol, color)) in icons.enumerated() {
+            let iconX = slot - CGFloat(index) * (Self.starSide + Space.xs)
+            Self.drawSymbol(symbol, in: NSRect(x: iconX, y: middle - Self.starSide / 2, width: Self.starSide, height: Self.starSide), color: color.platform)
         }
-        x += 24
+        let sendersEnd = icons.count > 1 ? slot - (Self.starSide + Space.xs) - Space.s : left + Self.sendersX + Self.sendersWidth
+        Self.drawLine(text.senders, x: left + Self.sendersX, width: sendersEnd - left - Self.sendersX, middle: middle)
+        let x = slot + 24
         let dateX = trailing - ceil(text.date.size().width)
         let dateColumnX = min(dateX, trailing - Self.dateColumn)
-        let starred = row.starred && row.draftId == nil
-        let star = NSRect(x: dateColumnX - Space.m - Self.starSide, y: middle - Self.starSide / 2, width: Self.starSide, height: Self.starSide)
-        let lineWidth = max((starred ? star.minX - Space.s : dateColumnX - Space.l) - x, 0)
+        let lineWidth = max(dateColumnX - Space.l - x, 0)
         guard hovering, !isSelecting else {
             Self.drawLine(text.line, x: x, width: lineWidth, middle: middle)
-            if starred { Self.drawSymbol(.starFilled, in: star, color: Tokens.star.platform) }
             Self.drawLine(text.date, x: dateX, width: trailing - dateX + 2, middle: middle)
             return
         }

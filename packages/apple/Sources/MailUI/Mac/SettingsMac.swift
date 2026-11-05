@@ -201,9 +201,9 @@ private struct GeneralSettings: View {
             }
             SettingsDivider()
             SettingsRow {
-                SettingsLabel(title: "Show mail beside the list", detail: "The open mail sits next to the list when the window is wide enough.")
+                SettingsLabel(title: "Reading pane", detail: "Open mail next to the list when the window is wide enough.")
             } trailing: {
-                Switch(title: "Show mail beside the list", isOn: $store.readingPane)
+                Switch(title: "Reading pane", isOn: $store.readingPane)
             }
         }
         SettingsGroup(

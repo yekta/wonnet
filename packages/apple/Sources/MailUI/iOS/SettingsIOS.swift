@@ -173,12 +173,12 @@ private struct GeneralPage: View {
 
     var body: some View {
         @Bindable var store = store
-        SettingsListSection("Appearance", footer: Platform.pad ? "The open mail sits next to the list when the screen is wide enough." : nil) {
+        SettingsListSection("Appearance", footer: Platform.pad ? "Open mail next to the list when the screen is wide enough." : nil) {
             Picker("Theme", selection: $store.appearance) {
                 ForEach(Appearance.allCases) { Text($0.name).tag($0) }
             }
             if Platform.pad {
-                Toggle("Show Mail Beside the List", isOn: $store.readingPane)
+                Toggle("Reading Pane", isOn: $store.readingPane)
             }
         }
         .id("appearance")

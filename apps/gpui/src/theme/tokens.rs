@@ -83,8 +83,9 @@ pub mod opacity {
     pub const SHADOW: ThemeNumber = ThemeNumber { light: 0.1, dark: 0.25 };
     pub const SHADOW_STRONGER: ThemeNumber = ThemeNumber { light: 0.16, dark: 0.4 };
     pub const SHADOW_STRONGEST: ThemeNumber = ThemeNumber { light: 0.32, dark: 0.75 };
-    pub const COLOR_TINT: ThemeNumber = ThemeNumber { light: 0.12, dark: 0.1 };
-    pub const COLOR_TINT_STRONGER: ThemeNumber = ThemeNumber { light: 0.2, dark: 0.16 };
+    pub const COLOR_TINT: ThemeNumber = ThemeNumber { light: 0.12, dark: 0.08 };
+    pub const COLOR_TINT_STRONGER: ThemeNumber = ThemeNumber { light: 0.2, dark: 0.14 };
+    pub const COLOR_TINT_STRONGEST: ThemeNumber = ThemeNumber { light: 0.28, dark: 0.2 };
     pub const COLOR_TINT_CHART: ThemeNumber = ThemeNumber { light: 0.25, dark: 0.2 };
     pub const COLOR_BORDER: ThemeNumber = ThemeNumber { light: 0.6, dark: 0.6 };
     pub const INPUT_GLASS_TINT: ThemeNumber = ThemeNumber { light: 0.8, dark: 0.8 };

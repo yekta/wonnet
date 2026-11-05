@@ -192,7 +192,9 @@ impl RenderOnce for ActionButton {
         let (fill, hover_fill): (Option<Hsla>, Hsla) = match self.variant {
             Variant::Primary => (Some(cx.color(PRIMARY)), cx.tint(PRIMARY, opacity::LIT)),
             Variant::Success => (Some(cx.color(SUCCESS)), cx.tint(SUCCESS, opacity::LIT)),
-            _ => (None, cx.color(self.surface.hover())),
+            Variant::Outline => (None, cx.tint(PRIMARY, opacity::COLOR_TINT)),
+            Variant::Destructive => (None, cx.tint(DESTRUCTIVE, opacity::COLOR_TINT)),
+            Variant::Ghost => (None, cx.color(self.surface.hover())),
         };
         let border = match self.variant {
             Variant::Outline => Some(cx.tint(PRIMARY, opacity::COLOR_BORDER)),

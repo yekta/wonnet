@@ -317,7 +317,7 @@ private fun GeneralPage(store: MailStore, anchor: (String) -> Modifier) {
         if (wide) {
             RowRule()
             SettingsRow(
-                "Show Mail Beside the List", detail = "The open mail sits next to the list when the window is wide enough.",
+                "Reading Pane", detail = "Open mail next to the list when the screen is wide enough.",
                 trailing = { Toggle(store.readingPane, store::changeReadingPane) },
             )
         }

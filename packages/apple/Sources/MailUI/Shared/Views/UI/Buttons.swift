@@ -209,7 +209,9 @@ struct ActionButton: View {
             switch variant {
             case .primary: hovered ? Tokens.primary.opacity(Opacity.lit).color : Tokens.primary.color
             case .success: hovered ? Tokens.success.opacity(Opacity.lit).color : Tokens.success.color
-            case .outline, .ghost, .destructive: hovered ? hoverFill.color : .clear
+            case .outline: hovered ? Tokens.primary.opacity(Opacity.colorTint).color : .clear
+            case .destructive: hovered ? Tokens.destructive.opacity(Opacity.colorTint).color : .clear
+            case .ghost: hovered ? hoverFill.color : .clear
             }
         }
 

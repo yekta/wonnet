@@ -76,7 +76,7 @@ export function ActionButton({
           "flex items-center gap-1.5 rounded-full border text-[13px] font-medium",
           size === "small" ? "h-7 px-3.5" : "h-9 px-[18px]",
           variant === "outline"
-            ? "border-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-color-border)*100%),transparent)] text-(--primary) group-hover/button:bg-(--button-hover)"
+            ? "border-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-color-border)*100%),transparent)] text-(--primary) group-hover/button:bg-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-color-tint)*100%),transparent)]"
             : variant === "ghost"
               ? "border-transparent text-(--muted-foreground) group-hover/button:bg-(--button-hover) group-hover/button:text-(--foreground)"
               : "border-transparent bg-(--primary) text-(--primary-foreground) group-hover/button:bg-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-lit)*100%),transparent)]"

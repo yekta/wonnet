@@ -556,14 +556,15 @@ fn loading_more(cx: &App) -> impl IntoElement + use<> {
 }
 
 /// Over the list: the split inbox's tabs, the filter the list is narrowed to, emptying Trash or Spam.
-/// `edge` is the room before the first tab and after the last control.
-fn list_header(store: &Entity<Store>, edge: f32, cx: &App) -> Option<impl IntoElement> {
+/// Beside the open mail it runs edge to edge. As tall as a bar, so it lines up with the one over the mail.
+fn list_header(store: &Entity<Store>, compact: bool, cx: &App) -> Option<impl IntoElement> {
     let state = store.read(cx);
     let shows =
         state.search_rows.is_none() && (!state.splits.is_empty() || state.filter.is_some() || state.can_empty());
     if !shows {
         return None;
     }
+    let edge = if compact { space::L } else { 0. };
     let chosen = state
         .splits
         .iter()
@@ -605,7 +606,7 @@ fn list_header(store: &Entity<Store>, edge: f32, cx: &App) -> Option<impl IntoEl
             .flex()
             .items_center()
             .gap(px(space::M))
-            .h(px(38.))
+            .h(px(size::BAR))
             .w_full()
             .max_w(px(size::CARD_WIDTH))
             .border_b_1()
@@ -642,7 +643,7 @@ impl Render for ThreadList {
         }
         // Beside the open mail, edge to edge as on the phones.
         let compact = self.store.read(cx).reading_pane(window);
-        let header = list_header(&self.store, if compact { space::L } else { 0. }, cx);
+        let header = list_header(&self.store, compact, cx);
         let has_header = header.is_some();
         let header_inset = if compact { 0. } else { space::XL + 4. + size::SELECT_GUTTER };
         let list_top = match (compact, has_header) {

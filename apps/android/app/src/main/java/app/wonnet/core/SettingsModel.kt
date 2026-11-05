@@ -19,7 +19,7 @@ data class SettingsEntry(val id: String, val title: String, val section: Setting
     companion object {
         val all = listOf(
             SettingsEntry("appearance", "Theme", SettingsSection.General, "appearance light dark system mode"),
-            SettingsEntry("appearance", "Show mail beside the list", SettingsSection.General, "reading pane split list mail beside tablet wide"),
+            SettingsEntry("appearance", "Reading pane", SettingsSection.General, "reading pane split list mail beside tablet wide"),
             SettingsEntry("notifications", "Notifications", SettingsSection.General, "notification button action archive delete trash undo"),
             SettingsEntry("updates", "Updates", SettingsSection.General, "version check for updates release about"),
             SettingsEntry("server", "Server", SettingsSection.General, "connection connected offline sync"),

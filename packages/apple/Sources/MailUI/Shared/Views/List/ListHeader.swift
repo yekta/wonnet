@@ -7,7 +7,8 @@ struct ListHeader: View {
     /// Before the first tab and after the last control; the Mac lines them up with its rows instead.
     var edgeInset = Space.l
 
-    static let height = 38 * Platform.scale
+    /// A bar's height, so a button has room in it and it lines up with the bar over an open mail.
+    static let height = Theme.barHeight
 
     static func shows(_ store: MailStore) -> Bool {
         store.searchRows == nil && (!store.splits.isEmpty || store.filter != nil || store.canEmpty)
