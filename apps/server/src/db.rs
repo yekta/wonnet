@@ -857,6 +857,70 @@ pub async fn delete_messages(db: &PgPool, account: &AccountRow, provider_ids: &[
     tx.commit().await
 }
 
+/// What a provider changed of a message's labels and flags, in the server's terms: `None` leaves a
+/// flag as it is.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Relabel {
+    pub provider_id: String,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub unread: Option<bool>,
+    pub starred: Option<bool>,
+}
+
+/// Changes the labels and flags of messages the server has, as upsert_messages would leave them
+/// had they been fetched again. Answers the provider ids it doesn't have, to fetch whole.
+pub async fn relabel_messages(db: &PgPool, account: &AccountRow, changes: &[Relabel]) -> sqlx::Result<Vec<String>> {
+    if changes.is_empty() {
+        return Ok(Vec::new());
+    }
+    let provider_ids: Vec<&str> = changes.iter().map(|change| change.provider_id.as_str()).collect();
+    let rows: Vec<Value> = changes
+        .iter()
+        .map(|change| {
+            json!({ "provider_id": change.provider_id, "added": change.added, "removed": change.removed,
+                "unread": change.unread, "starred": change.starred })
+        })
+        .collect();
+    let mut tx = UserTx::begin(db, account.user_id).await?;
+    let known: HashSet<String> = sqlx::query_scalar(
+        "SELECT provider_id FROM messages WHERE account_id = $1 AND provider_id = ANY($2) AND NOT deleted",
+    )
+    .bind(account.id)
+    .bind(&provider_ids)
+    .fetch_all(&mut *tx.tx)
+    .await?
+    .into_iter()
+    .collect();
+    sqlx::query(
+        "WITH changed AS (
+             SELECT messages.id,
+                 ARRAY(SELECT label FROM unnest(messages.labels) AS label
+                     WHERE NOT label = ANY(ARRAY(SELECT jsonb_array_elements_text(c.removed))))
+                 || ARRAY(SELECT label FROM jsonb_array_elements_text(c.added) AS label
+                     WHERE NOT label = ANY(messages.labels)) AS labels,
+                 COALESCE(c.unread, messages.unread) AS unread,
+                 COALESCE(c.starred, messages.starred) AS starred
+             FROM jsonb_to_recordset($2)
+                 AS c(provider_id TEXT, added JSONB, removed JSONB, unread BOOLEAN, starred BOOLEAN)
+             JOIN messages ON messages.account_id = $1 AND messages.provider_id = c.provider_id
+             WHERE NOT messages.deleted
+                 AND NOT EXISTS (SELECT 1 FROM provider_ops WHERE provider_ops.message_id = messages.id))
+         UPDATE messages SET labels = changed.labels, unread = changed.unread, starred = changed.starred,
+             rev = nextval('revs')
+         FROM changed
+         WHERE messages.id = changed.id
+             AND (messages.labels <> changed.labels OR messages.unread <> changed.unread
+                 OR messages.starred <> changed.starred)",
+    )
+    .bind(account.id)
+    .bind(Json(rows))
+    .execute(&mut *tx.tx)
+    .await?;
+    tx.commit().await?;
+    Ok(provider_ids.into_iter().filter(|id| !known.contains(*id)).map(String::from).collect())
+}
+
 pub async fn message(db: &PgPool, user_id: Uuid, id: Uuid) -> sqlx::Result<Option<MessageRow>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {MESSAGE_COLUMNS} FROM messages WHERE id = $1 AND user_id = $2"

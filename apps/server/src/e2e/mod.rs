@@ -59,6 +59,12 @@ struct FakeGoogle {
     listed: Vec<(String, Option<String>)>,
     /// How many message fetches Gmail refuses next.
     refused_fetches: usize,
+    /// The ids of the messages whose metadata was fetched.
+    fetched: Vec<String>,
+    /// Gmail's history records, oldest first, each with its numeric `id`.
+    history: Vec<Value>,
+    /// The `startHistoryId` of each history page asked for.
+    history_asked: Vec<String>,
     /// The scopes Microsoft says it granted.
     microsoft_scope: String,
 }
@@ -247,6 +253,18 @@ impl Server {
     pub fn modified(&self) -> Vec<Value> {
         self.google.lock().unwrap().modified.clone()
     }
+
+    pub fn fetched(&self) -> Vec<String> {
+        self.google.lock().unwrap().fetched.clone()
+    }
+
+    pub fn set_history(&self, history: Vec<Value>) {
+        self.google.lock().unwrap().history = history;
+    }
+
+    pub fn history_asked(&self) -> Vec<String> {
+        self.google.lock().unwrap().history_asked.clone()
+    }
 }
 
 impl Drop for Server {
@@ -300,6 +318,7 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         } else if query.get("format").map(String::as_str) == Some("raw") {
             (axum::http::StatusCode::OK, Json(json!({ "id": id, "raw": URL_SAFE_NO_PAD.encode(RAW_MESSAGE) })))
         } else {
+            google.fetched.push(id.clone());
             let index = google.mailbox.iter().position(|(other, _)| *other == id).unwrap_or_default();
             let labels = google.mailbox.get(index).map(|(_, labels)| labels.clone()).unwrap_or_default();
             let date = 1_700_000_000_000 - index as i64 * 1000;
@@ -337,6 +356,24 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         let mut answer = json!({ "messages": page });
         if offset + size < wanted.len() {
             answer["nextPageToken"] = json!((offset + size).to_string());
+        }
+        async move { Json(answer) }
+    };
+    // The records after `startHistoryId`, a page of `maxResults` at a time.
+    let recorded = google.clone();
+    let history = move |Query(query): Query<HashMap<String, String>>| {
+        let mut google = recorded.lock().unwrap();
+        let start = query.get("startHistoryId").cloned().unwrap_or_default();
+        google.history_asked.push(start.clone());
+        let start: u64 = start.parse().unwrap_or(0);
+        let size: usize = query.get("maxResults").and_then(|size| size.parse().ok()).unwrap_or(100);
+        let id = |record: &Value| record["id"].as_str().and_then(|id| id.parse::<u64>().ok()).unwrap_or(0);
+        let after: Vec<Value> = google.history.iter().filter(|record| id(record) > start).cloned().collect();
+        let latest = google.history.iter().map(id).max().unwrap_or(1).max(start);
+        let mut answer =
+            json!({ "history": after.iter().take(size).collect::<Vec<_>>(), "historyId": latest.to_string() });
+        if after.len() > size {
+            answer["nextPageToken"] = json!("more");
         }
         async move { Json(answer) }
     };
@@ -395,7 +432,7 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         .route("/labels", get(|| async { Json(json!({ "labels": [] })) }).post(create_label))
         .route("/messages/batchModify", post(modify))
         .route("/messages", get(list))
-        .route("/history", get(|| async { Json(json!({ "historyId": "1" })) }))
+        .route("/history", get(history))
         .route("/messages/{id}", get(message))
         .route("/settings/sendAs", get(send_as));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
