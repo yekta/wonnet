@@ -164,20 +164,6 @@ pub struct Applied {
 /// The tab after Other that shows every thread of the inbox, whatever its split.
 const ALL_SPLIT: &str = "inbox:all";
 
-/// An inbox's splits in order, by id (`inbox:important`, ...) and name.
-fn split_tabs(splits: &[Split]) -> Vec<(String, String)> {
-    let mut tabs = vec![("inbox:important".to_string(), "Important".to_string())];
-    tabs.extend(splits.iter().map(|split| (format!("inbox:{}", split.id), split.name.clone())));
-    tabs.push(("inbox:other".into(), "Other".into()));
-    tabs.push((ALL_SPLIT.into(), "All".into()));
-    tabs
-}
-
-/// The label a split's threads are kept under: All's are the inbox's own.
-fn split_label(tab: &str) -> String {
-    if tab == ALL_SPLIT { role::INBOX.to_string() } else { tab.to_string() }
-}
-
 pub fn is_split_key(key: &str) -> bool {
     key == SPLIT_INBOX_KEY || key.starts_with(SPLIT_KEY)
 }
@@ -777,21 +763,6 @@ impl Store {
             let label = counted(label);
             unread.iter().filter(|((name, _), _)| *name == label).map(|(_, count)| count).sum()
         };
-        let tabs = splits_in(&self.db)?.map(|splits| split_tabs(&splits)).unwrap_or_default();
-        let splits_of = |mailbox: &str, prefix: &str, unread_of: &dyn Fn(&str) -> u32| -> Vec<Mailbox> {
-            if mailbox != role::INBOX {
-                return Vec::new();
-            }
-            tabs.iter()
-                .map(|(tab, name)| Mailbox {
-                    id: format!("{prefix}{tab}"),
-                    name: name.clone(),
-                    symbol: "inbox".into(),
-                    unread: unread_of(&split_label(tab)),
-                    splits: Vec::new(),
-                })
-                .collect()
-        };
         let unified = MAILBOXES
             .iter()
             .map(|(id, name, symbol)| Mailbox {
@@ -799,7 +770,6 @@ impl Store {
                 name: name.to_string(),
                 symbol: symbol.to_string(),
                 unread: total(id),
-                splits: splits_of(id, "", &total),
             })
             .collect();
         let mut accounts = Vec::new();
@@ -811,9 +781,6 @@ impl Store {
                     name: name.to_string(),
                     symbol: symbol.to_string(),
                     unread: unread.get(&(counted(mailbox), id.clone())).copied().unwrap_or(0),
-                    splits: splits_of(mailbox, &format!("{id}/"), &|label| {
-                        unread.get(&(label.to_string(), id.clone())).copied().unwrap_or(0)
-                    }),
                 })
                 .collect();
             let mut statement = self
@@ -827,7 +794,6 @@ impl Store {
                     unread: unread.get(&(label_id.clone(), id.clone())).copied().unwrap_or(0),
                     name,
                     symbol: "tag".into(),
-                    splits: Vec::new(),
                 });
             }
             let title = if name.is_empty() { address.clone() } else { name.clone() };
@@ -875,11 +841,14 @@ impl Store {
         }
         let tabs = match &splits {
             Some(splits) if !in_unread && (in_all || label.starts_with("inbox:")) => {
-                let tabs = split_tabs(splits);
+                let mut tabs = vec![("inbox:important".to_string(), "Important".to_string())];
+                tabs.extend(splits.iter().map(|split| (format!("inbox:{}", split.id), split.name.clone())));
+                tabs.push(("inbox:other".into(), "Other".into()));
+                tabs.push((ALL_SPLIT.into(), "All".into()));
                 let prefix = account.as_ref().map(|account| format!("{account}/")).unwrap_or_default();
                 let mut list = Vec::new();
                 for (tab, name) in tabs {
-                    let label = split_label(&tab);
+                    let label = if tab == ALL_SPLIT { role::INBOX.to_string() } else { tab.clone() };
                     let total = self.count(&label, account.as_deref(), None, None)? as u32;
                     let unread = self.count(&label, account.as_deref(), Some(Filter::Unread), None)? as u32;
                     list.push(SplitTab { mailbox: format!("{prefix}{tab}"), name, unread, total });

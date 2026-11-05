@@ -555,90 +555,75 @@ fn loading_more(cx: &App) -> impl IntoElement + use<> {
         .child(div().text(TextStyle::Caption, cx).child("Loading more"))
 }
 
-impl ThreadList {
-    /// Over the list: the split of the inbox on screen, which opens the others, the filter the
-    /// list is narrowed to, emptying Trash or Spam. `edge` is the room before the first control
-    /// and after the last.
-    fn header(&self, edge: f32, cx: &App) -> Option<impl IntoElement + use<>> {
-        let store = &self.store;
-        let state = store.read(cx);
-        // A sidebar kept open lists the splits itself.
-        let picks = !state.splits.is_empty() && !state.sidebar_beside();
-        let shows = state.search_rows.is_none() && (picks || state.filter.is_some() || state.can_empty());
-        if !shows {
-            return None;
-        }
-        let chosen =
-            state.splits.iter().find(|split| split.mailbox == state.mailbox).or(state.splits.first()).filter(|_| picks);
-        let picker = chosen.map(|chosen| {
-            let splits: Vec<(String, String, u32)> =
-                state.splits.iter().map(|split| (split.mailbox.clone(), split.name.clone(), split.unread)).collect();
-            let current = chosen.mailbox.clone();
-            let store = store.clone();
-            let open: ui::OnClick = Rc::new(move |_, window, cx| {
-                let entries = splits
-                    .iter()
-                    .map(|(mailbox, name, unread)| {
-                        let pick = store.clone();
-                        let mailbox_id = mailbox.clone();
-                        MenuEntry::item(name.clone(), move |_, cx| {
-                            pick.update(cx, |store, cx| store.select_mailbox(&mailbox_id, cx))
-                        })
-                        .count(*unread)
-                        .checked(*mailbox == current)
-                    })
-                    .collect();
-                ui::open_menu(SPLIT_PICKER, entries, None, window, cx);
-            });
-            let count = (chosen.unread > 0).then(|| SharedString::from(chosen.unread.to_string()));
-            let menu = ui::menu_under(SPLIT_PICKER, cx);
-            let open_now = menu.is_some();
-            div()
-                .child(ui::combobox_face(
-                    SPLIT_PICKER,
-                    None,
-                    Some(chosen.name.clone().into()),
-                    count,
-                    "",
-                    ui::ComboboxStyle::Inline,
-                    open_now,
-                    (!open_now).then(|| state.key_help("Switch split", "nextSplit").into()),
-                    open,
-                    cx,
-                ))
-                .children(menu)
-        });
-        let filter = state.filter.map(|filter| {
-            let clear = store.clone();
-            Chip::new("filter", if filter == Filter::Unread { "Unread" } else { "Starred" })
-                .symbol(Symbol::ListFilter)
-                .remove_help("Show everything")
-                .remove(move |_, _, cx| clear.update(cx, |store, cx| store.set_filter(None, cx)))
-        });
-        let empty = state.can_empty().then(|| {
-            let empty = store.clone();
-            ActionButton::new("empty-mailbox", format!("Empty {}", state.mailbox_name()))
-                .variant(Variant::Ghost)
-                .on_click(move |_, _, cx| empty.update(cx, |store, cx| store.empty_mailbox(cx)))
-        });
-        Some(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(space::M))
-                .h(px(38.))
-                .w_full()
-                .max_w(px(size::CARD_WIDTH))
-                .border_b_1()
-                .border_color(cx.color(BORDER))
-                .child(div().flex_1().min_w_0().flex().pl(px(edge + space::S + 1. - space::XXS)).children(picker))
-                .children(filter.map(|chip| div().pr(px(edge)).child(chip)))
-                .children(empty.map(|button| div().pr(px((edge - size::BUTTON_GAP / 2.).max(0.))).child(button))),
-        )
+/// Over the list: the split inbox's tabs, the filter the list is narrowed to, emptying Trash or Spam.
+/// `edge` is the room before the first tab and after the last control.
+fn list_header(store: &Entity<Store>, edge: f32, cx: &App) -> Option<impl IntoElement> {
+    let state = store.read(cx);
+    let shows =
+        state.search_rows.is_none() && (!state.splits.is_empty() || state.filter.is_some() || state.can_empty());
+    if !shows {
+        return None;
     }
+    let chosen = state
+        .splits
+        .iter()
+        .find(|split| split.mailbox == state.mailbox)
+        .or(state.splits.first())
+        .map(|split| split.mailbox.clone());
+    let tabs = state
+        .splits
+        .iter()
+        .map(|split| {
+            let pick = store.clone();
+            let mailbox = split.mailbox.clone();
+            let on_click: ui::OnClick =
+                Rc::new(move |_, _, cx| pick.update(cx, |store, cx| store.select_mailbox(&mailbox, cx)));
+            (
+                SharedString::from(format!("split-{}", split.mailbox)),
+                SharedString::from(split.name.clone()),
+                split.unread,
+                chosen.as_ref() == Some(&split.mailbox),
+                on_click,
+            )
+        })
+        .collect();
+    let filter = state.filter.map(|filter| {
+        let clear = store.clone();
+        Chip::new("filter", if filter == Filter::Unread { "Unread" } else { "Starred" })
+            .symbol(Symbol::ListFilter)
+            .remove_help("Show everything")
+            .remove(move |_, _, cx| clear.update(cx, |store, cx| store.set_filter(None, cx)))
+    });
+    let empty = state.can_empty().then(|| {
+        let empty = store.clone();
+        ActionButton::new("empty-mailbox", format!("Empty {}", state.mailbox_name()))
+            .variant(Variant::Ghost)
+            .on_click(move |_, _, cx| empty.update(cx, |store, cx| store.empty_mailbox(cx)))
+    });
+    Some(
+        div()
+            .flex()
+            .items_center()
+            .gap(px(space::M))
+            .h(px(38.))
+            .w_full()
+            .max_w(px(size::CARD_WIDTH))
+            .border_b_1()
+            .border_color(cx.color(BORDER))
+            .child(
+                div()
+                    .id("split-tabs")
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_x_scroll()
+                    .pl(px(edge))
+                    .pr(px(space::L))
+                    .child(ui::tab_strip(tabs, cx)),
+            )
+            .children(filter.map(|chip| div().pr(px(edge)).child(chip)))
+            .children(empty.map(|button| div().pr(px((edge - size::BUTTON_GAP / 2.).max(0.))).child(button))),
+    )
 }
-
-const SPLIT_PICKER: &str = "split-picker";
 
 impl Render for ThreadList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -657,7 +642,7 @@ impl Render for ThreadList {
         }
         // Beside the open mail, edge to edge as on the phones.
         let compact = self.store.read(cx).reading_pane(window);
-        let header = self.header(if compact { space::L } else { 0. }, cx);
+        let header = list_header(&self.store, if compact { space::L } else { 0. }, cx);
         let has_header = header.is_some();
         let header_inset = if compact { 0. } else { space::XL + 4. + size::SELECT_GUTTER };
         let list_top = match (compact, has_header) {

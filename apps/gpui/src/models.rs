@@ -32,8 +32,6 @@ pub struct Mailbox {
     pub name: String,
     pub symbol: String,
     pub unread: u32,
-    #[serde(default)]
-    pub splits: Vec<Mailbox>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
