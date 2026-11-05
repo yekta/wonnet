@@ -8,6 +8,7 @@ license.workspace = true
 mail-protocol = { workspace = true, features = ["tls"] }
 aes-gcm = "0.11"
 anyhow.workspace = true
+async-imap = { version = "0.12", default-features = false, features = ["runtime-tokio"] }
 axum = { version = "0.8", features = ["macros", "ws"] }
 base64.workspace = true
 chrono.workspace = true
@@ -32,11 +33,13 @@ serde_json.workspace = true
 sha2.workspace = true
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros", "migrate", "chrono", "uuid", "json"] }
 tokio.workspace = true
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 tower-http = { version = "0.7", features = ["cors", "trace", "set-header"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url = "2"
 uuid.workspace = true
+webpki-roots = "1"
 
 [dev-dependencies]
 mail-core.workspace = true

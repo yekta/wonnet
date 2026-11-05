@@ -535,9 +535,6 @@ pub struct Mailbox {
     /// The Lucide icon it is drawn with.
     pub symbol: String,
     pub unread: u32,
-    /// An inbox's splits while Split Inbox is on, each a mailbox of its own: Important, the
-    /// custom splits, Other and All.
-    pub splits: Vec<Mailbox>,
 }
 
 #[derive(Debug, Clone, Serialize)]

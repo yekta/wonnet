@@ -743,6 +743,47 @@ pub async fn upsert_messages(db: &PgPool, account: &AccountRow, messages: &[Remo
     Ok(())
 }
 
+/// Labels a provider added to and took from a message, without the rest of it.
+#[derive(Debug, Default, PartialEq)]
+pub struct Relabel {
+    pub provider_id: String,
+    pub add: Vec<String>,
+    pub remove: Vec<String>,
+    pub unread: Option<bool>,
+    pub starred: Option<bool>,
+}
+
+const RELABEL_MESSAGES: &str = "WITH changed AS (
+        SELECT m.id, COALESCE(c.unread, m.unread) AS unread, COALESCE(c.starred, m.starred) AS starred,
+            ARRAY(SELECT DISTINCT label FROM unnest(m.labels || ARRAY(SELECT jsonb_array_elements_text(c.add))) label
+                WHERE NOT c.remove ? label ORDER BY label) AS labels
+        FROM jsonb_to_recordset($2) AS c(provider_id TEXT, add JSONB, remove JSONB, unread BOOLEAN, starred BOOLEAN)
+        JOIN messages m ON m.account_id = $1 AND m.provider_id = c.provider_id
+        WHERE NOT m.deleted AND NOT EXISTS (SELECT 1 FROM provider_ops WHERE provider_ops.message_id = m.id))
+    UPDATE messages SET labels = changed.labels, unread = changed.unread, starred = changed.starred, rev = nextval('revs')
+    FROM changed
+    WHERE messages.id = changed.id AND (messages.unread <> changed.unread OR messages.starred <> changed.starred
+        OR ARRAY(SELECT unnest(messages.labels) ORDER BY 1) <> changed.labels)";
+
+/// Writes label changes the provider reported to the messages the server has. As in
+/// `upsert_messages`, a message with changes the provider doesn't have yet is left alone, and one
+/// that ends up as it was keeps its rev, so echoes of the apps' own changes reach no one.
+pub async fn relabel_messages(db: &PgPool, account: &AccountRow, changes: &[Relabel]) -> sqlx::Result<()> {
+    for chunk in changes.chunks(1000) {
+        let rows: Vec<Value> = chunk
+            .iter()
+            .map(|change| {
+                json!({ "provider_id": change.provider_id, "add": change.add, "remove": change.remove,
+                    "unread": change.unread, "starred": change.starred })
+            })
+            .collect();
+        let mut tx = UserTx::begin(db, account.user_id).await?;
+        sqlx::query(RELABEL_MESSAGES).bind(account.id).bind(Json(rows)).execute(&mut *tx.tx).await?;
+        tx.commit().await?;
+    }
+    Ok(())
+}
+
 /// Changes the messages as `op` does to the state they are in, and queues it for their providers.
 pub async fn apply_op(tx: &mut UserTx, messages: &[(Uuid, MessageState)], op: &Op) -> sqlx::Result<()> {
     if messages.is_empty() {
@@ -855,70 +896,6 @@ pub async fn delete_messages(db: &PgPool, account: &AccountRow, provider_ids: &[
     .execute(&mut *tx.tx)
     .await?;
     tx.commit().await
-}
-
-/// What a provider changed of a message's labels and flags, in the server's terms: `None` leaves a
-/// flag as it is.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Relabel {
-    pub provider_id: String,
-    pub added: Vec<String>,
-    pub removed: Vec<String>,
-    pub unread: Option<bool>,
-    pub starred: Option<bool>,
-}
-
-/// Changes the labels and flags of messages the server has, as upsert_messages would leave them
-/// had they been fetched again. Answers the provider ids it doesn't have, to fetch whole.
-pub async fn relabel_messages(db: &PgPool, account: &AccountRow, changes: &[Relabel]) -> sqlx::Result<Vec<String>> {
-    if changes.is_empty() {
-        return Ok(Vec::new());
-    }
-    let provider_ids: Vec<&str> = changes.iter().map(|change| change.provider_id.as_str()).collect();
-    let rows: Vec<Value> = changes
-        .iter()
-        .map(|change| {
-            json!({ "provider_id": change.provider_id, "added": change.added, "removed": change.removed,
-                "unread": change.unread, "starred": change.starred })
-        })
-        .collect();
-    let mut tx = UserTx::begin(db, account.user_id).await?;
-    let known: HashSet<String> = sqlx::query_scalar(
-        "SELECT provider_id FROM messages WHERE account_id = $1 AND provider_id = ANY($2) AND NOT deleted",
-    )
-    .bind(account.id)
-    .bind(&provider_ids)
-    .fetch_all(&mut *tx.tx)
-    .await?
-    .into_iter()
-    .collect();
-    sqlx::query(
-        "WITH changed AS (
-             SELECT messages.id,
-                 ARRAY(SELECT label FROM unnest(messages.labels) AS label
-                     WHERE NOT label = ANY(ARRAY(SELECT jsonb_array_elements_text(c.removed))))
-                 || ARRAY(SELECT label FROM jsonb_array_elements_text(c.added) AS label
-                     WHERE NOT label = ANY(messages.labels)) AS labels,
-                 COALESCE(c.unread, messages.unread) AS unread,
-                 COALESCE(c.starred, messages.starred) AS starred
-             FROM jsonb_to_recordset($2)
-                 AS c(provider_id TEXT, added JSONB, removed JSONB, unread BOOLEAN, starred BOOLEAN)
-             JOIN messages ON messages.account_id = $1 AND messages.provider_id = c.provider_id
-             WHERE NOT messages.deleted
-                 AND NOT EXISTS (SELECT 1 FROM provider_ops WHERE provider_ops.message_id = messages.id))
-         UPDATE messages SET labels = changed.labels, unread = changed.unread, starred = changed.starred,
-             rev = nextval('revs')
-         FROM changed
-         WHERE messages.id = changed.id
-             AND (messages.labels <> changed.labels OR messages.unread <> changed.unread
-                 OR messages.starred <> changed.starred)",
-    )
-    .bind(account.id)
-    .bind(Json(rows))
-    .execute(&mut *tx.tx)
-    .await?;
-    tx.commit().await?;
-    Ok(provider_ids.into_iter().filter(|id| !known.contains(*id)).map(String::from).collect())
 }
 
 pub async fn message(db: &PgPool, user_id: Uuid, id: Uuid) -> sqlx::Result<Option<MessageRow>> {

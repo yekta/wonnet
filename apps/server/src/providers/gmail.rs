@@ -1,7 +1,9 @@
-//! Gmail through its REST API. The first sync lists the last 90 days (or INITIAL_SYNC_LIMIT
-//! messages) a page at a time, the inbox before the rest and a small page first so the list has
-//! mail at once; then older mail is backfilled a page at a time; after that history.list says
-//! what changed since the last historyId.
+//! Gmail through its REST API, and its IMAP for work in bulk. The first sync lists the last 90
+//! days (or INITIAL_SYNC_LIMIT messages) a page at a time, the inbox before the rest and a small
+//! page first so the list has mail at once; then older mail is backfilled a page at a time; after
+//! that history.list says what changed since the last historyId. Those pages, and bodies fetched
+//! ahead, go over IMAP, which spends none of the API's per-user quota; when IMAP fails the API
+//! does them, and IMAP is tried again a while later.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -9,7 +11,8 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use futures_util::{StreamExt, stream};
+use futures_util::future::BoxFuture;
+use futures_util::{FutureExt, StreamExt, stream};
 use mail_protocol::{Address, Attachment, Draft, Identity, Op, role};
 use reqwest::{Method, StatusCode};
 use serde::Deserialize;
@@ -18,8 +21,9 @@ use serde_json::{Value, json};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use super::gmail_imap::{self, Imap};
 use super::{Batch, Reauth, Refused, Synced, html_text, one_line, unescape};
-use crate::db::{self, AccountRow, RemoteMessage};
+use crate::db::{self, AccountRow, Relabel, RemoteMessage};
 use crate::mime::File;
 use crate::{AppState, mime};
 
@@ -37,6 +41,13 @@ const UNITS_PER_SECOND: f64 = 90.0;
 const BURST_UNITS: f64 = 500.0;
 /// What the worker's own requests (syncing, prefetching) leave for those someone waits for.
 const RESERVE_UNITS: f64 = 100.0;
+const IMAP_PAGE: usize = 500;
+/// How much of each message a page over IMAP fetches: enough for its headers and snippet.
+const RECENT_BYTES: u32 = 32 * 1024;
+/// Less for older mail, as Gmail lets IMAP download 2.5 GB a day.
+const OLDER_BYTES: u32 = 16 * 1024;
+/// How long the API does IMAP's work after IMAP failed.
+const IMAP_RETRY: Duration = Duration::from_secs(10 * 60);
 const HEADERS: [&str; 15] = [
     "From",
     "To",
@@ -65,6 +76,16 @@ pub struct Gmail {
     token: Arc<Mutex<Option<(String, Instant)>>>,
     pace: Quota,
     background: bool,
+    address: Arc<String>,
+    imap_url: Option<Arc<String>>,
+    imap: Arc<Mutex<ImapSlot>>,
+}
+
+/// The account's IMAP connection, opened when first needed and kept, or when it failed last.
+#[derive(Default)]
+struct ImapSlot {
+    imap: Option<Imap>,
+    failed_at: Option<Instant>,
 }
 
 /// An account's quota, shared by all its connections.
@@ -133,13 +154,118 @@ struct Header {
     value: String,
 }
 
-/// One page of Gmail's history: mail to fetch, labels changed on mail it had, mail gone.
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 struct HistoryPage {
+    #[serde(default)]
+    history: Vec<History>,
+    history_id: Option<String>,
+    next_page_token: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct History {
+    #[serde(default)]
+    messages_added: Vec<Changed>,
+    #[serde(default)]
+    messages_deleted: Vec<Changed>,
+    #[serde(default)]
+    labels_added: Vec<Changed>,
+    #[serde(default)]
+    labels_removed: Vec<Changed>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Changed {
+    message: MessageRef,
+    /// The labels added or removed, not all the message has.
+    #[serde(default)]
+    label_ids: Vec<String>,
+}
+
+/// What the history says changed. New mail is fetched whole; a change of labels is written as
+/// it is, since fetching every message marked read at once would take hours of the quota.
+#[derive(Default)]
+struct Changes {
+    /// New messages, oldest first.
     added: Vec<String>,
-    relabeled: Vec<(String, HashMap<String, bool>)>,
+    /// Each message's labels added (true) or removed (false), the last change of each kept.
+    marks: HashMap<String, HashMap<String, bool>>,
     deleted: Vec<String>,
-    next: String,
-    more: bool,
+    latest: String,
+}
+
+impl Changes {
+    fn add(&mut self, entry: History) {
+        self.added.extend(entry.messages_added.into_iter().map(|item| item.message.id));
+        for (items, on) in [(entry.labels_added, true), (entry.labels_removed, false)] {
+            for item in items {
+                let marks = self.marks.entry(item.message.id).or_default();
+                marks.extend(item.label_ids.into_iter().map(|label| (label, on)));
+            }
+        }
+        self.deleted.extend(entry.messages_deleted.into_iter().map(|item| item.message.id));
+    }
+
+    /// The label changes of messages that weren't added or deleted meanwhile. One moved between
+    /// Gmail's tabs is fetched again instead, for whether it is bulk.
+    fn relabels(&mut self, labels: &HashMap<String, Uuid>) -> Vec<Relabel> {
+        let settled: HashSet<String> = self.deleted.iter().chain(&self.added).cloned().collect();
+        let mut relabels = Vec::new();
+        for (id, marks) in std::mem::take(&mut self.marks) {
+            if settled.contains(&id) {
+                continue;
+            }
+            if marks.keys().any(|label| BULK_CATEGORIES.contains(&label.as_str())) {
+                self.added.push(id);
+                continue;
+            }
+            let mut relabel = Relabel { provider_id: id, ..Default::default() };
+            for (label, on) in marks {
+                match (mark(&label, labels), on) {
+                    (Mark::Label(label), true) => relabel.add.push(label),
+                    (Mark::Label(label), false) => relabel.remove.push(label),
+                    (Mark::Unread, _) => relabel.unread = Some(on),
+                    (Mark::Starred, _) => relabel.starred = Some(on),
+                    (Mark::Bulk | Mark::Other, _) => {}
+                }
+            }
+            relabels.push(relabel);
+        }
+        relabels
+    }
+
+    /// The new messages still there, newest first, each once.
+    fn newest_first(&self) -> Vec<String> {
+        let mut seen: HashSet<&str> = self.deleted.iter().map(String::as_str).collect();
+        self.added.iter().rev().filter(|id| seen.insert(id.as_str())).cloned().collect()
+    }
+}
+
+/// What one of Gmail's label ids is to the server.
+enum Mark {
+    /// A role or a custom label's id.
+    Label(String),
+    Unread,
+    Starred,
+    Bulk,
+    Other,
+}
+
+fn mark(label: &str, labels: &HashMap<String, Uuid>) -> Mark {
+    match label {
+        "INBOX" => Mark::Label(role::INBOX.to_string()),
+        "SENT" => Mark::Label(role::SENT.to_string()),
+        "DRAFT" => Mark::Label(role::DRAFTS.to_string()),
+        "TRASH" => Mark::Label(role::TRASH.to_string()),
+        "SPAM" => Mark::Label(role::SPAM.to_string()),
+        "UNREAD" => Mark::Unread,
+        "STARRED" => Mark::Starred,
+        _ if BULK_CATEGORIES.contains(&label) => Mark::Bulk,
+        other => labels.get(other).map_or(Mark::Other, |id| Mark::Label(id.to_string())),
+    }
 }
 
 #[derive(Deserialize, Default, serde::Serialize)]
@@ -154,6 +280,10 @@ struct SyncState {
     refreshed: bool,
     #[serde(default)]
     refresh: Refresh,
+    /// Where IMAP's backfill is: the oldest UID it fetched.
+    backfill_below: Option<u32>,
+    /// The UID validity the UIDs saved here belong to.
+    uid_validity: Option<u32>,
 }
 
 /// Where the listing of the last 90 days stands: the inbox first, then the rest, newest first.
@@ -164,6 +294,17 @@ struct Refresh {
     page_token: Option<String>,
     #[serde(default)]
     fetched: usize,
+    /// Where IMAP's listing is: the oldest UID it fetched.
+    below_uid: Option<u32>,
+}
+
+/// A page of a search over IMAP, newest first.
+struct ImapPage {
+    messages: Vec<RemoteMessage>,
+    /// The oldest UID fetched, where the next page starts below.
+    lowest: Option<u32>,
+    more: bool,
+    uid_validity: u32,
 }
 
 impl Gmail {
@@ -182,6 +323,9 @@ impl Gmail {
             token: Arc::new(Mutex::new(None)),
             pace: state.workers.quota(account.id),
             background: false,
+            address: Arc::new(account.address.clone()),
+            imap_url: config.gmail_imap_url.clone().map(Arc::new),
+            imap: Default::default(),
         };
         gmail.access_token().await?;
         Ok(gmail)
@@ -233,7 +377,7 @@ impl Gmail {
     ) -> anyhow::Result<T> {
         let url = format!("{}{path}", self.api);
         let what = format!("{method} {path}");
-        self.execute(&what, units(&method, path), || {
+        self.execute(&what, units(&method, path, query), || {
             let request = self.http.request(method.clone(), &url).query(query);
             match body {
                 Some(body) => request.json(body),
@@ -321,7 +465,7 @@ impl Gmail {
 
     pub async fn sync(&self, state: &AppState, account: &AccountRow) -> anyhow::Result<Synced> {
         let mut sync: SyncState = serde_json::from_value(account.sync_state.clone()).unwrap_or_default();
-        let labels = self.sync_labels(state, account).await?;
+        let (labels, names) = self.sync_labels(state, account).await?;
 
         match sync.history_id.clone() {
             // The history id is kept before the listing starts, so what arrives meanwhile is
@@ -334,8 +478,13 @@ impl Gmail {
                 sync.refresh = Refresh::default();
                 db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
             }
-            Some(history_id) => match self.catch_up(state, account, &labels, history_id, &mut sync).await {
-                Ok(()) => {}
+            Some(history_id) => match self.history(&history_id).await {
+                Ok(mut changes) => {
+                    db::relabel_messages(&state.db, account, &changes.relabels(&labels)).await?;
+                    db::delete_messages(&state.db, account, &changes.deleted).await?;
+                    self.fetch_and_store(state, account, &labels, &changes.newest_first()).await?;
+                    sync.history_id = Some(changes.latest);
+                }
                 Err(error) if error.is::<NotFound>() => {
                     tracing::info!("Gmail history of {} expired, syncing again", account.address);
                     sync.history_id = None;
@@ -347,15 +496,33 @@ impl Gmail {
         }
 
         if !sync.refreshed {
-            self.refresh_page(state, account, &labels, &mut sync).await?;
+            self.refresh_page(state, account, &labels, &names, &mut sync).await?;
             db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
             return Ok(Synced { backfilling: true, syncing: !sync.refreshed });
         }
         if !sync.backfilled {
-            let (ids, next) = self.list("older_than:90d", BACKFILL_PAGE, sync.backfill_token.clone()).await?;
-            self.fetch_and_store(state, account, &labels, &ids).await?;
-            sync.backfilled = next.is_none();
-            sync.backfill_token = next;
+            let query = "older_than:90d";
+            let (below, validity) = (sync.backfill_below, sync.uid_validity);
+            let page = self
+                .over_imap(|imap| {
+                    let names = names.clone();
+                    async move { imap_page(imap, query, below, validity, IMAP_PAGE, OLDER_BYTES, &names).await }.boxed()
+                })
+                .await;
+            match page {
+                Some(page) => {
+                    store(state, account, &page.messages).await?;
+                    sync.keep_uid_validity(page.uid_validity);
+                    sync.backfill_below = page.lowest;
+                    sync.backfilled = !page.more;
+                }
+                None => {
+                    let (ids, next) = self.list(query, BACKFILL_PAGE, sync.backfill_token.clone()).await?;
+                    self.fetch_and_store(state, account, &labels, &ids).await?;
+                    sync.backfilled = next.is_none();
+                    sync.backfill_token = next;
+                }
+            }
         }
         db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
         Ok(Synced { backfilling: !sync.backfilled, syncing: false })
@@ -368,28 +535,49 @@ impl Gmail {
         state: &AppState,
         account: &AccountRow,
         labels: &HashMap<String, Uuid>,
+        names: &HashMap<String, Uuid>,
         sync: &mut SyncState,
     ) -> anyhow::Result<()> {
-        let refresh = &mut sync.refresh;
         let limit = state.config.initial_sync_limit;
-        let query = match refresh.inbox_listed {
+        let query = match sync.refresh.inbox_listed {
             true => format!("{RECENT} -in:inbox"),
             false => format!("{RECENT} in:inbox"),
         };
-        let page = match refresh.fetched {
-            0 => FIRST_PAGE,
-            _ => REFRESH_PAGE,
-        };
-        let wanted = page.min(limit.saturating_sub(refresh.fetched));
-        if wanted == 0 {
+        let left = limit.saturating_sub(sync.refresh.fetched);
+        if left == 0 {
             sync.refreshed = true;
             return Ok(());
         }
-        let (ids, next) = self.list(&query, wanted, refresh.page_token.take()).await?;
-        self.fetch_and_store(state, account, labels, &ids).await?;
-        refresh.fetched += ids.len();
-        refresh.page_token = next;
-        if refresh.page_token.is_none() {
+        let first = sync.refresh.fetched == 0;
+        let imap_wanted = if first { FIRST_PAGE } else { IMAP_PAGE }.min(left);
+        let (below, validity) = (sync.refresh.below_uid, sync.uid_validity);
+        let page = self
+            .over_imap(|imap| {
+                let (query, names) = (query.clone(), names.clone());
+                async move { imap_page(imap, &query, below, validity, imap_wanted, RECENT_BYTES, &names).await }.boxed()
+            })
+            .await;
+        let more = match page {
+            Some(page) => {
+                store(state, account, &page.messages).await?;
+                sync.keep_uid_validity(page.uid_validity);
+                sync.refresh.fetched += page.messages.len();
+                sync.refresh.below_uid = page.lowest;
+                page.more
+            }
+            None => {
+                let wanted = if first { FIRST_PAGE } else { REFRESH_PAGE }.min(left);
+                let (ids, next) = self.list(&query, wanted, sync.refresh.page_token.take()).await?;
+                self.fetch_and_store(state, account, labels, &ids).await?;
+                sync.refresh.fetched += ids.len();
+                sync.refresh.page_token = next;
+                sync.refresh.page_token.is_some()
+            }
+        };
+        let refresh = &mut sync.refresh;
+        if !more {
+            refresh.below_uid = None;
+            refresh.page_token = None;
             match refresh.inbox_listed {
                 true => sync.refreshed = true,
                 false => refresh.inbox_listed = true,
@@ -401,7 +589,56 @@ impl Gmail {
         Ok(())
     }
 
-    async fn sync_labels(&self, state: &AppState, account: &AccountRow) -> anyhow::Result<HashMap<String, Uuid>> {
+    /// Runs `work` over IMAP, again on a new connection if a kept one failed. Nothing when there
+    /// is no IMAP or it failed lately: the API does the work then.
+    async fn over_imap<T>(
+        &self,
+        mut work: impl for<'i> FnMut(&'i mut Imap) -> BoxFuture<'i, anyhow::Result<T>>,
+    ) -> Option<T> {
+        let url = self.imap_url.as_deref()?;
+        let mut slot = self.imap.lock().await;
+        if slot.failed_at.is_some_and(|at| at.elapsed() < IMAP_RETRY) {
+            return None;
+        }
+        loop {
+            let kept = slot.imap.is_some();
+            if !kept {
+                let connected = match self.access_token().await {
+                    Ok(token) => Imap::connect(url, &self.address, &token).await,
+                    Err(error) => Err(error),
+                };
+                match connected {
+                    Ok(imap) => slot.imap = Some(imap),
+                    Err(error) => {
+                        tracing::warn!("IMAP of {} is off for now: {error:#}", self.address);
+                        slot.failed_at = Some(Instant::now());
+                        return None;
+                    }
+                }
+            }
+            let imap = slot.imap.as_mut()?;
+            match work(imap).await {
+                Ok(value) => return Some(value),
+                Err(error) => {
+                    if let Some(imap) = slot.imap.take() {
+                        imap.logout().await;
+                    }
+                    if !kept {
+                        tracing::warn!("IMAP of {} failed, the API takes over for now: {error:#}", self.address);
+                        slot.failed_at = Some(Instant::now());
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The custom labels' ids by Gmail's ids, and by their names, as IMAP gives them.
+    async fn sync_labels(
+        &self,
+        state: &AppState,
+        account: &AccountRow,
+    ) -> anyhow::Result<(HashMap<String, Uuid>, HashMap<String, Uuid>)> {
         let response: Value = self.get("/labels", &[]).await?;
         let custom: Vec<(String, String)> = response["labels"]
             .as_array()
@@ -410,7 +647,9 @@ impl Gmail {
             .filter(|label| label["type"] == "user")
             .filter_map(|label| Some((label["id"].as_str()?.to_string(), label["name"].as_str()?.to_string())))
             .collect();
-        Ok(db::sync_labels(&state.db, account, &custom).await?)
+        let ids = db::sync_labels(&state.db, account, &custom).await?;
+        let names = custom.into_iter().filter_map(|(id, name)| Some((name, *ids.get(&id)?))).collect();
+        Ok((ids, names))
     }
 
     /// Message ids matching `query`, newest first, up to `limit`, and where the listing stopped.
@@ -436,81 +675,25 @@ impl Gmail {
         }
     }
 
-    /// Goes through what changed after `history_id` a page at a time, keeping where each page
-    /// ended, so a pass cut short carries on. Labels changed on mail the server has are changed in
-    /// place; only new mail is fetched.
-    async fn catch_up(
-        &self,
-        state: &AppState,
-        account: &AccountRow,
-        labels: &HashMap<String, Uuid>,
-        mut history_id: String,
-        sync: &mut SyncState,
-    ) -> anyhow::Result<()> {
+    /// What changed after `history_id`, and the latest history id.
+    async fn history(&self, history_id: &str) -> anyhow::Result<Changes> {
+        let mut changes = Changes { latest: history_id.to_string(), ..Default::default() };
+        let mut page: Option<String> = None;
         loop {
-            let page = self.history(&history_id).await?;
-            let changes: Vec<db::Relabel> =
-                page.relabeled.into_iter().map(|(id, changed)| relabel(id, changed, labels)).collect();
-            let unknown = db::relabel_messages(&state.db, account, &changes).await?;
-            let fetch: Vec<String> = page.added.into_iter().chain(unknown).collect();
-            self.fetch_and_store(state, account, labels, &fetch).await?;
-            db::delete_messages(&state.db, account, &page.deleted).await?;
-            history_id = page.next;
-            sync.history_id = Some(history_id.clone());
-            db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-            if !page.more {
-                return Ok(());
+            let mut parameters = vec![("startHistoryId", history_id.to_string()), ("maxResults", "500".to_string())];
+            if let Some(token) = &page {
+                parameters.push(("pageToken", token.clone()));
+            }
+            let response: HistoryPage = self.get("/history", &parameters).await?;
+            response.history.into_iter().for_each(|entry| changes.add(entry));
+            if let Some(id) = response.history_id {
+                changes.latest = id;
+            }
+            page = response.next_page_token;
+            if page.is_none() {
+                return Ok(changes);
             }
         }
-    }
-
-    /// One page of what changed after `history_id`, and the id the next page starts after.
-    async fn history(&self, history_id: &str) -> anyhow::Result<HistoryPage> {
-        let parameters = [("startHistoryId", history_id.to_string()), ("maxResults", PAGE.to_string())];
-        let response: Value = self.get("/history", &parameters).await?;
-        let mut added = Vec::new();
-        let mut relabeled: Vec<(String, HashMap<String, bool>)> = Vec::new();
-        let mut deleted = HashSet::new();
-        let mut last = None;
-        for entry in response["history"].as_array().into_iter().flatten() {
-            last = entry["id"].as_str().or(last);
-            for item in entry["messagesAdded"].as_array().into_iter().flatten() {
-                added.extend(item["message"]["id"].as_str().map(String::from));
-            }
-            for (key, present) in [("labelsAdded", true), ("labelsRemoved", false)] {
-                for item in entry[key].as_array().into_iter().flatten() {
-                    let Some(id) = item["message"]["id"].as_str() else { continue };
-                    let index = match relabeled.iter().position(|(other, _)| other == id) {
-                        Some(index) => index,
-                        None => {
-                            relabeled.push((id.to_string(), HashMap::new()));
-                            relabeled.len() - 1
-                        }
-                    };
-                    for label in item["labelIds"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                        relabeled[index].1.insert(label.to_string(), present);
-                    }
-                }
-            }
-            for item in entry["messagesDeleted"].as_array().into_iter().flatten() {
-                deleted.extend(item["message"]["id"].as_str().map(String::from));
-            }
-        }
-        let latest = response["historyId"].as_str().unwrap_or(history_id);
-        let more = response["nextPageToken"].is_string() && last.is_some();
-        let next = match more {
-            true => last.unwrap_or(latest),
-            false => latest,
-        };
-        let added: HashSet<String> = added.into_iter().filter(|id| !deleted.contains(id)).collect();
-        relabeled.retain(|(id, _)| !added.contains(id) && !deleted.contains(id));
-        Ok(HistoryPage {
-            added: added.into_iter().collect(),
-            relabeled,
-            deleted: deleted.into_iter().collect(),
-            next: next.to_string(),
-            more,
-        })
     }
 
     async fn fetch_and_store(
@@ -540,8 +723,7 @@ impl Gmail {
                     Err(error) => return Err(error),
                 }
             }
-            db::upsert_messages(&state.db, account, &messages).await?;
-            crate::avatars::warm(state, messages.iter().map(|message| message.from.email.as_str()));
+            store(state, account, &messages).await?;
             db::delete_messages(&state.db, account, &gone).await?;
         }
         Ok(())
@@ -584,7 +766,18 @@ impl Gmail {
         Ok(())
     }
 
+    /// Over IMAP when the worker fetches ahead; through the API when someone waits for it.
     pub async fn raw(&self, provider_id: &str) -> anyhow::Result<Vec<u8>> {
+        if self.background
+            && let Some(Some(raw)) = self
+                .over_imap(|imap| {
+                    let id = provider_id.to_string();
+                    async move { imap.raw(&id).await }.boxed()
+                })
+                .await
+        {
+            return Ok(raw);
+        }
         let message: Value = self.get(&format!("/messages/{provider_id}"), &[("format", "raw".into())]).await?;
         let raw = message["raw"].as_str().unwrap_or_default().trim_end_matches('=');
         Ok(URL_SAFE_NO_PAD.decode(raw)?)
@@ -654,14 +847,64 @@ impl Gmail {
     }
 }
 
+impl SyncState {
+    /// Saved UIDs of another validity mean nothing: the listings over IMAP start again.
+    fn keep_uid_validity(&mut self, uid_validity: u32) {
+        if self.uid_validity == Some(uid_validity) {
+            return;
+        }
+        self.uid_validity = Some(uid_validity);
+        self.refresh.below_uid = None;
+        self.backfill_below = None;
+    }
+}
+
+async fn store(state: &AppState, account: &AccountRow, messages: &[RemoteMessage]) -> anyhow::Result<()> {
+    db::upsert_messages(&state.db, account, messages).await?;
+    crate::avatars::warm(state, messages.iter().map(|message| message.from.email.as_str()));
+    Ok(())
+}
+
+/// The next `size` messages a search finds over IMAP, newest first, below the UID `below` if it
+/// is of the mailbox's `uid_validity`.
+async fn imap_page(
+    imap: &mut Imap,
+    query: &str,
+    below: Option<u32>,
+    uid_validity: Option<u32>,
+    size: usize,
+    bytes: u32,
+    names: &HashMap<String, Uuid>,
+) -> anyhow::Result<ImapPage> {
+    let below = below.filter(|_| uid_validity == Some(imap.uid_validity));
+    let (uids, more) = imap.search(query, below, size).await?;
+    let mut page =
+        ImapPage { messages: Vec::new(), lowest: uids.last().copied(), more, uid_validity: imap.uid_validity };
+    if uids.is_empty() {
+        return Ok(page);
+    }
+    let bulk = imap.bulk(&uids).await?;
+    let fetched = imap.fetch(&uids, Some(bytes)).await?;
+    page.messages = fetched
+        .into_iter()
+        .map(|message| {
+            let is_bulk = bulk.contains(&message.uid);
+            gmail_imap::remote(message, names, is_bulk)
+        })
+        .collect();
+    Ok(page)
+}
+
 /// What a request costs of the user's quota, from Gmail's table.
-fn units(method: &Method, path: &str) -> u32 {
+fn units(method: &Method, path: &str, query: &[(&str, String)]) -> u32 {
+    let whole = query.iter().any(|(key, value)| *key == "format" && matches!(value.as_str(), "full" | "raw"));
     match path {
         "/profile" | "/settings/sendAs" => 1,
         "/labels" if method == Method::GET => 1,
         "/history" => 2,
         "/messages/batchModify" | "/messages/batchDelete" => 50,
         "/watch" => 100,
+        _ if method == Method::GET && path.starts_with("/messages/") && whole => 60,
         _ if method == Method::GET && path.starts_with("/messages/") => 20,
         _ => 5,
     }
@@ -687,60 +930,24 @@ impl std::fmt::Display for NotFound {
 
 impl std::error::Error for NotFound {}
 
-/// Gmail's labels a history page added (true) or removed (false), as the server keeps them.
-fn relabel(provider_id: String, changed: HashMap<String, bool>, labels: &HashMap<String, Uuid>) -> db::Relabel {
-    let mut relabel = db::Relabel { provider_id, ..Default::default() };
-    for (label, present) in changed {
-        let role = match label.as_str() {
-            "UNREAD" => {
-                relabel.unread = Some(present);
-                continue;
-            }
-            "STARRED" => {
-                relabel.starred = Some(present);
-                continue;
-            }
-            "INBOX" => role::INBOX.to_string(),
-            "SENT" => role::SENT.to_string(),
-            "DRAFT" => role::DRAFTS.to_string(),
-            "TRASH" => role::TRASH.to_string(),
-            "SPAM" => role::SPAM.to_string(),
-            other => {
-                let Some(id) = labels.get(other) else { continue };
-                id.to_string()
-            }
-        };
-        match present {
-            true => relabel.added.push(role),
-            false => relabel.removed.push(role),
-        }
-    }
-    relabel
-}
-
 fn remote(message: GmailMessage, labels: &HashMap<String, Uuid>) -> RemoteMessage {
     let lines: Vec<(String, String)> = message
         .payload
         .map(|payload| payload.headers.into_iter().map(|header| (header.name, header.value)).collect())
         .unwrap_or_default();
     let headers = mime::headers(&lines);
-    let mut unread = false;
-    let mut starred = false;
+    let (mut unread, mut starred, mut bulk) = (false, false, headers.bulk);
     let mut normalized = Vec::new();
     for label in &message.label_ids {
-        match label.as_str() {
-            "INBOX" => normalized.push(role::INBOX.to_string()),
-            "SENT" => normalized.push(role::SENT.to_string()),
-            "DRAFT" => normalized.push(role::DRAFTS.to_string()),
-            "TRASH" => normalized.push(role::TRASH.to_string()),
-            "SPAM" => normalized.push(role::SPAM.to_string()),
-            "UNREAD" => unread = true,
-            "STARRED" => starred = true,
-            other => normalized.extend(labels.get(other).map(Uuid::to_string)),
+        match mark(label, labels) {
+            Mark::Label(label) => normalized.push(label),
+            Mark::Unread => unread = true,
+            Mark::Starred => starred = true,
+            Mark::Bulk => bulk = true,
+            Mark::Other => {}
         }
     }
     let date = message.internal_date.and_then(|date| date.parse().ok()).or(headers.date).unwrap_or(0);
-    let bulk = headers.bulk || message.label_ids.iter().any(|label| BULK_CATEGORIES.contains(&label.as_str()));
     let attachments = match headers.multipart_mixed {
         true => vec![Attachment { name: String::new(), mime: String::new(), size: 0 }],
         false => Vec::new(),
