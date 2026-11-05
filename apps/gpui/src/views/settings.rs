@@ -370,8 +370,8 @@ impl SettingsView {
                         ui::settings_divider(cx).into_any_element(),
                         ui::settings_row(
                             ui::settings_label(
-                                "Show mail beside the list",
-                                Some("The open mail sits next to the list when the window is wide enough.".into()),
+                                "Reading pane",
+                                Some("Open mail next to the list when the window is wide enough.".into()),
                                 Lead::None,
                                 false,
                                 cx,

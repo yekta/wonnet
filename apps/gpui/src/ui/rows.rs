@@ -388,7 +388,8 @@ pub fn tab_strip(tabs: Vec<(SharedString, SharedString, u32, bool, OnClick)>, cx
             .flex()
             .items_center()
             .gap(px(space::XS))
-            .h(px(size::ROW))
+            // As tall as a bar, its line on the bar's rule; the hover as tall as a button.
+            .h(px(size::BAR))
             .px(px(space::S + 1.))
             .text_in(TextStyle::Label, color, cx)
             .cursor_pointer()
@@ -397,10 +398,10 @@ pub fn tab_strip(tabs: Vec<(SharedString, SharedString, u32, bool, OnClick)>, cx
             .child(
                 div()
                     .absolute()
-                    .top(px(space::XXS))
-                    .bottom(px(space::XXS))
-                    .left(px(space::XXS / 2.))
-                    .right(px(space::XXS / 2.))
+                    .top(px((size::BAR - size::REGULAR) / 2.))
+                    .bottom(px((size::BAR - size::REGULAR) / 2.))
+                    .left_0()
+                    .right_0()
                     .rounded(px(radius::MD))
                     .group_hover(group, |fill| fill.bg(cx.color(BACKGROUND_ACCENT))),
             )

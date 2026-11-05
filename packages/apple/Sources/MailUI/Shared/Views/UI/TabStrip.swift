@@ -37,12 +37,12 @@ struct TabStrip<Tab: Identifiable & Hashable>: View {
             }
             .foregroundStyle(chosen || hovered ? Tokens.foreground.color : Tokens.mutedForeground.color)
             .padding(.horizontal, Space.s + 1)
-            .frame(height: Theme.rowHeight * Platform.scale)
+            // As tall as a bar, its line on the bar's rule; the hover as tall as a button.
+            .frame(height: Theme.barHeight)
             .background {
                 RoundedRectangle(cornerRadius: Radius.md)
                     .fill(hovered ? Tokens.backgroundAccent.color : .clear)
-                    .padding(.vertical, Space.xxs)
-                    .padding(.horizontal, Space.xxs / 2)
+                    .frame(height: ControlSize.regular.height * Platform.scale)
             }
             .overlay(alignment: .bottom) {
                 Rectangle().fill(chosen ? Tokens.primary.color : .clear).frame(height: 2)

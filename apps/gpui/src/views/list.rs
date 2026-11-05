@@ -225,6 +225,10 @@ impl ThreadList {
         let open_row = row.clone();
         let menu_row = row.clone();
         let menu_entity = entity.clone();
+        // The star, then the paperclip before it, in the slot before the subject, so stars and
+        // subjects line up from row to row; the senders give way to a second icon.
+        let both = starred && row.attachment;
+        let second_icon = if both { 14. } else { 0. };
         let content = match state.compact {
             true => compact_text(&row, starred, &group, hover_actions, cx).into_any_element(),
             false => div()
@@ -237,7 +241,7 @@ impl ThreadList {
                 .font_family(FONT)
                 .child(
                     div()
-                        .w(px(190.))
+                        .w(px(190. - second_icon))
                         .flex_none()
                         .truncate()
                         .text_size(px(13.))
@@ -245,19 +249,28 @@ impl ThreadList {
                         .text_color(cx.color(strong))
                         .child(row.senders.clone()),
                 )
-                .child(div().w(px(38.)).flex_none().pl(px(14.)).when(row.attachment, |slot| {
-                    slot.child(icon(Symbol::Paperclip, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
-                }))
+                .child(
+                    div()
+                        .w(px(38. + second_icon))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .gap(px(space::XS))
+                        .pr(px(10.))
+                        .when(row.attachment, |slot| {
+                            slot.child(icon(Symbol::Paperclip, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+                        })
+                        .when(starred, |slot| slot.child(icon_in(Symbol::StarFilled, 14., cx.color(STAR)))),
+                )
                 .child(line)
                 .child(
                     div()
                         .flex()
                         .flex_none()
                         .items_center()
-                        .gap(px(space::M))
                         .pl(px(space::L))
                         .when(hover_actions, |end| end.group_hover(group.clone(), |end| end.invisible()))
-                        .when(starred, |end| end.child(icon_in(Symbol::StarFilled, 14., cx.color(STAR))))
                         .child(
                             div()
                                 .min_w(px(58.))
@@ -556,14 +569,15 @@ fn loading_more(cx: &App) -> impl IntoElement + use<> {
 }
 
 /// Over the list: the split inbox's tabs, the filter the list is narrowed to, emptying Trash or Spam.
-/// `edge` is the room before the first tab and after the last control.
-fn list_header(store: &Entity<Store>, edge: f32, cx: &App) -> Option<impl IntoElement> {
+/// Beside the open mail it runs edge to edge. As tall as a bar, so it lines up with the one over the mail.
+fn list_header(store: &Entity<Store>, compact: bool, cx: &App) -> Option<impl IntoElement> {
     let state = store.read(cx);
     let shows =
         state.search_rows.is_none() && (!state.splits.is_empty() || state.filter.is_some() || state.can_empty());
     if !shows {
         return None;
     }
+    let edge = if compact { space::L } else { 0. };
     let chosen = state
         .splits
         .iter()
@@ -605,7 +619,7 @@ fn list_header(store: &Entity<Store>, edge: f32, cx: &App) -> Option<impl IntoEl
             .flex()
             .items_center()
             .gap(px(space::M))
-            .h(px(38.))
+            .h(px(size::BAR))
             .w_full()
             .max_w(px(size::CARD_WIDTH))
             .border_b_1()
@@ -642,7 +656,7 @@ impl Render for ThreadList {
         }
         // Beside the open mail, edge to edge as on the phones.
         let compact = self.store.read(cx).reading_pane(window);
-        let header = list_header(&self.store, if compact { space::L } else { 0. }, cx);
+        let header = list_header(&self.store, compact, cx);
         let has_header = header.is_some();
         let header_inset = if compact { 0. } else { space::XL + 4. + size::SELECT_GUTTER };
         let list_top = match (compact, has_header) {

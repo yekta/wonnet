@@ -164,7 +164,7 @@ object ListHeader {
 fun ListHeader(store: MailStore) {
     val chosen = store.splits.firstOrNull { it.mailbox == store.mailbox }?.mailbox ?: store.splits.firstOrNull()?.mailbox
     Row(
-        Modifier.fillMaxWidth().height((38 * SCALE).dp).background(Tokens.background.color).rule(Edge.Bottom),
+        Modifier.fillMaxWidth().height(Dims.barHeight).background(Tokens.background.color).rule(Edge.Bottom),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.m),
     ) {

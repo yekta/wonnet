@@ -161,11 +161,12 @@ fun <T> TabStrip(tabs: List<T>, key: (T) -> String, selected: String?, title: (T
         for (tab in tabs) {
             val chosen = key(tab) == selected
             Pressable({ pick(tab) }) { hovered ->
-                Box(Modifier.height(Dims.rowHeight)) {
+                // As tall as a bar, its line on the bar's rule; the hover as tall as a button.
+                Box(Modifier.height(Dims.barHeight)) {
                     Box(
                         Modifier
                             .matchParentSize()
-                            .padding(horizontal = Space.xxs / 2, vertical = Space.xxs)
+                            .padding(vertical = (Dims.barHeight - Dims.rowHeight) / 2)
                             .background(if (hovered) Tokens.backgroundAccent.color else Color.Transparent, RoundedCornerShape(Radius.md)),
                     )
                     Row(
