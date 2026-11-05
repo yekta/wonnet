@@ -77,7 +77,7 @@ export function SearchField({
 export type RowAction = "archive" | "trash" | "snooze" | "read" | "star"
 
 /** One thread on one line, as the Mac's table draws it: the account's bar, unread dot, senders,
- * subject and snippet, the star if starred, date; hovered, what can be done to it over the date. In the
+ * the paperclip and the star, subject and snippet, date; hovered, what can be done to it over the date. In the
  * gutter before it, the circle that selects it; while threads are selected, a click selects. */
 export function ThreadRow({
   thread,
@@ -100,6 +100,8 @@ export function ThreadRow({
 }) {
   const message = latest(thread)
   const strong = thread.unread
+  // The star, then the paperclip before it, before the subject; the senders give way to both.
+  const both = thread.starred && thread.attachment
   const actions: [RowAction, LucideIcon, string][] = [
     ["archive", ArchiveIcon, "Archive"],
     ["trash", Trash2Icon, "Trash"],
@@ -148,7 +150,8 @@ export function ThreadRow({
           )}
           <span
             className={cn(
-              "ml-9 w-[190px] shrink-0 truncate",
+              "ml-9 shrink-0 truncate",
+              both ? "w-[176px]" : "w-[190px]",
               strong
                 ? "font-bold text-(--foreground)"
                 : "text-(--muted-foreground)"
@@ -156,20 +159,27 @@ export function ThreadRow({
           >
             {senders(thread)}
           </span>
-          <span className="ml-3.5 flex w-6 shrink-0">
+          <span
+            className={cn(
+              "flex shrink-0 gap-1.5",
+              both ? "ml-2 w-[44px]" : "ml-3.5 w-6"
+            )}
+          >
             {thread.attachment && (
               <PaperclipIcon
                 className="size-3.5 text-(--muted-stronger-foreground)"
                 strokeWidth={1.75}
               />
             )}
-          </span>
-          <span
-            className={cn(
-              "min-w-0 flex-1 truncate text-(--muted-stronger-foreground)",
-              thread.starred ? "pr-2" : "pr-4"
+            {thread.starred && (
+              <StarIcon
+                className="size-3.5 text-(--star)"
+                strokeWidth={1.75}
+                fill="currentColor"
+              />
             )}
-          >
+          </span>
+          <span className="min-w-0 flex-1 truncate pr-4 text-(--muted-stronger-foreground)">
             <span
               className={cn(
                 strong
@@ -184,16 +194,6 @@ export function ThreadRow({
               {message.text}
             </span>
           </span>
-          {thread.starred && (
-            <StarIcon
-              className={cn(
-                "mr-3 size-3.5 shrink-0 text-(--star)",
-                !selecting && "group-hover:invisible"
-              )}
-              strokeWidth={1.75}
-              fill="currentColor"
-            />
-          )}
           <span
             className={cn(
               "mr-4 min-w-[58px] shrink-0 text-right text-[12px]",
