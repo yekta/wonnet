@@ -319,6 +319,22 @@ fn the_inbox_splits_into_important_custom_splits_and_other() {
     assert_eq!(ids(&page(&store, "inbox:all")).len(), 4);
     assert_eq!(page(&store, "a/inbox:all").splits[4].mailbox, "a/inbox:all");
     assert_eq!(ids(&page(&store, "a/inbox:important")), ["a:t3"]);
+    let (unified, accounts) = store.mailboxes().unwrap();
+    let side: Vec<(String, String, u32)> =
+        unified[0].splits.iter().map(|split| (split.id.clone(), split.name.clone(), split.unread)).collect();
+    assert_eq!(
+        side,
+        [
+            ("inbox:important".into(), "Important".into(), 1),
+            ("inbox:trips".into(), "Trips".into(), 1),
+            ("inbox:team".into(), "Team".into(), 1),
+            ("inbox:other".into(), "Other".into(), 1),
+            ("inbox:all".into(), "All".into(), 4),
+        ],
+        "the sidebar lists the inbox's splits under it"
+    );
+    assert_eq!(accounts[0].mailboxes[0].splits[1].id, "a/inbox:trips");
+    assert!(unified[1].splits.is_empty());
     assert_eq!(page(&store, "a/inbox:team").splits[2].mailbox, "a/inbox:team");
     assert_eq!(ids(&page(&store, "inbox:trips")), ["a:t4"]);
     assert_eq!(ids(&page(&store, "inbox:other")), ["a:t1"]);
@@ -332,6 +348,7 @@ fn the_inbox_splits_into_important_custom_splits_and_other() {
 
     store.apply_local("off", &Op::SetPreference { key: "split_inbox".into(), value: None }).unwrap();
     assert!(page(&store, "inbox").splits.is_empty());
+    assert!(store.mailboxes().unwrap().0[0].splits.is_empty());
     assert_counts(&store);
     assert_eq!(counts(&store).0.iter().filter(|(label, ..)| label.starts_with("inbox:")).count(), 0);
 }

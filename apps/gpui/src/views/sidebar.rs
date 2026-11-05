@@ -103,9 +103,13 @@ fn tab_menu(store: &Entity<Store>, mailbox: &str) -> impl Fn(&mut Window, &mut A
     }
 }
 
+/// A split's indent, so its name lines up with its inbox's.
+const SPLIT_INDENT: f32 = 18. + space::M;
+
 fn mailbox_row(store: &Entity<Store>, mailbox: &Mailbox, indent: f32, cx: &App) -> NavRow {
     let state = store.read(cx);
-    let selected = state.base_mailbox() == mailbox.id && state.search_rows.is_none();
+    // With its splits under it, the inbox is shown as the split it opens on.
+    let selected = state.base_mailbox() == mailbox.id && state.search_rows.is_none() && mailbox.splits.is_empty();
     NavRow::new(SharedString::from(format!("side-{}", mailbox.id)), mailbox.name.clone())
         .symbol(Symbol::named(&mailbox.symbol))
         .count(mailbox.unread)
@@ -113,6 +117,27 @@ fn mailbox_row(store: &Entity<Store>, mailbox: &Mailbox, indent: f32, cx: &App) 
         .indent(indent)
         .on_click(pick(store, &mailbox.id))
         .menu(tab_menu(store, &mailbox.id))
+}
+
+/// An inbox's splits under it, the one on screen lit; the inbox itself opens on the first.
+fn split_rows(store: &Entity<Store>, inbox: &Mailbox, indent: f32, cx: &App) -> Vec<gpui::AnyElement> {
+    let state = store.read(cx);
+    inbox
+        .splits
+        .iter()
+        .enumerate()
+        .map(|(index, split)| {
+            let on_screen = state.mailbox == split.id || (index == 0 && state.mailbox == inbox.id);
+            NavRow::new(SharedString::from(format!("side-{}", split.id)), split.name.clone())
+                .count(split.unread)
+                .selected(on_screen && state.search_rows.is_none())
+                .indent(indent + SPLIT_INDENT)
+                .vertical_padding(-3.)
+                .on_click(pick(store, &split.id))
+                .menu(tab_menu(store, &split.id))
+                .into_any_element()
+        })
+        .collect()
 }
 
 fn rows(store: &Entity<Store>, cx: &App) -> impl IntoElement + use<> {
@@ -139,6 +164,7 @@ fn rows(store: &Entity<Store>, cx: &App) -> impl IntoElement + use<> {
                 })
                 .into_any_element(),
         );
+        rows.extend(split_rows(store, mailbox, 0., cx));
     }
     if !accounts.is_empty() {
         rows.push(
@@ -195,6 +221,7 @@ fn rows(store: &Entity<Store>, cx: &App) -> impl IntoElement + use<> {
         if expanded {
             for mailbox in &account.mailboxes {
                 rows.push(mailbox_row(store, mailbox, space::L, cx).into_any_element());
+                rows.extend(split_rows(store, mailbox, space::L, cx));
             }
         }
     }
