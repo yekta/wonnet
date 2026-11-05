@@ -144,7 +144,7 @@ impl ThreadList {
         let width = store.list_width(window);
         let compact = store.reading_pane(window);
         let column = match compact {
-            true => width - size::SELECT_GUTTER - space::S,
+            true => width,
             false => (width - 48. - 2. * size::SELECT_GUTTER).clamp(0., size::CARD_WIDTH),
         };
         let select_help = store.key_help("Select", "select");
@@ -193,8 +193,9 @@ impl ThreadList {
         let date_weight = if unread { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL };
         let date_color = if unread { strong } else { MUTED_STRONGER_FOREGROUND };
         let show_circle = state.checked || state.selecting;
-        // The gutter answers the pointer only while its circle can show, as on the Mac.
-        let circle_shown = state.circles || state.selecting;
+        // The gutter answers the pointer only while its circle can show, as on the Mac. Compact,
+        // as on the phones, only while rows are selected, the row moving over for it.
+        let circle_shown = state.selecting || (state.circles && !state.compact);
         let hover_actions = !state.selecting;
         let entity = cx.entity();
         let height = if state.compact { size::ROW_HEIGHT_COMPACT } else { size::ROW_HEIGHT };
@@ -271,6 +272,28 @@ impl ThreadList {
                 )
                 .into_any_element(),
         };
+        let gutter = div()
+            .id(SharedString::from(format!("select-{index}")))
+            .w(px(size::SELECT_GUTTER))
+            .flex_none()
+            .h_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .when(!show_circle, |gutter| gutter.invisible().group_hover(group.clone(), |gutter| gutter.visible()))
+            .tooltip(move |_, cx| {
+                ui::Tooltip::view(if state.checked { "Deselect".to_string() } else { select_help.clone() }, cx)
+            })
+            .child(ui::select_circle(state.checked, Some(SharedString::from(format!("select-{index}-hover"))), cx))
+            .group(SharedString::from(format!("select-{index}-hover")))
+            .on_click({
+                let entity = entity.clone();
+                let row = row.clone();
+                move |event, _, cx| {
+                    cx.stop_propagation();
+                    entity.update(cx, |list, cx| list.clicked_row(&row, Hit::Select, event, cx));
+                }
+            });
         let face = div()
             .relative()
             .flex_1()
@@ -279,25 +302,34 @@ impl ThreadList {
             .h(px(height - size::ROW_GAP))
             .flex()
             .items_center()
-            .rounded(px(radius::SM))
+            .when(!state.compact, |face| face.rounded(px(radius::SM)))
             .when(rests_lit, |face| face.bg(cx.color(lit)))
             .when(!rests_lit, |face| face.group_hover(group.clone(), |face| face.bg(cx.color(lit))))
             .when(state.checked, |face| {
-                face.child(div().absolute().inset_0().rounded(px(radius::SM)).bg(cx.tint(PRIMARY, opacity::COLOR_TINT)))
+                face.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .when(!state.compact, |tint| tint.rounded(px(radius::SM)))
+                        .bg(cx.tint(PRIMARY, opacity::COLOR_TINT)),
+                )
             })
-            .child(
-                div()
-                    .absolute()
-                    .left(px(3.))
-                    .top(px(5.))
-                    .bottom(px(5.))
-                    .w(px(size::ACCOUNT_BAR))
-                    .rounded_full()
-                    .bg(cx.color(account_color(&row.color))),
-            )
-            .when(unread, |face| {
-                let dot = div().absolute().left(px(18.)).size(px(7.)).rounded_full().bg(cx.color(PRIMARY));
-                face.child(if state.compact { dot.top(px(COMPACT_PAD + 6.)) } else { dot })
+            // Compact and at rest, the bar runs along the list's edge, as on the phones.
+            .when(!state.compact || state.selecting, |face| {
+                let inset = if state.compact { size::ROW_GAP / 2. } else { 5. };
+                face.child(
+                    div()
+                        .absolute()
+                        .left(px(if state.compact { 0. } else { 3. }))
+                        .top(px(inset))
+                        .bottom(px(inset))
+                        .w(px(size::ACCOUNT_BAR))
+                        .rounded_full()
+                        .bg(cx.color(account_color(&row.color))),
+                )
+            })
+            .when(unread && !state.compact, |face| {
+                face.child(div().absolute().left(px(18.)).size(px(7.)).rounded_full().bg(cx.color(PRIMARY)))
             })
             .child(content)
             .when(hover_actions, |face| {
@@ -319,27 +351,6 @@ impl ThreadList {
                         .child(div().h_full().flex().items_center().pr(px(0.)).bg(fade_to).children(actions)),
                 )
             });
-        let gutter = div()
-            .id(SharedString::from(format!("select-{index}")))
-            .w(px(size::SELECT_GUTTER))
-            .h_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .when(!show_circle, |gutter| gutter.invisible().group_hover(group.clone(), |gutter| gutter.visible()))
-            .tooltip(move |_, cx| {
-                ui::Tooltip::view(if state.checked { "Deselect".to_string() } else { select_help.clone() }, cx)
-            })
-            .child(ui::select_circle(state.checked, Some(SharedString::from(format!("select-{index}-hover"))), cx))
-            .group(SharedString::from(format!("select-{index}-hover")))
-            .on_click({
-                let entity = entity.clone();
-                let row = row.clone();
-                move |event, _, cx| {
-                    cx.stop_propagation();
-                    entity.update(cx, |list, cx| list.clicked_row(&row, Hit::Select, event, cx));
-                }
-            });
         let reach = div()
             .id(group.clone())
             .group(group.clone())
@@ -358,16 +369,35 @@ impl ThreadList {
                 let entries = menu_entity.read(cx).menu(&menu_row, cx);
                 ui::open_menu(format!("row-menu-{}", menu_row.id), entries, Some(event.position), window, cx);
             });
-        div().id(SharedString::from(format!("thread-{}", row.id))).h(px(height)).w_full().flex().justify_center().child(
+        let edge_bar = (state.compact && !state.selecting).then(|| {
             div()
-                .w(px(state.column + if state.compact { size::SELECT_GUTTER } else { 2. * size::SELECT_GUTTER }))
-                .h_full()
-                .flex()
-                .items_center()
-                .when(!circle_shown, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none()))
-                .child(reach)
-                .when(!state.compact, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none())),
-        )
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(size::ACCOUNT_BAR))
+                .bg(cx.color(account_color(&row.color)))
+        });
+        div()
+            .id(SharedString::from(format!("thread-{}", row.id)))
+            .relative()
+            .h(px(height))
+            .w_full()
+            .flex()
+            .justify_center()
+            .children(edge_bar)
+            .child(
+                div()
+                    .w(px(state.column + if state.compact { 0. } else { 2. * size::SELECT_GUTTER }))
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .when(!circle_shown && !state.compact, |row| {
+                        row.child(div().w(px(size::SELECT_GUTTER)).flex_none())
+                    })
+                    .child(reach)
+                    .when(!state.compact, |row| row.child(div().w(px(size::SELECT_GUTTER)).flex_none())),
+            )
     }
 
     /// What a right-click on the row offers: for the selection when the row is in it.
@@ -526,7 +556,8 @@ fn loading_more(cx: &App) -> impl IntoElement + use<> {
 }
 
 /// Over the list: the split inbox's tabs, the filter the list is narrowed to, emptying Trash or Spam.
-fn list_header(store: &Entity<Store>, cx: &App) -> Option<impl IntoElement> {
+/// `edge` is the room before the first tab and after the last control.
+fn list_header(store: &Entity<Store>, edge: f32, cx: &App) -> Option<impl IntoElement> {
     let state = store.read(cx);
     let shows =
         state.search_rows.is_none() && (!state.splits.is_empty() || state.filter.is_some() || state.can_empty());
@@ -585,11 +616,12 @@ fn list_header(store: &Entity<Store>, cx: &App) -> Option<impl IntoElement> {
                     .flex_1()
                     .min_w_0()
                     .overflow_x_scroll()
-                    .px(px(space::L))
+                    .pl(px(edge))
+                    .pr(px(space::L))
                     .child(ui::tab_strip(tabs, cx)),
             )
-            .children(filter.map(|chip| div().pr(px(space::L)).child(chip)))
-            .children(empty.map(|button| div().pr(px(space::L - size::BUTTON_GAP / 2.)).child(button))),
+            .children(filter.map(|chip| div().pr(px(edge)).child(chip)))
+            .children(empty.map(|button| div().pr(px((edge - size::BUTTON_GAP / 2.).max(0.))).child(button))),
     )
 }
 
@@ -608,18 +640,22 @@ impl Render for ThreadList {
         if self.restored && (kept_offset - scrolled).abs() > 1. {
             self.store.update(cx, |store, _| store.note_scroll(scrolled));
         }
-        let header = list_header(&self.store, cx);
+        // Beside the open mail, edge to edge as on the phones.
+        let compact = self.store.read(cx).reading_pane(window);
+        let header = list_header(&self.store, if compact { space::L } else { 0. }, cx);
         let has_header = header.is_some();
-        let header_inset = match self.store.read(cx).reading_pane(window) {
-            true => (size::SELECT_GUTTER, space::S),
-            false => (space::XL + 4. + size::SELECT_GUTTER, space::XL + 4. + size::SELECT_GUTTER),
+        let header_inset = if compact { 0. } else { space::XL + 4. + size::SELECT_GUTTER };
+        let list_top = match (compact, has_header) {
+            (true, _) => 0.,
+            (false, true) => space::S,
+            (false, false) => LIST_INSET,
         };
         let scroll = self.scroll.clone();
         let list =
             uniform_list("threads", count, cx.processor(|this, range, window, cx| this.render_rows(range, window, cx)))
                 .track_scroll(&self.scroll)
                 .size_full()
-                .pt(px(if has_header { 0. } else { LIST_INSET }))
+                .pt(px(list_top))
                 .pb(px(LIST_INSET));
         div()
             .relative()
@@ -632,9 +668,8 @@ impl Render for ThreadList {
                         .w_full()
                         .flex()
                         .justify_center()
-                        .pt(px(space::L))
-                        .pl(px(header_inset.0))
-                        .pr(px(header_inset.1))
+                        .pt(px(if compact { 0. } else { space::L }))
+                        .px(px(header_inset))
                         .child(header),
                 )
             })
@@ -676,11 +711,12 @@ fn compact_text(row: &ThreadRow, starred: bool, group: &SharedString, hover_acti
         .size_full()
         .min_w_0()
         .pt(px(COMPACT_PAD))
-        .pl(px(36.))
-        .pr(px(space::L))
+        .px(px(space::L))
         .font_family(FONT)
         .child(
             text_line()
+                // The unread dot before the senders, as on the phones.
+                .when(unread, |line| line.child(div().flex_none().size(px(7.)).rounded_full().bg(cx.color(PRIMARY))))
                 .child(
                     div()
                         .flex_1()

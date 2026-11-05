@@ -480,22 +480,29 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     override var isFlipped: Bool { true }
 
     /// Where the row is drawn: the column's width, centred, with the page's margin and a gutter
-    /// either side; compact, the list's width after the gutter.
+    /// either side; compact, the list's whole width, as the phones draw it.
     var column: NSRect {
-        guard !compact else {
-            return NSRect(x: Theme.macSelectGutter, y: 0, width: max(bounds.width - Theme.macSelectGutter - Space.s, 0), height: bounds.height)
-        }
+        guard !compact else { return bounds }
         let width = max(min(bounds.width - 48 - 2 * Theme.macSelectGutter, Theme.cardWidth), 0)
         return NSRect(x: ((bounds.width - width) / 2).rounded(), y: 0, width: width, height: bounds.height)
     }
 
-    /// The gutter before the column, where the circle that selects the row is.
+    /// The gutter before the column, where the circle that selects the row is; compact, the room
+    /// the row moves over for while rows are selected.
     private var gutter: NSRect {
-        NSRect(x: column.minX - Theme.macSelectGutter, y: 0, width: Theme.macSelectGutter, height: bounds.height)
+        guard !compact else { return NSRect(x: 0, y: 0, width: Theme.macSelectGutter, height: bounds.height) }
+        return NSRect(x: column.minX - Theme.macSelectGutter, y: 0, width: Theme.macSelectGutter, height: bounds.height)
     }
 
+    /// Compact, how far the row stands off its start: beside its circle while rows are selected.
+    private var compactShift: CGFloat { isSelecting ? Theme.macSelectGutter : 0 }
+
+    /// The circle is drawn: the row is selected, hovered with circles on, or rows are selected.
+    /// Compact, as on the phones, only while rows are selected.
+    private var circleDrawn: Bool { isChecked || isSelecting || (hovering && hoverCircle && !compact) }
+
     /// Whether the circle in the gutter can be clicked: it is shown on hover, or rows are selected.
-    private var circleShown: Bool { hoverCircle || isSelecting }
+    private var circleShown: Bool { (hoverCircle && !compact) || isSelecting }
 
     /// Where the row answers the pointer: the column, and the gutter before it while its circle is there.
     var reach: NSRect { circleShown ? column.union(gutter) : column }
@@ -544,6 +551,10 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
+        guard !compact else {
+            drawCompactBackground()
+            return
+        }
         let shape = NSBezierPath(roundedRect: face, xRadius: Radius.sm, yRadius: Radius.sm)
         if hovering {
             Tokens.backgroundAccentLarger.platform.setFill()
@@ -566,6 +577,28 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             let radius = Theme.macAccountBarWidth / 2
             NSBezierPath(roundedRect: bar, xRadius: radius, yRadius: radius).fill()
         }
+    }
+
+    /// Compact, as the phones draw a row: a plain fill, and the account's bar along the list's
+    /// edge, a pill of the row's own beside its circle while rows are selected.
+    private func drawCompactBackground() {
+        let fill: ThemeColor? = isChecked
+            ? Tokens.primary.opacity(Opacity.colorTint)
+            : isCurrent && hovering ? Tokens.backgroundAccentLargerStronger
+            : isCurrent || hovering ? Tokens.backgroundAccentLarger : nil
+        if let fill {
+            fill.platform.setFill()
+            face.fill()
+        }
+        guard let row else { return }
+        Theme.accountColor(row.color).platform.setFill()
+        let width = Theme.macAccountBarWidth
+        guard isSelecting else {
+            NSRect(x: 0, y: 0, width: width, height: bounds.height).fill()
+            return
+        }
+        let bar = NSRect(x: compactShift, y: Theme.rowGap, width: width, height: bounds.height - 2 * Theme.rowGap)
+        NSBezierPath(roundedRect: bar, xRadius: width / 2, yRadius: width / 2).fill()
     }
 
     override func drawSelection(in dirtyRect: NSRect) {}
@@ -612,17 +645,20 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
 
     /// Senders and the star, the subject and a paperclip, the snippet and the date.
     private func drawCompact(_ row: ThreadRow, _ text: RowText) {
-        let x = column.minX + Self.sendersX
+        let x = compactShift + Space.l
         let end = trailing
         let side = Self.compactIconSide
-        let middles = (0..<3).map { face.minY + Self.compactTop + Self.compactLine * (CGFloat($0) + 0.5) }
+        let middles = compactMiddles
+        // The unread dot before the senders, as on the phones.
+        var sendersX = x
         if row.unread {
             Tokens.primary.platform.setFill()
-            NSBezierPath(ovalIn: NSRect(x: column.minX + 18, y: middles[0] - 3.5, width: 7, height: 7)).fill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: middles[0] - 3.5, width: 7, height: 7)).fill()
+            sendersX += 15
         }
         guard hovering, !isSelecting else {
             let starred = row.starred && row.draftId == nil
-            Self.drawLine(text.senders, x: x, width: (starred ? end - side - Space.s : end) - x, middle: middles[0])
+            Self.drawLine(text.senders, x: sendersX, width: (starred ? end - side - Space.s : end) - sendersX, middle: middles[0])
             if starred {
                 Self.drawSymbol(.starFilled, in: NSRect(x: end - side, y: middles[0] - side / 2, width: side, height: side), color: Tokens.star.platform)
             }
@@ -636,10 +672,15 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             Self.drawLine(text.date, x: end - dateWidth, width: dateWidth + 2, middle: middles[2])
             return
         }
-        for (line, middle) in zip([text.senders, text.subject, text.snippet], middles) {
-            Self.drawLine(line, x: x, width: end - x, middle: middle, fadingBefore: actionsStart)
-        }
+        Self.drawLine(text.senders, x: sendersX, width: end - sendersX, middle: middles[0], fadingBefore: actionsStart)
+        Self.drawLine(text.subject, x: x, width: end - x, middle: middles[1], fadingBefore: actionsStart)
+        Self.drawLine(text.snippet, x: x, width: end - x, middle: middles[2], fadingBefore: actionsStart)
         drawActions(row)
+    }
+
+    /// The middles of a compact row's three lines.
+    private var compactMiddles: [CGFloat] {
+        (0..<3).map { face.minY + Self.compactTop + Self.compactLine * (CGFloat($0) + 0.5) }
     }
 
     private func drawActions(_ row: ThreadRow) {
@@ -663,7 +704,7 @@ final class ThreadRowView: NSTableRowView, NSViewToolTipOwner {
             Self.drawSymbol(.check, in: rect.insetBy(dx: 3, dy: 3), color: Tokens.primaryForeground.platform)
             return
         }
-        guard (hovering && hoverCircle) || isSelecting else { return }
+        guard circleDrawn else { return }
         let inset = Theme.selectCircleLine / 2
         let ring = NSBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset))
         ring.lineWidth = Theme.selectCircleLine

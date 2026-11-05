@@ -355,6 +355,7 @@ impl SettingsView {
                             vec![theme.into_any_element()],
                         )
                         .into_any_element(),
+                        ui::settings_divider(cx).into_any_element(),
                         ui::settings_row(
                             ui::settings_label(
                                 "Keep the sidebar open",
@@ -366,6 +367,7 @@ impl SettingsView {
                             vec![keep.into_any_element()],
                         )
                         .into_any_element(),
+                        ui::settings_divider(cx).into_any_element(),
                         ui::settings_row(
                             ui::settings_label(
                                 "Show mail beside the list",

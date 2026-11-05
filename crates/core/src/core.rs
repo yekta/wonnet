@@ -2118,7 +2118,6 @@ mod tests {
     #[tokio::test]
     async fn actions_answer_with_a_toast_and_undo_takes_them_back() {
         let mut demo = Demo::start();
-        demo.call(json!({ "type": "set_preference", "key": "split_inbox", "value": false })).await.unwrap();
         let first = demo.inbox().await[0].clone();
         let reply = demo.call(json!({ "type": "act", "action": "archive", "threads": [first] })).await.unwrap();
         assert_eq!(reply, json!({ "message": "Archived.", "undo": true, "url": null }));
