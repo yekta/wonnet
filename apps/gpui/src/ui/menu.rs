@@ -10,7 +10,7 @@ use gpui::{
     px,
 };
 
-use super::{Symbol, icon};
+use super::{Symbol, icon, line};
 use crate::theme::*;
 
 pub type MenuAction = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -23,6 +23,8 @@ pub enum MenuEntry {
         destructive: bool,
         checked: bool,
         disabled: bool,
+        /// Unread, shown faint after the title when there are any.
+        count: u32,
         action: MenuAction,
     },
     Heading(SharedString),
@@ -37,6 +39,7 @@ impl MenuEntry {
             destructive: false,
             checked: false,
             disabled: false,
+            count: 0,
             action: Rc::new(action),
         }
     }
@@ -58,6 +61,13 @@ impl MenuEntry {
     pub fn checked(mut self, on: bool) -> Self {
         if let Self::Item { checked, .. } = &mut self {
             *checked = on;
+        }
+        self
+    }
+
+    pub fn count(mut self, unread: u32) -> Self {
+        if let Self::Item { count, .. } = &mut self {
+            *count = unread;
         }
         self
     }
@@ -199,7 +209,7 @@ fn menu_card(open: &OpenMenu, cx: &App) -> impl IntoElement + use<> {
             .text(TextStyle::Footnote, cx)
             .child(title.clone())
             .into_any_element(),
-        MenuEntry::Item { title, symbol, destructive, checked, disabled, action } => {
+        MenuEntry::Item { title, symbol, destructive, checked, disabled, count, action } => {
             let color = if *destructive { DESTRUCTIVE } else { FOREGROUND };
             let highlighted = open.highlighted == Some(index);
             let action = action.clone();
@@ -222,6 +232,7 @@ fn menu_card(open: &OpenMenu, cx: &App) -> impl IntoElement + use<> {
                     None => div().into_any_element(),
                 })
                 .child(div().flex_1().whitespace_nowrap().child(title.clone()))
+                .when(*count > 0, |row| row.child(line(count.to_string(), TextStyle::Footnote, cx)))
                 .when(*checked, |row| row.child(icon(Symbol::Check, 14.)))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(move |_, window, cx| {
