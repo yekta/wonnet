@@ -378,7 +378,7 @@ impl RenderOnce for ChoiceRow {
 /// Tabs on a line with counts, the chosen one underlined: a split inbox's. A tab hovers in a
 /// rounded fill clear of the line, as the pill tabs do.
 pub fn tab_strip(tabs: Vec<(SharedString, SharedString, u32, bool, OnClick)>, cx: &App) -> impl IntoElement + use<> {
-    div().flex().items_center().children(tabs.into_iter().map(|(id, title, count, chosen, on_click)| {
+    div().flex().flex_none().items_center().children(tabs.into_iter().map(|(id, title, count, chosen, on_click)| {
         let color = if chosen { FOREGROUND } else { MUTED_FOREGROUND };
         let group = SharedString::from(format!("{id}-tab"));
         div()
@@ -386,6 +386,7 @@ pub fn tab_strip(tabs: Vec<(SharedString, SharedString, u32, bool, OnClick)>, cx
             .group(group.clone())
             .relative()
             .flex()
+            .flex_none()
             .items_center()
             .gap(px(space::XS))
             // As tall as a bar, its line on the bar's rule; the hover as tall as a button.

@@ -629,6 +629,7 @@ fn list_header(store: &Entity<Store>, compact: bool, cx: &App) -> Option<impl In
                     .id("split-tabs")
                     .flex_1()
                     .min_w_0()
+                    .flex()
                     .overflow_x_scroll()
                     .pl(px(edge))
                     .pr(px(space::L))
