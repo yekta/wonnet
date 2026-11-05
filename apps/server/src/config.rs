@@ -10,6 +10,9 @@ pub struct Config {
     pub google_authorize_url: String,
     pub google_token_url: String,
     pub gmail_api_url: String,
+    /// Gmail's IMAP, which lists and fetches mail in bulk outside the API's quota. Without it all
+    /// of Gmail goes through the API.
+    pub gmail_imap_url: Option<String>,
     pub microsoft_client_id: String,
     pub microsoft_client_secret: String,
     pub microsoft_authorize_url: String,
@@ -101,6 +104,7 @@ impl Config {
             google_authorize_url: crate::google::AUTHORIZE_URL.to_string(),
             google_token_url: crate::google::TOKEN_URL.to_string(),
             gmail_api_url: crate::providers::gmail::API_URL.to_string(),
+            gmail_imap_url: Some(crate::providers::gmail_imap::URL.to_string()),
             microsoft_client_id: optional("MICROSOFT_CLIENT_ID").unwrap_or_default(),
             microsoft_client_secret: optional("MICROSOFT_CLIENT_SECRET").unwrap_or_default(),
             microsoft_authorize_url: crate::microsoft::AUTHORIZE_URL.to_string(),

@@ -22,6 +22,9 @@ a WebSocket. It looks like the old Newton Mail: calm, plain, nothing that isn't 
   `PROTOCOL_VERSION` in `wire.rs` when an old app or server could no longer understand the other.
 - Every write to synced rows on the server runs in `UserTx` (`db.rs`), which keeps a user's revs in
   order. The server runs one replica: an account's worker must run in one place.
+- Gmail allows each user 6,000 API units a minute, and Google won't raise it. So what's done in bulk
+  (a first sync, the backfill, bodies fetched ahead) goes over Gmail's IMAP, which spends none of
+  it, and the API does the rest; when IMAP fails the API does it all for a while.
 - The core's `core.rs` is one loop that owns all state; anything that waits on the network runs in a
   task and sends its result back. Its SQLite store is a cache: a new schema rebuilds it.
 - `DEV_LOGIN=1` gives a session without an account, for tests and local work only. The apps'

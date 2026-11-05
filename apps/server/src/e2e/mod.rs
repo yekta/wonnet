@@ -7,6 +7,7 @@ mod avatars;
 mod changes;
 mod first_sync;
 mod history;
+mod imap;
 mod mcp;
 mod push;
 mod rules;
@@ -64,6 +65,8 @@ struct FakeGoogle {
     fetched: Vec<String>,
     /// What the next history.list answers, once.
     history: Vec<Value>,
+    /// Gmail's IMAP turns every sign-in down.
+    imap_refused: bool,
     /// The scopes Microsoft says it granted.
     microsoft_scope: String,
 }
@@ -85,6 +88,7 @@ pub fn config(base: &str) -> Config {
         google_authorize_url: google::AUTHORIZE_URL.into(),
         google_token_url: String::new(),
         gmail_api_url: String::new(),
+        gmail_imap_url: None,
         microsoft_client_id: "microsoft-client".into(),
         microsoft_client_secret: "microsoft-secret".into(),
         microsoft_authorize_url: microsoft::AUTHORIZE_URL.into(),
@@ -109,6 +113,11 @@ impl Server {
         Self::start_with(db, |_| {}).await
     }
 
+    /// With Gmail's IMAP played too, over the same mailbox.
+    pub async fn start_with_imap(db: PgPool) -> Self {
+        Self::start_with(db, |config| config.gmail_imap_url = Some(imap::FAKE.into())).await
+    }
+
     pub async fn start_with(db: PgPool, configure: impl FnOnce(&mut Config)) -> Self {
         mail_protocol::tls::install();
         let google = Arc::new(Mutex::new(FakeGoogle::default()));
@@ -121,6 +130,9 @@ impl Server {
         config.microsoft_token_url = format!("{google_base}/microsoft/token");
         config.graph_api_url = format!("{google_base}/graph");
         configure(&mut config);
+        if config.gmail_imap_url.as_deref() == Some(imap::FAKE) {
+            config.gmail_imap_url = Some(imap::fake_imap(google.clone()).await);
+        }
         // A pool of the server's own: a test's pool keeps the connections it opened counted against
         // one limit shared by every test, and tests starting together would wait on each other.
         let server_db = PgPoolOptions::new().max_connections(5).connect_lazy_with((*db.connect_options()).clone());
@@ -253,6 +265,10 @@ impl Server {
         std::mem::take(&mut self.google.lock().unwrap().fetched)
     }
 
+    pub fn refuse_imap(&self) {
+        self.google.lock().unwrap().imap_refused = true;
+    }
+
     pub fn history(&self, history: Vec<Value>) {
         self.google.lock().unwrap().history = history;
     }
@@ -311,6 +327,7 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
             google.refused_fetches -= 1;
             (axum::http::StatusCode::BAD_REQUEST, Json(json!({})))
         } else if query.get("format").map(String::as_str) == Some("raw") {
+            google.fetched.push(format!("raw:{id}"));
             (axum::http::StatusCode::OK, Json(json!({ "id": id, "raw": URL_SAFE_NO_PAD.encode(RAW_MESSAGE) })))
         } else {
             google.fetched.push(id.clone());
@@ -330,21 +347,8 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         let q = query.get("q").cloned().unwrap_or_default();
         let token = query.get("pageToken").cloned();
         google.listed.push((q.clone(), token.clone()));
-        let wanted: Vec<&String> = google
-            .mailbox
-            .iter()
-            .filter(|(_, labels)| {
-                let inbox = labels.iter().any(|label| label == "INBOX");
-                if q.contains("older_than") {
-                    return false;
-                }
-                if q.contains("-in:inbox") {
-                    return !inbox;
-                }
-                !q.contains("in:inbox") || inbox
-            })
-            .map(|(id, _)| id)
-            .collect();
+        let wanted: Vec<&String> =
+            google.mailbox.iter().filter(|(_, labels)| matches(&q, labels)).map(|(id, _)| id).collect();
         let offset: usize = token.and_then(|token| token.parse().ok()).unwrap_or(0);
         let size: usize = query.get("maxResults").and_then(|size| size.parse().ok()).unwrap_or(100);
         let page: Vec<Value> = wanted.iter().skip(offset).take(size).map(|id| json!({ "id": id })).collect();
@@ -427,6 +431,21 @@ async fn fake_google(google: Arc<Mutex<FakeGoogle>>) -> String {
         .route("/graph/me", get(me));
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     base
+}
+
+/// Whether a message with Gmail's `labels` is found by a search, as far as the tests search.
+fn matches(query: &str, labels: &[String]) -> bool {
+    let inbox = labels.iter().any(|label| label == "INBOX");
+    if query.contains("category:") {
+        return labels.iter().any(|label| label.starts_with("CATEGORY_") && label != "CATEGORY_PERSONAL");
+    }
+    if query.contains("older_than") {
+        return false;
+    }
+    if query.contains("-in:inbox") {
+        return !inbox;
+    }
+    !query.contains("in:inbox") || inbox
 }
 
 /// The code and state in the URL the app is sent back to.

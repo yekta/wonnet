@@ -3,6 +3,7 @@
 //! A connection is cheap to clone, so bodies can be fetched while the worker syncs.
 
 pub mod gmail;
+pub mod gmail_imap;
 pub mod jmap;
 pub mod outlook;
 
