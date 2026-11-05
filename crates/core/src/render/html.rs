@@ -24,7 +24,7 @@ body { font: 15px/1.55 "Avenir", -apple-system, BlinkMacSystemFont, "Helvetica N
   -webkit-text-size-adjust: 100%; overflow-wrap: break-word; box-sizing: border-box; }
 a { color: var(--primary); }
 img { max-width: 100%; height: auto; }
-.plain { white-space: pre-wrap; }
+.plain, pre { white-space: pre-wrap; }
 blockquote { margin: 0 0 0 2px; padding-left: 12px; border-left: 2px solid var(--border-card); color: var(--muted-foreground); }
 /* The fold rests and hovers as a chip on the thread's card does; pressed is hovered, at once.
    It is 32px tall to click and starts at the text's edge, where the page ends; the spacing after
@@ -295,6 +295,27 @@ pub fn outgoing(html: &str) -> String {
         .to_string()
 }
 
+/// The mail's text kept on one line, wrapped at the page's edge instead: a line wider than the
+/// screen would shrink the whole mail to fit it.
+fn wrapping(style: &str) -> Cow<'_, str> {
+    if !style.to_ascii_lowercase().contains("white-space") {
+        return Cow::Borrowed(style);
+    }
+    let declarations = style.split(';').map(|declaration| {
+        let Some((property, value)) = declaration.split_once(':') else { return Cow::Borrowed(declaration) };
+        if !property.trim().eq_ignore_ascii_case("white-space") {
+            return Cow::Borrowed(declaration);
+        }
+        let wrapped = match value.split_whitespace().next().map(str::to_ascii_lowercase).as_deref() {
+            Some("nowrap") => "normal",
+            Some("pre") => "pre-wrap",
+            _ => return Cow::Borrowed(declaration),
+        };
+        Cow::Owned(format!("{property}:{wrapped}"))
+    });
+    Cow::Owned(declarations.collect::<Vec<_>>().join(";"))
+}
+
 /// The mail's colours go to `palette`, which makes the stylesheet the page needs for them.
 pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette: Arc<Palette>) -> String {
     builder()
@@ -315,7 +336,7 @@ pub fn sanitize(html: &str, show_images: bool, blocked: Arc<AtomicBool>, palette
                     }
                     style = Cow::Owned(cleaned);
                 }
-                Some(Cow::Owned(palette.style(&style)))
+                Some(Cow::Owned(palette.style(&wrapping(&style))))
             }
             (_, "bgcolor") => {
                 palette.bgcolor(value);
@@ -424,6 +445,19 @@ mod tests {
         let shown = page(&mail, true, true);
         assert!(!shown.blocked_images);
         assert!(shown.html.contains("https://tracker.example/p.gif"));
+    }
+
+    #[test]
+    fn wraps_text_kept_on_one_line() {
+        let page = page(
+            &html("<div style=\"color:red; white-space: nowrap !important\">a</div><p style=\"WHITE-SPACE:pre\">b</p><p style=\"white-space:pre-line\">c</p>"),
+            false,
+            false,
+        )
+        .html;
+        assert!(page.contains("style=\"color:var(--c0); white-space:normal\""));
+        assert!(page.contains("style=\"WHITE-SPACE:pre-wrap\""));
+        assert!(page.contains("style=\"white-space:pre-line\""));
     }
 
     #[test]
