@@ -200,8 +200,11 @@ async fn work(
         let status = if synced.syncing { "syncing" } else { "ready" };
         db::set_account_status(&state.db, &account, status).await?;
         *backoff = Duration::from_secs(2);
-        prefetch(state, &account, &background).await;
         passes.send_modify(|passes| *passes += 1);
+        tokio::select! {
+            () = prefetch(state, &account, &background) => {}
+            () = wake.notified() => continue,
+        }
         let wait = if synced.backfilling { Duration::from_secs(2) } else { state.config.poll_interval };
         let _ = tokio::time::timeout(wait, wake.notified()).await;
     }
