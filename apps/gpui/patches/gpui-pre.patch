@@ -54,10 +54,22 @@ index 2328e95..f69fcdb 100644
  use std::{any::Any, future::Future};
  pub use style::*;
 diff --git a/src/platform.rs b/src/platform.rs
-index 90b3bc3..366a7cb 100644
+index 90b3bc3..0366d0e 100644
 --- a/src/platform.rs
 +++ b/src/platform.rs
-@@ -1305,6 +1305,14 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+@@ -1268,6 +1268,11 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+         answers: &[PromptButton],
+     ) -> Option<oneshot::Receiver<usize>>;
+     fn activate(&self);
++    /// Activates the window with a token another program handed this one, such as a
++    /// notification server. Platforms without such tokens activate as usual.
++    fn activate_with_token(&self, _token: String) {
++        self.activate();
++    }
+     /// Requests that the operating system draw attention to this window.
+     fn request_attention(&self) {}
+     fn is_active(&self) -> bool;
+@@ -1305,6 +1310,14 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
      fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
      fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}
      fn draw(&self, scene: &Scene);
@@ -294,7 +306,7 @@ index 0000000..90401ea
 +    }
 +}
 diff --git a/src/window.rs b/src/window.rs
-index c559412..c74928a 100644
+index c559412..538929d 100644
 --- a/src/window.rs
 +++ b/src/window.rs
 @@ -1257,6 +1257,7 @@ pub struct Window {
@@ -431,3 +443,17 @@ index c559412..c74928a 100644
          if hit_test != self.mouse_hit_test {
              self.mouse_hit_test = hit_test;
              self.reset_cursor_style(cx);
+@@ -6670,6 +6706,13 @@ impl Window {
+         self.platform_window.activate();
+     }
+ 
++    /// Focus the window with an activation token another program handed this one, such as a
++    /// notification server on Wayland. Without a use for the token, the same as
++    /// [`Self::activate_window`].
++    pub fn activate_window_with_token(&self, token: String) {
++        self.platform_window.activate_with_token(token);
++    }
++
+     /// Requests that the operating system draw attention to this window.
+     pub fn request_attention(&self) {
+         self.platform_window.request_attention();

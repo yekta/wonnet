@@ -28,7 +28,7 @@ use mail_core::api::Event;
 use crate::core::Core;
 use crate::keys::{self, KeyScope};
 use crate::models::{Filter, ReplyKind};
-use crate::platform::notify::{Answer, Notifier};
+use crate::platform::notify::{Answer, Click, Notifier};
 use crate::store::{LocalSettings, PaletteScope, SettingsSection, Store, ThreadCommand};
 use crate::theme::*;
 use crate::ui::{self, ActionButton, IconButton, Symbol, Variant};
@@ -129,9 +129,9 @@ impl MailWindow {
         }));
         store.update(cx, |store, cx| store.boot(cx));
 
-        Self::pump(events, cx, |this, event, cx| this.store.update(cx, |store, cx| store.handle(event, cx)));
-        Self::pump(starts, cx, |this, line, cx| this.heard(line, cx));
-        Self::pump(answered, cx, Self::answer);
+        Self::pump(events, window, cx, |this, event, _, cx| this.store.update(cx, |store, cx| store.handle(event, cx)));
+        Self::pump(starts, window, cx, Self::heard);
+        Self::pump(answered, window, cx, Self::answer);
 
         let mut this = Self {
             store,
@@ -158,12 +158,13 @@ impl MailWindow {
     /// Hands what arrives on a channel to the window, one at a time.
     fn pump<T: 'static>(
         receiver: async_channel::Receiver<T>,
+        window: &mut Window,
         cx: &mut Context<Self>,
-        handle: impl Fn(&mut Self, T, &mut Context<Self>) + 'static,
+        handle: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static,
     ) {
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             while let Ok(item) = receiver.recv().await {
-                if this.update(cx, |this, cx| handle(this, item, cx)).is_err() {
+                if this.update_in(cx, |this, window, cx| handle(this, item, window, cx)).is_err() {
                     break;
                 }
             }
@@ -172,9 +173,9 @@ impl MailWindow {
     }
 
     /// A later start handed over a link, or asked to be shown.
-    fn heard(&mut self, line: String, cx: &mut Context<Self>) {
+    fn heard(&mut self, line: String, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(answer) = Answer::from_link(&line) {
-            return self.answer(answer, cx);
+            return self.answer(Click { answer, activation: None }, window, cx);
         }
         cx.activate(true);
         if line.starts_with("wonnet://") {
@@ -183,11 +184,14 @@ impl MailWindow {
     }
 
     /// A notification was clicked: the window comes forward unless a button did it all.
-    fn answer(&mut self, answer: Answer, cx: &mut Context<Self>) {
-        if matches!(answer, Answer::Open(_) | Answer::Reply(_)) {
-            cx.activate(true);
+    fn answer(&mut self, click: Click, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(click.answer, Answer::Open(_) | Answer::Reply(_)) {
+            match click.activation {
+                Some(token) => window.activate_window_with_token(token),
+                None => cx.activate(true),
+            }
         }
-        self.store.update(cx, |store, cx| store.answer(answer, cx));
+        self.store.update(cx, |store, cx| store.answer(click.answer, cx));
     }
 
     fn apply_look(&mut self, window: &mut Window, cx: &mut Context<Self>) {

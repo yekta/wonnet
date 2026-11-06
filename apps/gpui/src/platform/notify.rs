@@ -5,7 +5,8 @@
 //! A thread's notifications are taken down once it is read or leaves the inbox, here or
 //! elsewhere, but not its Undo; all of them at sign-out.
 //!
-//! On Linux the buttons answer on the notification's own thread. Windows starts the app with a
+//! On Linux the buttons answer on the notification's own thread, with the activation token the
+//! server may send to bring the window forward. Windows starts the app with a
 //! `wonnet://notification` link for them, which a running window is handed.
 
 use std::collections::HashMap;
@@ -76,6 +77,13 @@ impl Answer {
     }
 }
 
+/// A notification's answer, with the activation token its server sent for it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Click {
+    pub answer: Answer,
+    pub activation: Option<String>,
+}
+
 /// What the first button answers, as the settings choose it.
 #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
 fn first_button(action: NotificationAction) -> &'static str {
@@ -115,7 +123,7 @@ fn decode(text: &str) -> Option<String> {
 #[derive(Clone)]
 pub struct Notifier {
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    answers: async_channel::Sender<Answer>,
+    answers: async_channel::Sender<Click>,
     /// Linux's ids of each thread's notifications.
     shown: Arc<Mutex<HashMap<String, Vec<u32>>>>,
     /// Linux's id of each thread's Undo, or of the notification it is to replace; apart from
@@ -124,7 +132,7 @@ pub struct Notifier {
 }
 
 impl Notifier {
-    pub fn new(answers: async_channel::Sender<Answer>) -> Self {
+    pub fn new(answers: async_channel::Sender<Click>) -> Self {
         Self { answers, shown: Arc::default(), undos: Arc::default() }
     }
 
@@ -228,18 +236,16 @@ impl Notifier {
         if let Some(photo) = photo {
             notification.image_path(&file_uri(&photo));
         }
+        let signals = Signals::listen();
         let Ok(handle) = notification.show() else { return };
         let id = handle.id();
         self.noted(&message.thread, id);
-        let answers = self.answers.clone();
-        let thread = message.thread.clone();
-        handle.wait_for_action(|action| {
-            let Some(answer) = Answer::from_action(action, thread.clone()) else { return };
-            if matches!(answer, Answer::Archive(_) | Answer::Trash(_)) {
-                self.noted_undo(&thread, id);
+        if let Some(click) = signals.and_then(|signals| signals.click(id, &message.thread)) {
+            if matches!(click.answer, Answer::Archive(_) | Answer::Trash(_)) {
+                self.noted_undo(&message.thread, id);
             }
-            let _ = answers.send_blocking(answer);
-        });
+            let _ = self.answers.send_blocking(click);
+        }
         self.forget(&message.thread, id);
     }
 
@@ -257,15 +263,13 @@ impl Notifier {
         if let Some(replaced) = replaced {
             notification.id(replaced);
         }
+        let signals = Signals::listen();
         let Ok(handle) = notification.show() else { return };
         let id = handle.id();
         self.noted_undo(&thread, id);
-        let answers = self.answers.clone();
-        handle.wait_for_action(|action| {
-            if let Some(answer) = Answer::from_action(action, thread.clone()) {
-                let _ = answers.send_blocking(answer);
-            }
-        });
+        if let Some(click) = signals.and_then(|signals| signals.click(id, &thread)) {
+            let _ = self.answers.send_blocking(click);
+        }
         self.forget_undo(&thread, id);
     }
 
@@ -274,6 +278,59 @@ impl Notifier {
         if undos.get(thread) == Some(&id) {
             undos.remove(thread);
         }
+    }
+}
+
+/// The notification server's signals, listened to before a notification is shown so that none
+/// of its answers comes too soon.
+#[cfg(target_os = "linux")]
+struct Signals(zbus::blocking::MessageIterator);
+
+#[cfg(target_os = "linux")]
+impl Signals {
+    fn listen() -> Option<Self> {
+        let connection = zbus::blocking::Connection::session().ok()?;
+        let rule = zbus::MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface("org.freedesktop.Notifications")
+            .ok()?
+            .path("/org/freedesktop/Notifications")
+            .ok()?
+            .build();
+        zbus::blocking::MessageIterator::for_match_rule(rule, &connection, None).ok().map(Self)
+    }
+
+    /// Waits for notification `id` to be clicked or closed. The server may send an activation
+    /// token just before the click.
+    fn click(self, id: u32, thread: &str) -> Option<Click> {
+        let mut activation = None;
+        for message in self.0 {
+            let Ok(message) = message else { continue };
+            let header = message.header();
+            let Some(member) = header.member() else { continue };
+            match member.as_str() {
+                "ActivationToken" => {
+                    if let Ok((of, token)) = message.body().deserialize::<(u32, String)>()
+                        && of == id
+                    {
+                        activation = Some(token);
+                    }
+                }
+                "ActionInvoked" => {
+                    let Ok((of, action)) = message.body().deserialize::<(u32, String)>() else { continue };
+                    if of != id {
+                        continue;
+                    }
+                    let answer = Answer::from_action(&action, thread.to_string())?;
+                    return Some(Click { answer, activation });
+                }
+                "NotificationClosed" if message.body().deserialize::<(u32, u32)>().is_ok_and(|(of, _)| of == id) => {
+                    return None;
+                }
+                _ => {}
+            }
+        }
+        None
     }
 }
 
