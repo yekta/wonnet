@@ -4,8 +4,9 @@ import SwiftUI
 /// or Spam.
 struct ListHeader: View {
     @Environment(MailStore.self) private var store
-    /// Before the first tab and after the last control; the Mac lines them up with its rows instead.
-    var edgeInset = Space.l
+    /// Before the first tab and after the last control, as far from the sides as from the top and
+    /// the rule; the Mac lines them up with its rows instead.
+    var edgeInset = Theme.barInset
 
     /// A bar's height, so a button has room in it and it lines up with the bar over an open mail.
     static let height = Theme.barHeight

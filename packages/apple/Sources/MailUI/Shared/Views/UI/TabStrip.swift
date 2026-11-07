@@ -42,7 +42,7 @@ struct TabStrip<Tab: Identifiable & Hashable>: View {
             .background {
                 RoundedRectangle(cornerRadius: Radius.md)
                     .fill(hovered ? Tokens.backgroundAccent.color : .clear)
-                    .frame(height: ControlSize.regular.height * Platform.scale)
+                    .padding(.vertical, Theme.barInset)
             }
             .overlay(alignment: .bottom) {
                 Rectangle().fill(chosen ? Tokens.primary.color : .clear).frame(height: 2)

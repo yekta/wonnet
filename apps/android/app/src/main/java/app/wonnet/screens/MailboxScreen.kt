@@ -168,14 +168,14 @@ fun ListHeader(store: MailStore) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.m),
     ) {
-        Box(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = Space.l)) {
+        Box(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = Dims.barInset, end = Space.l)) {
             TabStrip(store.splits, { it.mailbox }, chosen, { it.name }, { it.unread }) { store.select(it.mailbox) }
         }
         store.filter?.let { filter ->
-            Chip(if (filter == Filter.Unread) "Unread" else "Starred", Modifier.padding(end = Space.l), symbol = Symbol.ListFilter, remove = { store.narrow(null) })
+            Chip(if (filter == Filter.Unread) "Unread" else "Starred", Modifier.padding(end = Dims.barInset), symbol = Symbol.ListFilter, remove = { store.narrow(null) })
         }
         if (store.canEmpty) {
-            ActionButton("Empty ${store.mailboxName}", Modifier.padding(end = Space.l - Dims.buttonGap / 2), variant = ButtonVariant.Ghost, onClick = store::emptyMailbox)
+            ActionButton("Empty ${store.mailboxName}", Modifier.padding(end = Dims.barButtonInset), variant = ButtonVariant.Ghost, onClick = store::emptyMailbox)
         }
     }
 }

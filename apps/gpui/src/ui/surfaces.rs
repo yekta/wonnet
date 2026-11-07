@@ -62,10 +62,6 @@ pub fn header_bar(
     }
 }
 
-/// How far a sheet's bar keeps its buttons from the sheet's sides: a button's circle is as far
-/// from the side as from the bar's top and bottom.
-const SHEET_BAR_INSET: f32 = (size::BAR - size::REGULAR) / 2. - size::BUTTON_GAP / 2.;
-
 /// Every sheet's shell over the window: its header with the close, its content, at its size.
 /// `background` is the page's colour unless it is a card's.
 pub fn sheet<E: IntoElement, F: Fn(&mut Window, &mut App) + 'static>(
@@ -102,7 +98,7 @@ pub fn sheet<E: IntoElement, F: Fn(&mut Window, &mut App) + 'static>(
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(
             header_bar(Some(title.into()), vec![close_button.into_any_element()], None, trailing, cx)
-                .px(px(SHEET_BAR_INSET))
+                .px(px(size::BAR_BUTTON_INSET))
                 .flex_none(),
         )
         .child(rule(rule_color, cx))

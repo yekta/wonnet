@@ -40,7 +40,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
-import app.wonnet.theme.ControlSize
 import app.wonnet.theme.Dims
 import app.wonnet.theme.LocalDark
 import app.wonnet.theme.Radius
@@ -92,7 +91,7 @@ fun Sheet(
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
             ) {
                 HeaderBar(
-                    inset = (Dims.barHeight - ControlSize.Regular.scaled) / 2 - Dims.buttonGap / 2,
+                    inset = Dims.barButtonInset,
                     leading = {
                         if (close == "Close") {
                             IconButton(Symbol.X, "Close", circled = false, strong = true, onClick = onClose)

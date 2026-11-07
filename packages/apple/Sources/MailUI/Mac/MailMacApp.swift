@@ -186,7 +186,6 @@ private struct MacPages: View {
                         } else {
                             ListHeader(edgeInset: 0)
                                 .frame(maxWidth: Theme.cardWidth)
-                                .padding(.top, Space.l)
                                 .padding(.horizontal, Space.xl + 4 + Theme.macSelectGutter)
                         }
                     }

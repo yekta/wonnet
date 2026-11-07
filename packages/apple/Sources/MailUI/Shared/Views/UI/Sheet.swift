@@ -33,16 +33,10 @@ struct Sheet<Content: View, Trailing: View>: View {
     @ViewBuilder let content: Content
     @ViewBuilder var trailing: Trailing
 
-    #if os(macOS)
-    /// Keeps the faces of the bar's end buttons as far from the sheet's sides as from the bar's
-    /// top and bottom.
-    private static var barInset: CGFloat { (Theme.barHeight - ControlSize.regular.height) / 2 - Theme.buttonGap / 2 }
-    #endif
-
     var body: some View {
         #if os(macOS)
         VStack(spacing: 0) {
-            HeaderBar(title: title, inset: Self.barInset) {
+            HeaderBar(title: title, inset: Theme.barButtonInset) {
                 IconButton(symbol: .x, help: "Close (Esc)", circled: false) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             } trailing: {

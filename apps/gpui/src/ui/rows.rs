@@ -399,8 +399,8 @@ pub fn tab_strip(tabs: Vec<(SharedString, SharedString, u32, bool, OnClick)>, cx
             .child(
                 div()
                     .absolute()
-                    .top(px((size::BAR - size::REGULAR) / 2.))
-                    .bottom(px((size::BAR - size::REGULAR) / 2.))
+                    .top(px(size::BAR_INSET))
+                    .bottom(px(size::BAR_INSET))
                     .left_0()
                     .right_0()
                     .rounded(px(radius::MD))

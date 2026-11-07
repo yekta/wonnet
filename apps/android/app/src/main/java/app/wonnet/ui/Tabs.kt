@@ -166,7 +166,7 @@ fun <T> TabStrip(tabs: List<T>, key: (T) -> String, selected: String?, title: (T
                     Box(
                         Modifier
                             .matchParentSize()
-                            .padding(vertical = (Dims.barHeight - Dims.rowHeight) / 2)
+                            .padding(vertical = Dims.barInset)
                             .background(if (hovered) Tokens.backgroundAccent.color else Color.Transparent, RoundedCornerShape(Radius.md)),
                     )
                     Row(

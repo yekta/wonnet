@@ -125,6 +125,10 @@ pub mod size {
     pub const ATTACHMENT_WIDTH: f32 = 168.0;
     pub const ATTACHMENT_PREVIEW: f32 = 96.0;
     pub const BAR: f32 = 52.0;
+    /// How far a control's face in a bar is from the bar's edges: its top, its rule and its sides.
+    pub const BAR_INSET: f32 = (BAR - REGULAR) / 2.;
+    /// What keeps a button's face `BAR_INSET` from a bar's side, its hit area padded around it.
+    pub const BAR_BUTTON_INSET: f32 = BAR_INSET - BUTTON_GAP / 2.;
     pub const SEARCH: f32 = LARGE;
     pub const POPUP_WIDTH: f32 = 380.0;
     pub const SIDEBAR_END: f32 = 48.0;
