@@ -188,6 +188,9 @@ impl MailWindow {
         if matches!(click.answer, Answer::Open(_) | Answer::Reply(_)) {
             match click.activation {
                 Some(token) => window.activate_window_with_token(token),
+                #[cfg(target_os = "linux")]
+                None => window.activate_window(),
+                #[cfg(not(target_os = "linux"))]
                 None => cx.activate(true),
             }
         }
