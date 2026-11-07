@@ -18,9 +18,6 @@ use uuid::Uuid;
 use crate::ops::{self, Outcome};
 use crate::{AppState, api, changes, db, search, workers};
 
-/// A catch-up that sends this many messages or more is logged.
-const LARGE_CATCH_UP: usize = 500;
-
 pub async fn socket(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
     ws.on_upgrade(move |socket| run(state, socket))
 }
@@ -77,6 +74,8 @@ async fn run(state: AppState, socket: WebSocket) {
         syncs: JoinSet::new(),
         out,
     };
+    let connected = tokio::time::Instant::now();
+    tracing::info!("user {user_id} connected at rev {cursor}");
     let _ = session.out.send(ServerMessage::Welcome { protocol: PROTOCOL_VERSION }).await;
     let mut running = session.send_changes().await;
     while running {
@@ -98,6 +97,7 @@ async fn run(state: AppState, socket: WebSocket) {
         }
     }
     writer.abort();
+    tracing::info!("user {user_id} disconnected after {:?} at rev {}", connected.elapsed(), session.cursor);
 }
 
 struct Session {
@@ -162,7 +162,7 @@ impl Session {
             self.cursor = cursor;
             self.ahead = self.ahead.max(sent.unwrap_or(cursor)).max(cursor);
             if !more {
-                if sent_messages >= LARGE_CATCH_UP {
+                if sent_messages > 0 {
                     let (user_id, took) = (self.user_id, began.elapsed());
                     tracing::info!(
                         "sent user {user_id} {sent_messages} messages from rev {from} to {cursor} in {took:?}"
@@ -201,6 +201,7 @@ impl Session {
             ClientMessage::Ping => self.send(ServerMessage::Pong).await,
             ClientMessage::Sync { request } => {
                 let (state, user_id) = (self.state.clone(), self.user_id);
+                tracing::info!("user {user_id} asked for a sync");
                 self.syncs.spawn(async move {
                     state.workers.sync_now(&state, user_id).await;
                     request
