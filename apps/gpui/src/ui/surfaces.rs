@@ -277,7 +277,7 @@ pub fn banner(banner: Banner, cx: &App) -> impl IntoElement + use<> {
 }
 
 /// The note at the bottom: a line and maybe an action, gone after a while. A toast that counts
-/// down (a message about to be sent) starts with a ring that empties until it is done: `shown`
+/// down (a message about to be sent) starts with a ring that fills until it is done: `shown`
 /// and how long it lasts. The ring and the action are capsules inset from the toast's edge by as
 /// much on every side, so their ends are concentric with the toast's.
 pub fn toast(
@@ -340,10 +340,10 @@ const TOAST_INSET: f32 = space::XS;
 const TOAST_INNER: f32 = size::LARGE - TOAST_INSET * 2.;
 const COUNTDOWN_LINE: f32 = 2.5;
 
-/// The seconds left in a ring that empties as they run out, drawn again every frame.
+/// The seconds left, in a ring that fills as they run out, drawn again every frame.
 fn toast_countdown(shown: Instant, duration: Duration, cx: &App) -> impl IntoElement + use<> {
     let left = duration.saturating_sub(shown.elapsed());
-    let fraction = if duration.is_zero() { 0. } else { left.as_secs_f32() / duration.as_secs_f32() };
+    let fraction = if duration.is_zero() { 1. } else { 1. - left.as_secs_f32() / duration.as_secs_f32() };
     let track = cx.color(POPOVER_ACCENT_STRONGER);
     let arc = cx.color(FOREGROUND);
     div()

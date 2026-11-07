@@ -110,7 +110,7 @@ fun Root(store: MailStore) {
 
 /**
  * The note at the bottom: a line of text and maybe an action, gone after a while. A toast that
- * counts down (a message about to be sent) starts with a ring that empties until it is done. The
+ * counts down (a message about to be sent) starts with a ring that fills until it is done. The
  * ring and the action are capsules inset from the toast's edge by as much on every side, so their
  * ends are concentric with the toast's.
  */
@@ -163,13 +163,13 @@ fun ToastView(store: MailStore) {
 private val ToastInset = Space.xs * SCALE
 private val ToastInner = Dims.searchHeight - ToastInset * 2
 
-/** The seconds left in a ring that empties as they run out. */
+/** The seconds left, in a ring that fills as they run out. */
 @Composable
 private fun Countdown(start: Long, duration: Long, modifier: Modifier) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(start) { while (true) withFrameMillis { now = System.currentTimeMillis() } }
     val left = (duration - (now - start)).coerceAtLeast(0)
-    val fraction = if (duration > 0) left.toFloat() / duration else 0f
+    val fraction = if (duration > 0) 1f - left.toFloat() / duration else 1f
     val track = Tokens.popoverAccentStronger.color
     val arc = Tokens.foreground.color
     Box(
@@ -178,7 +178,7 @@ private fun Countdown(start: Long, duration: Long, modifier: Modifier) {
             val inset = Offset(line / 2, line / 2)
             val ring = Size(size.width - line, size.height - line)
             drawArc(track, 0f, 360f, false, inset, ring, style = Stroke(line))
-            drawArc(arc, -90f, 360f * fraction, false, inset, ring, style = Stroke(line, cap = StrokeCap.Round))
+            if (fraction > 0f) drawArc(arc, -90f, 360f * fraction, false, inset, ring, style = Stroke(line, cap = StrokeCap.Round))
         },
         contentAlignment = Alignment.Center,
     ) {

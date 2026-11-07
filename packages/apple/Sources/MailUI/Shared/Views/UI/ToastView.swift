@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The note at the bottom: a line of text and maybe an action, gone after a while. A toast that
-/// counts down (a message about to be sent) starts with a ring that empties until it is done.
+/// counts down (a message about to be sent) starts with a ring that fills until it is done.
 /// The ring and the action are capsules inset from the toast's edge by as much on every side,
 /// so their ends are concentric with the toast's.
 struct ToastView: View {
@@ -56,7 +56,7 @@ struct ToastView: View {
         }
     }
 
-    /// The seconds left in a ring that empties as they run out.
+    /// The seconds left, in a ring that fills as they run out.
     private struct Countdown: View {
         let start: Date
         let duration: TimeInterval
@@ -67,7 +67,7 @@ struct ToastView: View {
                 ZStack {
                     Circle().stroke(Tokens.popoverAccentStronger.color, lineWidth: Self.line)
                     Circle()
-                        .trim(from: 0, to: duration > 0 ? left / duration : 0)
+                        .trim(from: 0, to: duration > 0 ? 1 - left / duration : 1)
                         .stroke(Tokens.foreground.color, style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     Text("\(Int(left.rounded(.up)))").monospacedDigit().textStyle(.labelStrong, color: Tokens.foreground.color)

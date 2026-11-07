@@ -339,7 +339,7 @@ export function Sheet({
 }
 
 /** The note at the bottom: a line of text and maybe an action. One that counts down (a message
- * about to be sent) starts with a ring that empties until it is done. The ring and the action are
+ * about to be sent) starts with a ring that fills until it is done. The ring and the action are
  * 32px capsules inset 6px from the toast's edge on every side (5px of padding inside its 1px
  * border), so their ends are concentric with the toast's. */
 export function Toast({
@@ -388,7 +388,7 @@ const RING_LINE = 2.5
 const RING_RADIUS = (32 - RING_LINE) / 2
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS
 
-/** The seconds left in a ring that empties, from the top and clockwise, as they run out. */
+/** The seconds left, in a ring that fills from the top and clockwise as they run out. */
 function Countdown({ start, duration }: { start: number; duration: number }) {
   const [left, setLeft] = useState(duration)
   useEffect(() => {
@@ -402,7 +402,7 @@ function Countdown({ start, duration }: { start: number; duration: number }) {
     return () => cancelAnimationFrame(frame)
   }, [start, duration])
 
-  const fraction = duration > 0 ? left / duration : 0
+  const fraction = duration > 0 ? 1 - left / duration : 1
   return (
     <span className="relative flex size-8 shrink-0 items-center justify-center">
       <svg
