@@ -1,8 +1,7 @@
 use serde_json::json;
 use sqlx::PgPool;
 
-use super::Server;
-use crate::db;
+use super::{Server, pass};
 use crate::providers::Connection;
 
 #[sqlx::test]
@@ -16,10 +15,7 @@ async fn label_changes_are_written_without_fetching_the_messages_again(db: PgPoo
     server.fill(vec![inbox("m0", &["UNREAD"]), inbox("m1", &[]), inbox("m2", &[]), inbox("m3", &[])]);
     let (_, _, account) = server.gmail_user("ann@gmail.com").await;
     let connection = Connection::open(&server.state, &account).await.unwrap();
-    let sync = async || {
-        let account = db::account(&db, account.id).await.unwrap().unwrap();
-        connection.background().sync(&server.state, &account).await.unwrap()
-    };
+    let sync = async || pass(&server.state, &connection, account.id).await.unwrap();
     while sync().await.syncing {}
     server.fetched();
     let state = async |id: &str| -> (Vec<String>, bool, bool, bool, i64) {

@@ -98,6 +98,15 @@ impl Connection {
         }
     }
 
+    /// Work in bulk that `sync` leaves for after it, and what is left then: Gmail lists its mail
+    /// a page at a time. Nothing for the providers that list as they sync.
+    pub async fn fill(&self, state: &AppState, account: &AccountRow) -> anyhow::Result<Option<Synced>> {
+        match self {
+            Connection::Gmail(gmail) => gmail.fill(state, account).await.map(Some),
+            Connection::Jmap(_) | Connection::Outlook(_) => Ok(None),
+        }
+    }
+
     pub async fn apply(&self, batch: &Batch, labels: &HashMap<Uuid, String>) -> anyhow::Result<()> {
         match self {
             Connection::Gmail(gmail) => gmail.apply(batch, labels).await,

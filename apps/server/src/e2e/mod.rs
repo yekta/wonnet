@@ -33,6 +33,7 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::db::{self, AccountRow, NewAccount};
+use crate::providers::{Connection, Synced};
 use crate::{AppState, Inner, google, microsoft, router, seal};
 
 const GOOGLE_CLIENT_ID: &str = "google-client";
@@ -67,6 +68,9 @@ struct FakeGoogle {
     history: Vec<Value>,
     /// Gmail's IMAP turns every sign-in down.
     imap_refused: bool,
+    /// Gmail's IMAP never answers a fetch of a whole message, and counts those asked for.
+    imap_stalls: bool,
+    imap_stalled: usize,
     /// The scopes Microsoft says it granted.
     microsoft_scope: String,
 }
@@ -265,6 +269,14 @@ impl Server {
         std::mem::take(&mut self.google.lock().unwrap().fetched)
     }
 
+    pub fn stall_imap(&self) {
+        self.google.lock().unwrap().imap_stalls = true;
+    }
+
+    pub fn imap_stalled(&self) -> usize {
+        self.google.lock().unwrap().imap_stalled
+    }
+
     pub fn refuse_imap(&self) {
         self.google.lock().unwrap().imap_refused = true;
     }
@@ -449,6 +461,14 @@ fn matches(query: &str, labels: &[String]) -> bool {
 }
 
 /// The code and state in the URL the app is sent back to.
+/// A worker's pass, without the bodies it fetches ahead: it catches up, then lists a page more.
+pub async fn pass(state: &AppState, connection: &Connection, account_id: Uuid) -> anyhow::Result<Synced> {
+    let account = db::account(&state.db, account_id).await?.expect("the account");
+    let synced = connection.background().sync(state, &account).await?;
+    let account = db::account(&state.db, account_id).await?.expect("the account");
+    Ok(connection.background().fill(state, &account).await?.unwrap_or(synced))
+}
+
 pub fn code_of(url: &Url) -> String {
     assert_eq!((url.scheme(), url.host_str()), ("wonnet", Some("auth")));
     let query: HashMap<String, String> = url.query_pairs().into_owned().collect();
