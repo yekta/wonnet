@@ -2,15 +2,16 @@
 //! and X-GM-MSGID is each one's API id read as hex.
 
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use serde_json::json;
 use sqlx::PgPool;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
-use super::{FakeGoogle, RAW_MESSAGE, Server, matches};
-use crate::db;
+use super::{FakeGoogle, RAW_MESSAGE, Server, matches, pass};
 use crate::providers::Connection;
 
 /// Asks `Server::start_with` for the fake IMAP.
@@ -63,6 +64,17 @@ async fn serve(socket: TcpStream, google: Arc<Mutex<FakeGoogle>>) {
                 let uids = search(&google.lock().unwrap(), &command["UID SEARCH ".len()..]);
                 let uids: Vec<String> = uids.iter().map(u32::to_string).collect();
                 format!("* SEARCH {}\r\n{tag} OK SEARCH completed (Success)\r\n", uids.join(" "))
+            }
+            _ if command.starts_with("UID FETCH ") && command.contains("BODY.PEEK[])") => {
+                let reply = {
+                    let mut google = google.lock().unwrap();
+                    google.imap_stalled += usize::from(google.imap_stalls);
+                    (!google.imap_stalls).then(|| fetch(&google, &command["UID FETCH ".len()..]))
+                };
+                let Some(mut reply) = reply else { continue };
+                reply.extend(format!("{tag} OK Success\r\n").into_bytes());
+                let _ = write.write_all(&reply).await;
+                continue;
             }
             _ if command.starts_with("UID FETCH ") => {
                 let mut reply = fetch(&google.lock().unwrap(), &command["UID FETCH ".len()..]);
@@ -199,10 +211,7 @@ async fn the_first_sync_comes_over_imap_and_spends_none_of_the_api_quota(db: PgP
     server.fill(mailbox());
     let (_, _, account) = server.gmail_user("ann@gmail.com").await;
     let connection = Connection::open(&server.state, &account).await.unwrap();
-    let sync = async || {
-        let account = db::account(&db, account.id).await.unwrap().unwrap();
-        connection.background().sync(&server.state, &account).await.unwrap()
-    };
+    let sync = async || pass(&server.state, &connection, account.id).await.unwrap();
 
     // The newest twenty of the inbox come first, as through the API.
     sync().await;
@@ -243,12 +252,42 @@ async fn the_api_syncs_when_imap_refuses(db: PgPool) {
     let (_, _, account) = server.gmail_user("ann@gmail.com").await;
     let connection = Connection::open(&server.state, &account).await.unwrap();
     for _ in 0..10 {
-        let account = db::account(&db, account.id).await.unwrap().unwrap();
-        let synced = connection.background().sync(&server.state, &account).await.unwrap();
+        let synced = pass(&server.state, &connection, account.id).await.unwrap();
         if !synced.syncing && !synced.backfilling {
             break;
         }
     }
     assert_eq!(stored(&db).await.len(), 50);
     assert_eq!(server.fetched().len(), 50, "every message came through the API");
+}
+
+#[sqlx::test]
+async fn a_sync_asked_for_waits_on_new_mail_and_not_on_imap(db: PgPool) {
+    let server = Server::start_with(db.clone(), |config| {
+        config.gmail_imap_url = Some(FAKE.into());
+        config.workers = true;
+    })
+    .await;
+    server.fill(mailbox());
+    server.stall_imap();
+    let (_, user_id, account) = server.gmail_user("ann@gmail.com").await;
+    server.state.workers.start(&server.state, account.id);
+    for _ in 0..200 {
+        if server.imap_stalled() > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(server.imap_stalled() > 0, "the worker fetches bodies ahead over IMAP");
+
+    let new = format!("{:x}", 0x18c0_0000 + 51);
+    let mut mailbox = mailbox();
+    mailbox.insert(0, (new.clone(), vec!["INBOX".into()]));
+    server.fill(mailbox);
+    server.history(vec![json!({ "messagesAdded": [{ "message": { "id": new, "threadId": new } }] })]);
+
+    let started = Instant::now();
+    server.state.workers.sync_now(&server.state, user_id).await;
+    assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+    assert!(stored(&db).await.iter().any(|message| message.provider_id == new), "the new mail is in");
 }

@@ -1,7 +1,6 @@
 use sqlx::PgPool;
 
-use super::Server;
-use crate::db;
+use super::{Server, pass};
 use crate::providers::Connection;
 
 /// Fifty messages at Gmail, newest first; every other one is in the inbox.
@@ -23,10 +22,7 @@ async fn the_inbox_comes_first_a_page_at_a_time_and_a_failed_pass_carries_on(db:
     server.fill(mailbox());
     let (_, _, account) = server.gmail_user("ann@gmail.com").await;
     let connection = Connection::open(&server.state, &account).await.unwrap();
-    let sync = async || {
-        let account = db::account(&db, account.id).await.unwrap().unwrap();
-        connection.background().sync(&server.state, &account).await
-    };
+    let sync = async || pass(&server.state, &connection, account.id).await;
     // What is stored, in the order it came, as the pages it came in.
     let stored = async |pages: &[usize]| -> Vec<Vec<String>> {
         let all: Vec<String> =

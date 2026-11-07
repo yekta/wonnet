@@ -463,9 +463,10 @@ impl Gmail {
         self.request(Method::GET, path, query, None).await
     }
 
+    /// Catches up on what changed, through the API.
     pub async fn sync(&self, state: &AppState, account: &AccountRow) -> anyhow::Result<Synced> {
         let mut sync: SyncState = serde_json::from_value(account.sync_state.clone()).unwrap_or_default();
-        let (labels, names) = self.sync_labels(state, account).await?;
+        let (labels, _) = self.sync_labels(state, account).await?;
 
         match sync.history_id.clone() {
             // The history id is kept before the listing starts, so what arrives meanwhile is
@@ -494,13 +495,23 @@ impl Gmail {
                 Err(error) => return Err(error),
             },
         }
+        db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
+        Ok(Synced { backfilling: !sync.refreshed || !sync.backfilled, syncing: !sync.refreshed })
+    }
 
+    /// A page more of the last 90 days until they are listed, then of older mail.
+    pub async fn fill(&self, state: &AppState, account: &AccountRow) -> anyhow::Result<Synced> {
+        let mut sync: SyncState = serde_json::from_value(account.sync_state.clone()).unwrap_or_default();
+        if sync.history_id.is_none() {
+            return Ok(Synced { backfilling: true, syncing: true });
+        }
+        if sync.refreshed && sync.backfilled {
+            return Ok(Synced { backfilling: false, syncing: false });
+        }
+        let (labels, names) = self.sync_labels(state, account).await?;
         if !sync.refreshed {
             self.refresh_page(state, account, &labels, &names, &mut sync).await?;
-            db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-            return Ok(Synced { backfilling: true, syncing: !sync.refreshed });
-        }
-        if !sync.backfilled {
+        } else {
             let query = "older_than:90d";
             let (below, validity) = (sync.backfill_below, sync.uid_validity);
             let page = self
@@ -525,7 +536,7 @@ impl Gmail {
             }
         }
         db::save_sync_state(&state.db, account.id, &json!(sync)).await?;
-        Ok(Synced { backfilling: !sync.backfilled, syncing: false })
+        Ok(Synced { backfilling: !sync.refreshed || !sync.backfilled, syncing: !sync.refreshed })
     }
 
     /// One page of the last 90 days: the inbox's until it is listed, then everyone else's. Up to
@@ -601,29 +612,34 @@ impl Gmail {
             return None;
         }
         loop {
-            let kept = slot.imap.is_some();
-            if !kept {
-                let connected = match self.access_token().await {
-                    Ok(token) => Imap::connect(url, &self.address, &token).await,
-                    Err(error) => Err(error),
-                };
-                match connected {
-                    Ok(imap) => slot.imap = Some(imap),
-                    Err(error) => {
-                        tracing::warn!("IMAP of {} is off for now: {error:#}", self.address);
-                        slot.failed_at = Some(Instant::now());
-                        return None;
+            // Taken out while in use, so a session left halfway by work given up on isn't kept.
+            let kept = slot.imap.take();
+            let fresh = kept.is_none();
+            let mut imap = match kept {
+                Some(imap) => imap,
+                None => {
+                    let connected = match self.access_token().await {
+                        Ok(token) => Imap::connect(url, &self.address, &token).await,
+                        Err(error) => Err(error),
+                    };
+                    match connected {
+                        Ok(imap) => imap,
+                        Err(error) => {
+                            tracing::warn!("IMAP of {} is off for now: {error:#}", self.address);
+                            slot.failed_at = Some(Instant::now());
+                            return None;
+                        }
                     }
                 }
-            }
-            let imap = slot.imap.as_mut()?;
-            match work(imap).await {
-                Ok(value) => return Some(value),
+            };
+            match work(&mut imap).await {
+                Ok(value) => {
+                    slot.imap = Some(imap);
+                    return Some(value);
+                }
                 Err(error) => {
-                    if let Some(imap) = slot.imap.take() {
-                        imap.logout().await;
-                    }
-                    if !kept {
+                    imap.logout().await;
+                    if fresh {
                         tracing::warn!("IMAP of {} failed, the API takes over for now: {error:#}", self.address);
                         slot.failed_at = Some(Instant::now());
                         return None;

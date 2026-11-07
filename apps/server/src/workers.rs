@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::db::{self, AccountRow, MessageRow};
 use crate::mime;
-use crate::providers::{Batch, Connection, Reauth, Refused, gmail};
+use crate::providers::{Batch, Connection, Reauth, Refused, Synced, gmail};
 
 const PREFETCH: i64 = 100;
 const MAX_ATTEMPTS: i32 = 5;
@@ -33,9 +33,24 @@ pub struct Workers {
 struct Running {
     wake: Arc<Notify>,
     connection: Arc<Mutex<Option<Connection>>>,
-    /// Counts the passes made, failed ones too, for those waiting on the next.
-    passes: watch::Sender<u64>,
+    passes: watch::Sender<Passes>,
     task: JoinHandle<()>,
+}
+
+/// The worker's catch-ups with the provider, counted for the syncs asked for.
+#[derive(Clone, Copy, Default)]
+struct Passes {
+    started: u64,
+    /// Every catch-up up to this one is over, failed ones too.
+    done: u64,
+    /// The catch-up a sync asked for waits on; the work in bulk gives way until it starts.
+    asked: u64,
+}
+
+impl Passes {
+    fn waiting(&self) -> bool {
+        self.asked > self.started
+    }
 }
 
 impl Workers {
@@ -61,7 +76,7 @@ impl Workers {
         }
         let wake = Arc::new(Notify::new());
         let connection = Arc::new(Mutex::new(None));
-        let passes = watch::Sender::new(0);
+        let passes = watch::Sender::new(Passes::default());
         let task = tokio::spawn(run(state.clone(), account_id, wake.clone(), connection.clone(), passes.clone()));
         running.insert(account_id, Running { wake, connection, passes, task });
     }
@@ -85,22 +100,27 @@ impl Workers {
         }
     }
 
-    /// Wakes the user's workers and waits until each has made a pass, at most `SYNC_NOW`.
+    /// Wakes the user's workers and waits until each has caught up, at most `SYNC_NOW`.
     pub async fn sync_now(&self, state: &AppState, user_id: Uuid) {
         let Ok(ids) = db::live_account_ids_of(&state.db, user_id).await else { return };
         let waits: Vec<_> = ids.into_iter().filter_map(|id| self.wake_for_pass(id)).collect();
         let _ = tokio::time::timeout(SYNC_NOW, futures_util::future::join_all(waits)).await;
     }
 
-    /// Wakes a worker and gives what waits for its next pass; nothing when it doesn't run.
+    /// Wakes a worker and gives what waits for a catch-up started after now; nothing when it
+    /// doesn't run.
     fn wake_for_pass(&self, account_id: Uuid) -> Option<impl Future<Output = ()>> {
         let running = self.running.lock().unwrap();
         let worker = running.get(&account_id).filter(|worker| !worker.task.is_finished())?;
+        let mut wanted = 0;
+        worker.passes.send_modify(|passes| {
+            wanted = passes.started + 1;
+            passes.asked = wanted;
+        });
         worker.wake.notify_one();
-        let before = *worker.passes.borrow();
         let mut passes = worker.passes.subscribe();
         Some(async move {
-            let _ = passes.wait_for(|passes| *passes > before).await;
+            let _ = passes.wait_for(|passes| passes.done >= wanted).await;
         })
     }
 
@@ -129,7 +149,7 @@ async fn run(
     account_id: Uuid,
     wake: Arc<Notify>,
     slot: Arc<Mutex<Option<Connection>>>,
-    passes: watch::Sender<u64>,
+    passes: watch::Sender<Passes>,
 ) {
     let mut backoff = Duration::from_secs(2);
     loop {
@@ -154,7 +174,10 @@ async fn run(
             }
         }
         *slot.lock().unwrap() = None;
-        passes.send_modify(|passes| *passes += 1);
+        passes.send_modify(|passes| {
+            passes.started = passes.started.max(passes.asked);
+            passes.done = passes.started;
+        });
         let _ = tokio::time::timeout(backoff, wake.notified()).await;
         backoff = (backoff * 2).min(Duration::from_secs(300));
     }
@@ -177,11 +200,12 @@ async fn work(
     account_id: Uuid,
     connection: &Connection,
     wake: &Notify,
-    passes: &watch::Sender<u64>,
+    passes: &watch::Sender<Passes>,
     backoff: &mut Duration,
 ) -> anyhow::Result<()> {
     let mut daily_at: Option<tokio::time::Instant> = None;
     loop {
+        passes.send_modify(|passes| passes.started += 1);
         let Some(account) = db::account(&state.db, account_id).await? else { return Ok(()) };
         if daily_at.is_none_or(|at| at.elapsed() > DAILY) {
             if let Err(error) = connection.watch(state).await {
@@ -200,8 +224,23 @@ async fn work(
         let status = if synced.syncing { "syncing" } else { "ready" };
         db::set_account_status(&state.db, &account, status).await?;
         *backoff = Duration::from_secs(2);
-        prefetch(state, &account, &background).await;
-        passes.send_modify(|passes| *passes += 1);
+        passes.send_modify(|passes| passes.done = passes.started);
+
+        // What's done in bulk gives way to a sync asked for, which runs next; what was under way
+        // is done again later.
+        let mut asked = passes.subscribe();
+        let filled = tokio::select! {
+            filled = in_bulk(state, account_id, &background) => filled?,
+            _ = asked.wait_for(Passes::waiting) => continue,
+        };
+        let synced = match filled {
+            Some(filled) if filled.syncing != synced.syncing => {
+                let status = if filled.syncing { "syncing" } else { "ready" };
+                db::set_account_status(&state.db, &account, status).await?;
+                filled
+            }
+            filled => filled.unwrap_or(synced),
+        };
         let wait = if synced.backfilling { Duration::from_secs(2) } else { state.config.poll_interval };
         let _ = tokio::time::timeout(wait, wake.notified()).await;
     }
@@ -294,6 +333,15 @@ pub(crate) async fn flush_ops(state: &AppState, account: &AccountRow, connection
 async fn delete_ops(state: &AppState, ids: &[i64]) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM provider_ops WHERE id = ANY($1)").bind(ids).execute(&state.db).await?;
     Ok(())
+}
+
+/// A page more of the first listing or of older mail, and the bodies of the newest inbox mail.
+/// What is left to list after it, if the provider lists in bulk.
+async fn in_bulk(state: &AppState, account_id: Uuid, connection: &Connection) -> anyhow::Result<Option<Synced>> {
+    let Some(account) = db::account(&state.db, account_id).await? else { return Ok(None) };
+    let filled = connection.fill(state, &account).await?;
+    prefetch(state, &account, connection).await;
+    Ok(filled)
 }
 
 async fn prefetch(state: &AppState, account: &AccountRow, connection: &Connection) {
