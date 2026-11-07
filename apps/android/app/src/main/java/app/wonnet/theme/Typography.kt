@@ -59,7 +59,7 @@ enum class TextStyle(val size: Float, val weight: FontWeight) {
     )
 }
 
-/** Words in a style of the scale, in its colour or in `color`. */
+/** Words in a style of the scale, in its colour or in `color`. `tabular` gives every digit the same width, for numbers that change. */
 @Composable
 fun Text(
     text: String,
@@ -69,8 +69,11 @@ fun Text(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Ellipsis,
     align: TextAlign? = null,
+    tabular: Boolean = false,
 ) {
-    val drawn = style.compose(color ?: style.color.color).let { if (align != null) it.copy(textAlign = align) else it }
+    val drawn = style.compose(color ?: style.color.color)
+        .let { if (align != null) it.copy(textAlign = align) else it }
+        .let { if (tabular) it.copy(fontFeatureSettings = "tnum") else it }
     BasicText(text, modifier, drawn, maxLines = maxLines, overflow = overflow)
 }
 

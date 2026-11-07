@@ -9,7 +9,7 @@ mod prefs;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::FutureExt as _;
 use futures::future::Shared;
@@ -33,6 +33,9 @@ pub struct Toast {
     pub message: String,
     pub action: Option<String>,
     pub seconds: u64,
+    /// Shows the seconds left until it goes: a message's undo delay.
+    pub countdown: bool,
+    pub shown: Instant,
 }
 
 type StoreAction = Box<dyn FnOnce(&mut Store, &mut Context<Store>)>;
@@ -1293,7 +1296,7 @@ impl Store {
                                 this.undo_send(op, cx)
                             });
                         } else if delay > 0 {
-                            this.show_with("Sending", "Undo", delay, cx, move |this, cx| this.undo_send(op, cx));
+                            this.show_countdown("Sending", "Undo", delay, cx, move |this, cx| this.undo_send(op, cx));
                         }
                     }
                     Err(error) => {
@@ -1526,7 +1529,14 @@ impl Store {
 
     pub fn show(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
         let id = self.next_id();
-        self.toast = Some(Toast { id, message: message.into(), action: None, seconds: 4 });
+        self.toast = Some(Toast {
+            id,
+            message: message.into(),
+            action: None,
+            seconds: 4,
+            countdown: false,
+            shown: Instant::now(),
+        });
         self.toast_action = None;
         self.hide_later(id, 4, cx);
         cx.notify();
@@ -1540,8 +1550,33 @@ impl Store {
         cx: &mut Context<Self>,
         perform: impl FnOnce(&mut Store, &mut Context<Store>) + 'static,
     ) {
+        self.show_toast(message, action, seconds, false, cx, perform);
+    }
+
+    /// A toast with an action that shows the seconds left until it goes.
+    pub fn show_countdown(
+        &mut self,
+        message: impl Into<String>,
+        action: &str,
+        seconds: u64,
+        cx: &mut Context<Self>,
+        perform: impl FnOnce(&mut Store, &mut Context<Store>) + 'static,
+    ) {
+        self.show_toast(message, action, seconds, true, cx, perform);
+    }
+
+    fn show_toast(
+        &mut self,
+        message: impl Into<String>,
+        action: &str,
+        seconds: u64,
+        countdown: bool,
+        cx: &mut Context<Self>,
+        perform: impl FnOnce(&mut Store, &mut Context<Store>) + 'static,
+    ) {
         let id = self.next_id();
-        self.toast = Some(Toast { id, message: message.into(), action: Some(action.into()), seconds });
+        let action = Some(action.into());
+        self.toast = Some(Toast { id, message: message.into(), action, seconds, countdown, shown: Instant::now() });
         self.toast_action = Some(Box::new(perform));
         self.hide_later(id, seconds.max(1), cx);
         cx.notify();

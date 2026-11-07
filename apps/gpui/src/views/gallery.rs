@@ -2,6 +2,7 @@
 //! "Component gallery".
 
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use gpui::prelude::*;
 use gpui::{AnyElement, App, Context, Entity, SharedString, Window, div, px};
@@ -14,13 +15,17 @@ use crate::ui::{self, ActionButton, Chip, ChoiceRow, IconButton, Lead, MenuEntry
 pub struct Gallery {
     store: Entity<Store>,
     on: bool,
+    /// When the gallery opened, which the countdown toast starts over from every ten seconds.
+    opened: Instant,
 }
 
 impl Gallery {
     pub fn new(store: Entity<Store>) -> Self {
-        Self { store, on: true }
+        Self { store, on: true, opened: Instant::now() }
     }
 }
+
+const COUNTDOWN: Duration = Duration::from_secs(10);
 
 fn section(title: &str, items: Vec<AnyElement>, cx: &App) -> AnyElement {
     div()
@@ -147,6 +152,7 @@ impl Render for Gallery {
                 )
                 .into_any_element(),
         ];
+        let countdown_lap = Duration::from_secs_f32(self.opened.elapsed().as_secs_f32() % COUNTDOWN.as_secs_f32());
         let surfaces = vec![
             ui::notice(
                 "Images from the sender were left out.",
@@ -158,7 +164,14 @@ impl Render for Gallery {
             .into_any_element(),
             ui::notice("The server couldn't be reached.", ui::Tone::Error, Some(Symbol::CircleAlert), None, cx)
                 .into_any_element(),
-            ui::toast("Archived.".into(), Some(("Undo".into(), Rc::new(|_, _, _| {}))), cx).into_any_element(),
+            ui::toast("Archived.".into(), Some(("Undo".into(), Rc::new(|_, _, _| {}))), None, cx).into_any_element(),
+            ui::toast(
+                "Sending".into(),
+                Some(("Undo".into(), Rc::new(|_, _, _| {}))),
+                Some((Instant::now() - countdown_lap, COUNTDOWN)),
+                cx,
+            )
+            .into_any_element(),
             ui::banner(
                 ui::Banner {
                     symbol: Symbol::CircleArrowDown,

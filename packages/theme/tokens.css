@@ -92,9 +92,9 @@
   --opacity-shadow: 0.1;
   --opacity-shadow-stronger: 0.16;
   --opacity-shadow-strongest: 0.32;
-  --opacity-color-tint: 0.12;
-  --opacity-color-tint-stronger: 0.2;
-  --opacity-color-tint-strongest: 0.28;
+  --opacity-color-tint: 0.16;
+  --opacity-color-tint-stronger: 0.24;
+  --opacity-color-tint-strongest: 0.32;
   --opacity-color-tint-chart: 0.25;
   --opacity-color-border: 0.6;
   --opacity-input-glass-tint: 0.8;
@@ -178,9 +178,9 @@
     --opacity-shadow: 0.25;
     --opacity-shadow-stronger: 0.4;
     --opacity-shadow-strongest: 0.75;
-    --opacity-color-tint: 0.08;
-    --opacity-color-tint-stronger: 0.14;
-    --opacity-color-tint-strongest: 0.2;
+    --opacity-color-tint: 0.12;
+    --opacity-color-tint-stronger: 0.18;
+    --opacity-color-tint-strongest: 0.24;
     --opacity-color-tint-chart: 0.2;
     --opacity-color-border: 0.6;
     --opacity-input-glass-tint: 0.8;

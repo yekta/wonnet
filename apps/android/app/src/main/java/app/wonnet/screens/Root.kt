@@ -7,15 +7,16 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -23,11 +24,19 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.wonnet.core.AppUpdater
@@ -36,6 +45,8 @@ import app.wonnet.core.Version
 import app.wonnet.theme.ControlSize
 import app.wonnet.theme.Dims
 import app.wonnet.theme.LocalDark
+import app.wonnet.theme.Opacity
+import app.wonnet.theme.SCALE
 import app.wonnet.theme.ShadowSize
 import app.wonnet.theme.Space
 import app.wonnet.theme.Symbol
@@ -47,9 +58,8 @@ import app.wonnet.ui.ActionButton
 import app.wonnet.ui.Banner
 import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.ConfirmDialog
-import app.wonnet.ui.LocalOnPopover
 import app.wonnet.ui.LocalSheetOverlay
-import app.wonnet.ui.PlainButton
+import app.wonnet.ui.Pressable
 import kotlinx.coroutines.delay
 
 /** Changed by the hardware keyboard's `/` to put the cursor in the search field. */
@@ -98,7 +108,12 @@ fun Root(store: MailStore) {
     }
 }
 
-/** The note at the bottom: a line of text and maybe an action, gone after a while. */
+/**
+ * The note at the bottom: a line of text and maybe an action, gone after a while. A toast that
+ * counts down (a message about to be sent) starts with a ring that empties until it is done. The
+ * ring and the action are capsules inset from the toast's edge by as much on every side, so their
+ * ends are concentric with the toast's.
+ */
 @Composable
 fun ToastView(store: MailStore) {
     val toast = store.toast
@@ -116,18 +131,58 @@ fun ToastView(store: MailStore) {
                 .height(Dims.searchHeight)
                 .shadow(ShadowSize.MD, CircleShape)
                 .background(Tokens.popover.color, CircleShape)
-                .border(Dims.hairline, Tokens.border.color, CircleShape)
-                .padding(horizontal = Space.l + 2.dp),
+                .border(Dims.hairline, Tokens.borderPopover.color, CircleShape)
+                .padding(ToastInset),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.l),
         ) {
-            Text(shown.message, TextStyle.Label, Modifier.weight(1f, fill = false), color = Tokens.foreground.color, maxLines = 2)
+            if (shown.countdown) Countdown(shown.shown, shown.duration, Modifier.size(ToastInner))
+            Text(
+                shown.message, TextStyle.Label,
+                Modifier
+                    .weight(1f, fill = false)
+                    .padding(start = if (shown.countdown) Space.s + 2.dp else Space.m, end = if (shown.action == null) Space.m else Space.xl),
+                color = Tokens.foreground.color, maxLines = 2,
+            )
             shown.action?.let { action ->
-                CompositionLocalProvider(LocalOnPopover provides true) {
-                    PlainButton(store::toastTapped) { Text(action, TextStyle.LabelStrong, color = Tokens.primary.color) }
+                Pressable(store::toastTapped) { hovered ->
+                    Box(
+                        Modifier
+                            .defaultMinSize(minWidth = ToastInner * 1.6f)
+                            .height(ToastInner)
+                            .background(if (hovered) Tokens.primary.opacity(Opacity.colorTint).color else Color.Transparent, CircleShape)
+                            .border(Dims.hairline, Tokens.primary.opacity(Opacity.colorBorder).color, CircleShape)
+                            .padding(horizontal = Space.l),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(action, TextStyle.LabelStrong, color = Tokens.primary.color, maxLines = 1) }
                 }
             }
         }
+    }
+}
+
+private val ToastInset = Space.xs * SCALE
+private val ToastInner = Dims.searchHeight - ToastInset * 2
+
+/** The seconds left in a ring that empties as they run out. */
+@Composable
+private fun Countdown(start: Long, duration: Long, modifier: Modifier) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(start) { while (true) withFrameMillis { now = System.currentTimeMillis() } }
+    val left = (duration - (now - start)).coerceAtLeast(0)
+    val fraction = if (duration > 0) left.toFloat() / duration else 0f
+    val track = Tokens.popoverAccentStronger.color
+    val arc = Tokens.foreground.color
+    Box(
+        modifier.drawBehind {
+            val line = 2.5.dp.toPx()
+            val inset = Offset(line / 2, line / 2)
+            val ring = Size(size.width - line, size.height - line)
+            drawArc(track, 0f, 360f, false, inset, ring, style = Stroke(line))
+            drawArc(arc, -90f, 360f * fraction, false, inset, ring, style = Stroke(line, cap = StrokeCap.Round))
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("${(left + 999) / 1000}", TextStyle.LabelStrong, color = Tokens.foreground.color, tabular = true)
     }
 }
 
