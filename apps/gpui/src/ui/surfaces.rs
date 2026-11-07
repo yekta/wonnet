@@ -2,9 +2,12 @@
 //! banner and the toast at the bottom, notices and the empty state.
 
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use gpui::prelude::*;
-use gpui::{AnyElement, App, Div, MouseButton, SharedString, Window, div, px};
+use gpui::{
+    AnyElement, App, Bounds, Div, MouseButton, Path, PathBuilder, Pixels, Point, SharedString, Window, canvas, div, px,
+};
 
 use super::{ActionButton, IconButton, Surface, Symbol, Variant, icon, line, paragraph_in, rule, spinner};
 use crate::theme::*;
@@ -273,35 +276,141 @@ pub fn banner(banner: Banner, cx: &App) -> impl IntoElement + use<> {
         )
 }
 
-/// The note at the bottom: a line and maybe an action, gone after a while.
+/// The note at the bottom: a line and maybe an action, gone after a while. A toast that counts
+/// down (a message about to be sent) starts with a ring that empties until it is done: `shown`
+/// and how long it lasts. The ring and the action are capsules inset from the toast's edge by as
+/// much on every side, so their ends are concentric with the toast's.
 pub fn toast(
     message: SharedString,
     action: Option<(SharedString, super::OnClick)>,
+    countdown: Option<(Instant, Duration)>,
     cx: &App,
 ) -> impl IntoElement + use<> {
+    let has_action = action.is_some();
     div()
         .flex()
         .items_center()
-        .gap(px(space::L))
-        .px(px(space::L + 2.))
-        .h(px(size::SEARCH))
+        .p(px(TOAST_INSET))
+        .h(px(size::LARGE))
         .rounded_full()
         .bg(cx.color(POPOVER))
         .border_1()
-        .border_color(cx.color(BORDER))
+        .border_color(cx.color(BORDER_POPOVER))
         .shadow(cx.shadow(ShadowSize::Md, opacity::SHADOW))
         .occlude()
-        .child(div().text_in(TextStyle::Label, FOREGROUND, cx).whitespace_nowrap().child(message))
+        .when_some(countdown, |toast, (shown, duration)| toast.child(toast_countdown(shown, duration, cx)))
+        .child(
+            div()
+                .text_in(TextStyle::Label, FOREGROUND, cx)
+                .whitespace_nowrap()
+                .pl(px(if countdown.is_some() { space::S + 2. } else { space::M }))
+                .pr(px(if has_action { space::XL } else { space::M }))
+                .child(message),
+        )
         .when_some(action, |toast, (title, on_click)| {
             toast.child(
-                super::PlainButton::new(
-                    "toast-action",
-                    div().text_in(TextStyle::LabelStrong, PRIMARY, cx).child(title),
-                )
-                .surface(Surface::Popover)
-                .on_click(move |event, window, cx| on_click(event, window, cx)),
+                div()
+                    .id("toast-action")
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .h(px(TOAST_INNER))
+                    .min_w(px(TOAST_INNER * 1.6))
+                    .px(px(space::L))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(cx.tint(PRIMARY, opacity::COLOR_BORDER))
+                    .hover(|face| face.bg(cx.tint(PRIMARY, opacity::COLOR_TINT)))
+                    .cursor_pointer()
+                    .text_in(TextStyle::LabelStrong, PRIMARY, cx)
+                    .whitespace_nowrap()
+                    .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+                    .on_click(move |event, window, cx| {
+                        cx.stop_propagation();
+                        on_click(event, window, cx);
+                    })
+                    .child(title),
             )
         })
+}
+
+const TOAST_INSET: f32 = space::XS;
+/// The height of what is in a toast: the ring and the action.
+const TOAST_INNER: f32 = size::LARGE - TOAST_INSET * 2.;
+const COUNTDOWN_LINE: f32 = 2.5;
+
+/// The seconds left in a ring that empties as they run out, drawn again every frame.
+fn toast_countdown(shown: Instant, duration: Duration, cx: &App) -> impl IntoElement + use<> {
+    let left = duration.saturating_sub(shown.elapsed());
+    let fraction = if duration.is_zero() { 0. } else { left.as_secs_f32() / duration.as_secs_f32() };
+    let track = cx.color(POPOVER_ACCENT_STRONGER);
+    let arc = cx.color(FOREGROUND);
+    div()
+        .relative()
+        .flex_none()
+        .size(px(TOAST_INNER))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    let center = bounds.center();
+                    let radius = (TOAST_INNER - COUNTDOWN_LINE) / 2.;
+                    if let Some(path) = ring_path(center, radius, 1.) {
+                        window.paint_path(path, track);
+                    }
+                    if let Some(path) = ring_path(center, radius, fraction) {
+                        window.paint_path(path, arc);
+                    }
+                    if fraction > 0. {
+                        for end in [0., fraction] {
+                            let point = ring_point(center, radius, end);
+                            let cap = gpui::size(px(COUNTDOWN_LINE), px(COUNTDOWN_LINE));
+                            let origin = point - gpui::point(px(COUNTDOWN_LINE / 2.), px(COUNTDOWN_LINE / 2.));
+                            window.paint_quad(
+                                gpui::fill(Bounds::new(origin, cap), arc).corner_radii(px(COUNTDOWN_LINE / 2.)),
+                            );
+                        }
+                    }
+                    if !left.is_zero() {
+                        window.request_animation_frame();
+                    }
+                },
+            )
+            .absolute()
+            .inset_0(),
+        )
+        .child(
+            div()
+                .text_in(TextStyle::LabelStrong, FOREGROUND, cx)
+                .child(SharedString::from((left.as_secs_f32().ceil() as u64).to_string())),
+        )
+}
+
+/// The point a `fraction` of the way round a ring, clockwise from the top.
+fn ring_point(center: Point<Pixels>, radius: f32, fraction: f32) -> Point<Pixels> {
+    let angle = std::f32::consts::TAU * fraction - std::f32::consts::FRAC_PI_2;
+    center + gpui::point(px(radius * angle.cos()), px(radius * angle.sin()))
+}
+
+/// A line along a `fraction` of a ring, clockwise from the top.
+fn ring_path(center: Point<Pixels>, radius: f32, fraction: f32) -> Option<Path<Pixels>> {
+    if fraction <= 0. {
+        return None;
+    }
+    let steps = (fraction * 96.).ceil() as usize;
+    let mut path = PathBuilder::stroke(px(COUNTDOWN_LINE));
+    path.move_to(ring_point(center, radius, 0.));
+    for step in 1..=steps {
+        path.line_to(ring_point(center, radius, fraction * step as f32 / steps as f32));
+    }
+    if fraction >= 1. {
+        path.close();
+    }
+    path.build().ok()
 }
 
 /// Cancel and Save under a form, on `surface`.

@@ -635,7 +635,8 @@ impl MailWindow {
                     std::rc::Rc::new(move |_, _, cx| store.update(cx, |store, cx| store.toast_tapped(cx)));
                 (SharedString::from(title), on_click)
             });
-            ui::toast(toast.message.into(), action, cx).into_any_element()
+            let countdown = toast.countdown.then(|| (toast.shown, Duration::from_secs(toast.seconds)));
+            ui::toast(toast.message.into(), action, countdown, cx).into_any_element()
         });
         let banner = self.update_banner(cx);
         if toast.is_some() || banner.is_some() {

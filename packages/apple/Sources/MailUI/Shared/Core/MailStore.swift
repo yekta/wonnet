@@ -15,6 +15,9 @@ struct Toast: Identifiable, Equatable {
     let message: String
     var action: String?
     var duration: TimeInterval = 4
+    /// Shows the seconds left until it goes: a message's undo delay.
+    var countdown = false
+    let shown = Date()
 
     static func == (lhs: Toast, rhs: Toast) -> Bool { lhs.id == rhs.id }
 }
@@ -1071,7 +1074,7 @@ public final class MailStore {
                 if let sendAt {
                     show("Sending \(sendAt.formatted(date: .abbreviated, time: .shortened)).", action: "Undo") { self.undoSend(sent.opId) }
                 } else if undoDelay > 0 {
-                    show("Sending", action: "Undo", duration: TimeInterval(undoDelay)) { self.undoSend(sent.opId) }
+                    show("Sending", action: "Undo", duration: TimeInterval(undoDelay), countdown: true) { self.undoSend(sent.opId) }
                 }
             } catch {
                 show(error.localizedDescription)
@@ -1326,8 +1329,8 @@ public final class MailStore {
 
     // MARK: Toasts
 
-    func show(_ message: String, action: String? = nil, duration: TimeInterval = 4, perform: (() -> Void)? = nil) {
-        toast = Toast(message: message, action: action, duration: duration)
+    func show(_ message: String, action: String? = nil, duration: TimeInterval = 4, countdown: Bool = false, perform: (() -> Void)? = nil) {
+        toast = Toast(message: message, action: action, duration: duration, countdown: countdown)
         toastAction = perform
     }
 

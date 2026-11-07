@@ -26,8 +26,15 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** A note at the bottom of the screen, sometimes with something to do about it. */
-data class Toast(val message: String, val action: String? = null, val duration: Long = 4000, val id: String = UUID.randomUUID().toString())
+/** A note at the bottom of the screen, sometimes with something to do about it. `countdown` shows the seconds left until it goes: a message's undo delay. */
+data class Toast(
+    val message: String,
+    val action: String? = null,
+    val duration: Long = 4000,
+    val countdown: Boolean = false,
+    val shown: Long = System.currentTimeMillis(),
+    val id: String = UUID.randomUUID().toString(),
+)
 
 /** Threads being labelled, or moved to a label. */
 data class Labeling(val threads: List<String>, val move: Boolean, val id: String = UUID.randomUUID().toString())
@@ -940,7 +947,7 @@ class MailStore(private val context: Context) {
                     val time = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(sendAt))
                     show("Sending $time.", "Undo") { undoSend(opId) }
                 } else if (undoDelay > 0) {
-                    show("Sending", "Undo", undoDelay * 1000L) { undoSend(opId) }
+                    show("Sending", "Undo", undoDelay * 1000L, countdown = true) { undoSend(opId) }
                 }
             } catch (error: CoreError) {
                 show(error.message)
@@ -1191,8 +1198,8 @@ class MailStore(private val context: Context) {
 
     // Toasts
 
-    fun show(message: String, action: String? = null, duration: Long = 4000, perform: (() -> Unit)? = null) {
-        toast = Toast(message, action, duration)
+    fun show(message: String, action: String? = null, duration: Long = 4000, countdown: Boolean = false, perform: (() -> Unit)? = null) {
+        toast = Toast(message, action, duration, countdown)
         toastAction = perform
     }
 

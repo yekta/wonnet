@@ -46,7 +46,12 @@ interface Notice {
   undo?: Thread[]
   /** The draft that was sent, opened again by Undo. */
   reopen?: Draft
+  /** When a send started, for the toast's countdown to its going out. */
+  sending?: number
 }
+
+/** How long a toast stays, and a send can be undone: the Mac app's default undo delay. */
+const TOAST_SECONDS = 5
 
 const FONT = '"Avenir Next", Avenir, "DM Sans Variable", sans-serif'
 
@@ -73,7 +78,7 @@ export function Demo() {
 
   useEffect(() => {
     if (!notice) return
-    const timer = setTimeout(() => setNotice(null), 5000)
+    const timer = setTimeout(() => setNotice(null), TOAST_SECONDS * 1000)
     return () => clearTimeout(timer)
   }, [notice])
 
@@ -216,7 +221,12 @@ export function Demo() {
     if (!draft) return
     const ago = -(Date.now() - (now?.getTime() ?? Date.now())) / 60_000
     const text = draft.text.trim() || "(no message)"
-    setNotice({ message: "Sent", undo: threads, reopen: draft })
+    setNotice({
+      message: "Sending",
+      undo: threads,
+      reopen: draft,
+      sending: Date.now(),
+    })
     if (draft.replyTo) {
       change([draft.replyTo], (thread) => ({
         messages: [...thread.messages, { mine: true, text, ago }],
@@ -592,6 +602,11 @@ export function Demo() {
               message={notice.message}
               action={notice.undo ? "Undo" : undefined}
               onAction={undo}
+              countdown={
+                notice.sending === undefined
+                  ? undefined
+                  : { start: notice.sending, duration: TOAST_SECONDS }
+              }
             />
           )}
         </div>

@@ -6,7 +6,7 @@ import {
   XIcon,
   type LucideIcon,
 } from "lucide-react"
-import type { ComponentProps, ReactNode } from "react"
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react"
 
 /** The apps' components (packages/apple/Sources/MailUI/Shared/Views/UI), drawn with tokens.css. */
 
@@ -97,7 +97,7 @@ export function ActionButton({
   )
 }
 
-/** A button that is only its content (a sender, a word in a toast), on a rounded fill when
+/** A button that is only its content (a sender), on a rounded fill when
  * hovered, never under 28px. `flush` gives the fill room all round and pulls it out by as much. */
 export function PlainButton({
   flush,
@@ -338,32 +338,103 @@ export function Sheet({
   )
 }
 
+/** The note at the bottom: a line of text and maybe an action. One that counts down (a message
+ * about to be sent) starts with a ring that empties until it is done. The ring and the action are
+ * 32px capsules inset 6px from the toast's edge on every side (5px of padding inside its 1px
+ * border), so their ends are concentric with the toast's. */
 export function Toast({
   message,
   action,
   onAction,
+  countdown,
 }: {
   message: string
   action?: string
   onAction?: () => void
+  /** When it started, in milliseconds since the epoch, and how many seconds it lasts. */
+  countdown?: { start: number; duration: number }
 }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-5 z-50 flex justify-center">
       <div
-        className="pointer-events-auto flex h-11 items-center gap-4 rounded-full border border-(--border) bg-(--popover) px-[18px] text-[13px] text-(--foreground) [--button-hover:var(--popover-accent-stronger)]"
+        className="pointer-events-auto flex h-11 items-center rounded-full border border-(--border-popover) bg-(--popover) p-[5px]"
         style={{ boxShadow: shadow("md", "shadow-stronger") }}
       >
-        {message}
+        {countdown && <Countdown {...countdown} />}
+        <span
+          className={cn(
+            "text-[13px] whitespace-nowrap text-(--foreground)",
+            countdown ? "pl-2.5" : "pl-3",
+            action ? "pr-5" : "pr-3"
+          )}
+        >
+          {message}
+        </span>
         {action && (
-          <PlainButton
+          <button
+            type="button"
             onClick={onAction}
-            className="font-medium text-(--primary)"
+            className="flex h-8 min-w-[51px] items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-color-border)*100%),transparent)] px-4 text-[13px] font-medium text-(--primary) hover:bg-[color-mix(in_srgb,var(--primary)_calc(var(--opacity-color-tint)*100%),transparent)]"
           >
             {action}
-          </PlainButton>
+          </button>
         )}
       </div>
     </div>
+  )
+}
+
+const RING_LINE = 2.5
+const RING_RADIUS = (32 - RING_LINE) / 2
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS
+
+/** The seconds left in a ring that empties, from the top and clockwise, as they run out. */
+function Countdown({ start, duration }: { start: number; duration: number }) {
+  const [left, setLeft] = useState(duration)
+  useEffect(() => {
+    let frame = 0
+    const tick = () => {
+      const remaining = Math.max(0, duration - (Date.now() - start) / 1000)
+      setLeft(remaining)
+      if (remaining > 0) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [start, duration])
+
+  const fraction = duration > 0 ? left / duration : 0
+  return (
+    <span className="relative flex size-8 shrink-0 items-center justify-center">
+      <svg
+        className="absolute inset-0 -rotate-90"
+        viewBox="0 0 32 32"
+        aria-hidden
+      >
+        <circle
+          cx={16}
+          cy={16}
+          r={RING_RADIUS}
+          fill="none"
+          strokeWidth={RING_LINE}
+          className="stroke-(--popover-accent-stronger)"
+        />
+        {fraction > 0 && (
+          <circle
+            cx={16}
+            cy={16}
+            r={RING_RADIUS}
+            fill="none"
+            strokeWidth={RING_LINE}
+            strokeLinecap="round"
+            strokeDasharray={`${fraction * RING_LENGTH} ${RING_LENGTH}`}
+            className="stroke-(--foreground)"
+          />
+        )}
+      </svg>
+      <span className="relative text-[13px] font-medium text-(--foreground) tabular-nums">
+        {Math.ceil(left)}
+      </span>
+    </span>
   )
 }
 
