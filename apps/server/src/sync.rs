@@ -18,6 +18,9 @@ use uuid::Uuid;
 use crate::ops::{self, Outcome};
 use crate::{AppState, api, changes, db, search, workers};
 
+/// A catch-up that sends this many messages or more is logged.
+const LARGE_CATCH_UP: usize = 500;
+
 pub async fn socket(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
     ws.on_upgrade(move |socket| run(state, socket))
 }
@@ -120,6 +123,8 @@ impl Session {
     }
 
     async fn send_changes(&mut self) -> bool {
+        let (began, from) = (tokio::time::Instant::now(), self.cursor);
+        let mut sent_messages = 0;
         loop {
             let mut batch = match changes::read(&self.state.db, self.user_id, self.cursor, self.ahead).await {
                 Ok(batch) => batch,
@@ -149,6 +154,7 @@ impl Session {
                 .chain(preferences.iter().map(|preference| preference.rev))
                 .max();
             let (cursor, more) = (*cursor, *more);
+            sent_messages += messages.len();
             if (!empty || !self.caught_up || raised) && !self.send(batch).await {
                 return false;
             }
@@ -156,6 +162,12 @@ impl Session {
             self.cursor = cursor;
             self.ahead = self.ahead.max(sent.unwrap_or(cursor)).max(cursor);
             if !more {
+                if sent_messages >= LARGE_CATCH_UP {
+                    let (user_id, took) = (self.user_id, began.elapsed());
+                    tracing::info!(
+                        "sent user {user_id} {sent_messages} messages from rev {from} to {cursor} in {took:?}"
+                    );
+                }
                 return true;
             }
         }
