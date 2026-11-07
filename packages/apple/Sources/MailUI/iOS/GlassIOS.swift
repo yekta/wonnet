@@ -5,13 +5,16 @@ extension View {
     /// The system's search field, in the bottom bar where the system has it there, with its
     /// symbol in the foreground and its placeholder in the colour every field's has. The field
     /// ignores both colours of SwiftUI, so they are set on the field once it is in the window.
+    /// The navigation bar stays while typing, so the title and the close don't go away.
     @ViewBuilder func searchField(text: Binding<String>, prompt: String) -> some View {
         if #available(iOS 26, *) {
             searchable(text: text, prompt: prompt)
+                .searchPresentationToolbarBehavior(.avoidHidingContent)
                 .toolbar { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
                 .background(SearchFieldColors(prompt: prompt))
         } else {
             searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: prompt)
+                .searchPresentationToolbarBehavior(.avoidHidingContent)
                 .background(SearchFieldColors(prompt: prompt))
         }
     }
