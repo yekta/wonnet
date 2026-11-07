@@ -116,6 +116,10 @@ enum Theme {
     /// A bar across the window: the top bar, a sheet's header, a toolbar. On the Mac the top bar
     /// is the window's toolbar, with the window's buttons in its middle.
     static let barHeight: CGFloat = 52
+    /// How far a control's face in a bar is from the bar's edges: its top, its rule and its sides.
+    static let barInset = (barHeight - ControlSize.regular.height * Platform.scale) / 2
+    /// What keeps a button's face `barInset` from a bar's side, its hit area padded around it.
+    static let barButtonInset = barInset - buttonGap / 2
     /// A search field in a sheet.
     static let searchHeight: CGFloat = ControlSize.large.height
     /// A popup under a field: suggestions, a combobox's list.

@@ -97,6 +97,10 @@ object Dims {
     val attachmentPreviewHeight = (96 * SCALE).dp
     /** A bar across the screen: the top bar, a sheet's header, a toolbar. */
     val barHeight = 52.dp
+    /** How far a control's face in a bar is from the bar's edges: its top, its rule and its sides. */
+    val barInset = (barHeight - ControlSize.Regular.scaled) / 2
+    /** What keeps a button's face `barInset` from a bar's side, its hit area padded around it. */
+    val barButtonInset = barInset - buttonGap / 2
     val searchHeight = ControlSize.Large.scaled
     val popupWidth = 380.dp
     /** Room after the sidebar's last row, above its footer. */

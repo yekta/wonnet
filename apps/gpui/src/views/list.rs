@@ -577,7 +577,7 @@ fn list_header(store: &Entity<Store>, compact: bool, cx: &App) -> Option<impl In
     if !shows {
         return None;
     }
-    let edge = if compact { space::L } else { 0. };
+    let edge = if compact { size::BAR_INSET } else { 0. };
     let chosen = state
         .splits
         .iter()
@@ -678,15 +678,7 @@ impl Render for ThreadList {
             .flex()
             .flex_col()
             .when_some(header, |page, header| {
-                page.child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .justify_center()
-                        .pt(px(if compact { 0. } else { space::L }))
-                        .px(px(header_inset))
-                        .child(header),
-                )
+                page.child(div().w_full().flex().justify_center().px(px(header_inset)).child(header))
             })
             .child(div().flex_1().min_h_0().relative().child(list).when(empty, |area| {
                 area.child(div().absolute().inset_0().child(ui::empty_state(
