@@ -23,6 +23,8 @@ const MAX_ATTEMPTS: i32 = 5;
 const DAILY: Duration = Duration::from_secs(24 * 60 * 60);
 /// How long a client asking for a sync now waits for the pass.
 const SYNC_NOW: Duration = Duration::from_secs(20);
+/// A pass that takes longer is logged with where its time went.
+const SLOW_PASS: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 pub struct Workers {
@@ -103,8 +105,20 @@ impl Workers {
     /// Wakes the user's workers and waits until each has caught up, at most `SYNC_NOW`.
     pub async fn sync_now(&self, state: &AppState, user_id: Uuid) {
         let Ok(ids) = db::live_account_ids_of(&state.db, user_id).await else { return };
-        let waits: Vec<_> = ids.into_iter().filter_map(|id| self.wake_for_pass(id)).collect();
-        let _ = tokio::time::timeout(SYNC_NOW, futures_util::future::join_all(waits)).await;
+        let asked = tokio::time::Instant::now();
+        let waits: Vec<_> = ids
+            .into_iter()
+            .filter_map(|id| {
+                let wait = self.wake_for_pass(id)?;
+                Some(async move {
+                    wait.await;
+                    tracing::info!("account {id} caught up {:?} after user {user_id} asked", asked.elapsed());
+                })
+            })
+            .collect();
+        if tokio::time::timeout(SYNC_NOW, futures_util::future::join_all(waits)).await.is_err() {
+            tracing::warn!("a sync user {user_id} asked for took over {SYNC_NOW:?}");
+        }
     }
 
     /// Wakes a worker and gives what waits for a catch-up started after now; nothing when it
@@ -206,6 +220,7 @@ async fn work(
     let mut daily_at: Option<tokio::time::Instant> = None;
     loop {
         passes.send_modify(|passes| passes.started += 1);
+        let began = tokio::time::Instant::now();
         let Some(account) = db::account(&state.db, account_id).await? else { return Ok(()) };
         if daily_at.is_none_or(|at| at.elapsed() > DAILY) {
             if let Err(error) = connection.watch(state).await {
@@ -219,8 +234,13 @@ async fn work(
         }
         create_labels(state, &account, connection).await?;
         flush_ops(state, &account, connection).await?;
+        let flushed = began.elapsed();
         let background = connection.background();
         let synced = background.sync(state, &account).await?;
+        if began.elapsed() > SLOW_PASS {
+            let address = &account.address;
+            tracing::info!("the pass of {address} took {:?}, {flushed:?} of it before syncing", began.elapsed());
+        }
         let status = if synced.syncing { "syncing" } else { "ready" };
         db::set_account_status(&state.db, &account, status).await?;
         *backoff = Duration::from_secs(2);

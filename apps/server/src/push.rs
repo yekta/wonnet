@@ -177,14 +177,18 @@ async fn push_user(state: &AppState, user_id: Uuid) -> anyhow::Result<()> {
     .bind(user_id)
     .fetch_all(db)
     .await?;
-    let badge: i64 = sqlx::query_scalar(
-        "SELECT count(DISTINCT (account_id, thread_id)) FROM messages
-         WHERE user_id = $1 AND unread AND NOT deleted AND 'inbox' = ANY(labels)",
+    let unread: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT account_id, count(DISTINCT thread_id) FROM messages
+         WHERE user_id = $1 AND unread AND NOT deleted AND 'inbox' = ANY(labels) GROUP BY account_id",
     )
     .bind(user_id)
-    .fetch_one(db)
+    .fetch_all(db)
     .await?;
+    let badge: i64 = unread.iter().map(|(_, count)| count).sum();
     let badge_changed = state.pusher.badges.lock().unwrap().insert(user_id, badge) != Some(badge);
+    if badge_changed {
+        tracing::info!("badge {badge} of user {user_id}, by account: {unread:?}");
+    }
 
     let settled: HashSet<String> = settled.iter().map(|(account, thread)| thread_key(*account, thread)).collect();
     let settled: Vec<String> = settled.into_iter().collect();
