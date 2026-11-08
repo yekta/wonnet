@@ -854,7 +854,7 @@ class MailStore(private val context: Context) {
 
     // Writing
 
-    /** A new message from the first account. */
+    /** A new message from the shown mailbox's account, or the address last sent from. */
     fun newMessage() = startDraft(emptyList())
 
     /** A new message to someone, from the contact page. */
@@ -863,7 +863,7 @@ class MailStore(private val context: Context) {
     private fun startDraft(to: List<Address>) {
         scope.launch {
             try {
-                val made = bridge.call("new_draft") { DraftReply.read(it.objectOrEmpty) }
+                val made = bridge.call("new_draft", mapOf("mailbox" to mailbox)) { DraftReply.read(it.objectOrEmpty) }
                 compose = Compose(made.draft.copy(to = to), made.from, false)
             } catch (error: CoreError) {
                 show(error.message)

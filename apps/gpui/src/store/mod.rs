@@ -1170,7 +1170,8 @@ impl Store {
     }
 
     fn start_draft(&mut self, to: Vec<Address>, cx: &mut Context<Self>) {
-        self.ask_or_show(Command::NewDraft { account: None }, cx, move |this, made: DraftReply, cx| {
+        let command = Command::NewDraft { mailbox: Some(self.mailbox.clone()) };
+        self.ask_or_show(command, cx, move |this, made: DraftReply, cx| {
             let mut draft = made.draft;
             draft.to = to;
             this.open_compose(ComposeState::new(draft, made.from), cx);

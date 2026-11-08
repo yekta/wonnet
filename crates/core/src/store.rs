@@ -30,7 +30,7 @@ use crate::api::{AccountView, Filter, LabelChip, Mailbox, NewMail, Person, Split
 use crate::render::{dates, drafts, rows};
 use crate::search::{self, Condition, Query};
 
-const SCHEMA_VERSION: &str = "6";
+const SCHEMA_VERSION: &str = "7";
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -62,8 +62,8 @@ CREATE TABLE thread_people (thread TEXT NOT NULL, email TEXT NOT NULL, last_date
     PRIMARY KEY (thread, email));
 CREATE INDEX thread_people_by_email ON thread_people(email, last_date DESC);
 CREATE TABLE contacts (email TEXT PRIMARY KEY, name TEXT, sent INTEGER NOT NULL, received INTEGER NOT NULL,
-    last INTEGER NOT NULL);
-CREATE INDEX contacts_by_rank ON contacts((sent * 4 + received) DESC, last DESC);
+    last INTEGER NOT NULL, rank REAL);
+CREATE INDEX contacts_by_rank ON contacts(rank DESC);
 CREATE TABLE contact_words (word TEXT NOT NULL, email TEXT NOT NULL, PRIMARY KEY (word, email)) WITHOUT ROWID;
 CREATE TABLE address_book (email TEXT PRIMARY KEY, name TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -306,7 +306,7 @@ impl Store {
         if meta("schema").as_deref() == Some(SCHEMA_VERSION) {
             return Ok(Self { db, path: path.to_path_buf() });
         }
-        let kept: Vec<(&str, String)> = ["server", "server_chosen", "token", "ui"]
+        let kept: Vec<(&str, String)> = ["server", "server_chosen", "token", "ui", "last_sender"]
             .into_iter()
             .filter_map(|key| meta(key).map(|value| (key, value)))
             .collect();
@@ -1217,15 +1217,14 @@ impl Store {
     // ---------- people ----------
 
     /// The people whose name or address starts with every word of `query`: the address itself,
-    /// then the addresses and the names it begins, then the rest, each those the user wrote to
-    /// most first.
+    /// then the people it names, then those it only matches by their domain, each by `rank`.
     pub fn contacts(&self, query: &str, limit: usize) -> Result<Vec<Address>> {
         let query = query.trim().to_lowercase();
         let words: Vec<&str> = query.split_whitespace().collect();
         let Some(first) = words.first() else {
             let mut statement = self.db.prepare_cached(
                 "SELECT c.email, COALESCE(b.name, c.name), c.sent FROM contacts c LEFT JOIN address_book b USING (email)
-                 ORDER BY (c.sent * 4 + c.received) DESC, c.last DESC LIMIT ?1",
+                 ORDER BY c.rank DESC LIMIT ?1",
             )?;
             let rows = statement.query_map([(limit * 4) as i64], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
             let mut found = Vec::new();
@@ -1241,7 +1240,7 @@ impl Store {
         let mut statement = self.db.prepare_cached(
             "SELECT c.email, COALESCE(b.name, c.name), c.sent FROM contacts c LEFT JOIN address_book b USING (email)
              WHERE c.email IN (SELECT email FROM contact_words WHERE word >= ?1 AND word < ?2)
-             ORDER BY (c.sent * 4 + c.received) DESC, c.last DESC",
+             ORDER BY c.rank DESC",
         )?;
         let rows = statement.query_map(params![first, format!("{first}\u{10FFFF}")], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
@@ -1257,7 +1256,7 @@ impl Store {
                 continue;
             }
             let address = Address { name, email };
-            found.push((closeness(&address, &query), address));
+            found.push((closeness(&address, &query, first), address));
         }
         found.sort_by_key(|(closeness, _)| *closeness);
         Ok(found.into_iter().map(|(_, address)| address).take(limit).collect())
@@ -1511,17 +1510,15 @@ fn named(db: &Connection, address: &Address) -> Result<Address> {
 
 /// How closely a contact matches `query`, closest first: its address, an address it begins,
 /// a name it begins, a word within.
-fn closeness(address: &Address, query: &str) -> u8 {
+fn closeness(address: &Address, query: &str, first_word: &str) -> u8 {
     if address.email == query {
         return 0;
     }
-    if address.email.starts_with(query) {
-        return 1;
-    }
-    if address.name.as_deref().is_some_and(|name| name.to_lowercase().starts_with(query)) {
-        return 2;
-    }
-    3
+    let domain = address.email.split_once('@').map_or("", |(_, domain)| domain);
+    let named = contact_words(&address.email, address.name.as_deref())
+        .iter()
+        .any(|word| word != domain && word.starts_with(first_word));
+    if named { 1 } else { 2 }
 }
 
 /// The words a contact is found by: its address, the address's parts, its name's words. An
@@ -1565,6 +1562,23 @@ fn index_contact(tx: &Transaction, email: &str) -> Result<()> {
     Ok(())
 }
 
+/// How much writing to someone, copying them and hearing from them count towards their rank.
+const TO_WEIGHT: f64 = 1.0;
+const CC_WEIGHT: f64 = 0.5;
+const RECEIVED_WEIGHT: f64 = 0.25;
+/// How long it takes a message to count half as much towards a contact's rank.
+const RANK_HALF_LIFE_MS: f64 = 14.0 * 86_400_000.0;
+
+/// A contact's rank with one more message, sent or received at `date`: the sum of every
+/// message's weight, halved for each half-life it is older. Every rank halves at the same pace,
+/// so they are kept as `log2(sum of weight * 2^(date / half-life))` and never need updating.
+fn ranked(rank: Option<f64>, weight: f64, date: i64) -> f64 {
+    let added = weight.log2() + date as f64 / RANK_HALF_LIFE_MS;
+    let Some(rank) = rank else { return added };
+    let (high, low) = if rank > added { (rank, added) } else { (added, rank) };
+    high + (low - high).exp2().ln_1p() / std::f64::consts::LN_2
+}
+
 /// Counts the people of a new message: whom the user wrote to, and who wrote. Spam counts for
 /// nothing. A name comes from the user's own mail, as they addressed the person, or else from
 /// the person's own From line; what a third party wrote in a To line names no one.
@@ -1581,22 +1595,30 @@ fn remember_people(tx: &Transaction, message: &Message, me: &HashSet<String>) ->
         }
         let sender = index == 0;
         let name = if sender || from_me { address.name.as_deref() } else { None };
-        let known: Option<(Option<String>, i64)> = tx
-            .prepare_cached("SELECT name, sent FROM contacts WHERE email = ?1")?
-            .query_row([&address.email], |row| Ok((row.get(0)?, row.get(1)?)))
+        let known: Option<(Option<String>, i64, Option<f64>)> = tx
+            .prepare_cached("SELECT name, sent, rank FROM contacts WHERE email = ?1")?
+            .query_row([&address.email], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
             .optional()?;
         let named = match &known {
             None => true,
-            Some((old, sent)) => name.is_some() && (from_me || old.is_none() || *sent == 0),
+            Some((old, sent, _)) => name.is_some() && (from_me || old.is_none() || *sent == 0),
         };
+        let weight = match (from_me, index) {
+            (true, _) if message.recipients.to.iter().any(|to| to.email == address.email) => TO_WEIGHT,
+            (true, _) => CC_WEIGHT,
+            (false, 0) => RECEIVED_WEIGHT,
+            (false, _) => 0.0,
+        };
+        let rank = known.as_ref().and_then(|(.., rank)| *rank);
+        let rank = if weight > 0.0 { Some(ranked(rank, weight, message.date)) } else { rank };
         tx.prepare_cached(
-            "INSERT INTO contacts (email, name, sent, received, last) VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO contacts (email, name, sent, received, last, rank) VALUES (?1, ?2, ?3, ?4, ?5, ?7)
              ON CONFLICT (email) DO UPDATE SET sent = sent + excluded.sent, received = received + excluded.received,
                  name = CASE WHEN ?6 AND excluded.last >= last THEN excluded.name ELSE name END,
-                 last = max(last, excluded.last)",
+                 last = max(last, excluded.last), rank = excluded.rank",
         )?
-        .execute(params![address.email, name, from_me as i64, sender as i64, message.date, named])?;
-        if known.as_ref().is_none_or(|(old, _)| named && old.as_deref() != name) {
+        .execute(params![address.email, name, from_me as i64, sender as i64, message.date, named, rank])?;
+        if known.as_ref().is_none_or(|(old, ..)| named && old.as_deref() != name) {
             index_contact(tx, &address.email)?;
         }
     }
