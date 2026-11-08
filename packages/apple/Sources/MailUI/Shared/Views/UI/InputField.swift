@@ -18,9 +18,7 @@ struct InputField: View {
                 Text(label).textStyle(.footnote).fontWeight(.medium)
             }
             Group {
-                if secure {
-                    SecureField(placeholder, text: $text)
-                } else if lines > 1 {
+                if !secure, lines > 1 {
                     TextEditor(text: $text)
                         .scrollContentBackground(.hidden)
                         .overlay(alignment: .topLeading) {
@@ -30,11 +28,7 @@ struct InputField: View {
                         }
                         .padding(.vertical, Space.s)
                 } else {
-                    TextField(placeholder, text: $text)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        #endif
+                    line
                 }
             }
             .textFieldStyle(.plain)
@@ -57,6 +51,20 @@ struct InputField: View {
             guard autofocus else { return }
             DispatchQueue.main.async { focused = true }
         }
+    }
+
+    @ViewBuilder private var line: some View {
+        #if os(macOS)
+        LineField(placeholder: placeholder, text: $text, font: TextStyle.body.platformFont, secure: secure, onReturn: commit)
+        #else
+        if secure {
+            SecureField(placeholder, text: $text)
+        } else {
+            TextField(placeholder, text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        }
+        #endif
     }
 
     private var boxHeight: CGFloat {

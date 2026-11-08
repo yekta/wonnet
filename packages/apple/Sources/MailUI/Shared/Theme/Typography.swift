@@ -62,6 +62,12 @@ enum TextStyle {
         guard self != .mono else { return .system(size: size * Platform.scale, design: .monospaced) }
         return .ui(size, weight)
     }
+
+    /// `font` for what AppKit and UIKit draw themselves.
+    var platformFont: PlatformFont {
+        guard self != .mono else { return .monospacedSystemFont(ofSize: size * Platform.scale, weight: .regular) }
+        return Platform.font(size, weight)
+    }
 }
 
 extension Font {

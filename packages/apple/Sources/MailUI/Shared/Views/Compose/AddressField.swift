@@ -61,8 +61,7 @@ struct AddressField<Accessory: View>: View {
     }
 
     private var field: some View {
-        TextField("", text: $text)
-            .textFieldStyle(.plain)
+        line
             .focused($focused)
             .frame(minWidth: 80)
             .frame(height: Theme.chipHeight * Platform.scale)
@@ -72,8 +71,17 @@ struct AddressField<Accessory: View>: View {
             .keyboardType(.emailAddress)
             #endif
             .onFieldKeys(handle)
+    }
+
+    @ViewBuilder private var line: some View {
+        #if os(macOS)
+        LineField(text: $text, font: TextStyle.body.platformFont) { _ = pick() }
+        #else
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
             .onKeyPress(.return) { pick() ? .handled : .ignored }
             .onSubmit { _ = pick() }
+        #endif
     }
 
     private func handle(_ key: FieldKey) -> KeyPress.Result {

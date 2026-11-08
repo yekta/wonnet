@@ -112,6 +112,7 @@ added to the component, not to the view.
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `SelectCircle` | The circle that selects threads, filled in the primary colour with a check once selected; the Mac's rows draw it in the gutter before them |
 | `InputField` | A text field with its label above, or a text box of `lines` |
+| `LineField` | The Mac's one line to type in, under `InputField`, `SearchField` and the compose fields: an AppKit field whose cell keeps its text in from its sides, so the caret after the last letter isn't cut off as in SwiftUI's plain field. Return is its `onReturn` |
 | `FieldArea` | Behind a field's box, makes all of it the field: a click anywhere on it puts the caret in the field, and the pointer is the I-beam over it. Every field has one |
 | `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.popup` the same, smaller, at the top of a popup; `.bar` as the top bar's capsule |
 | `Dropdown` | A choice from a short list, with a label |

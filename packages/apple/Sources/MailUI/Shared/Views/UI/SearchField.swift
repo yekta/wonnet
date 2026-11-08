@@ -25,17 +25,9 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: Space.s) {
             Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color).allowsHitTesting(false)
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
-                .font(.ui(style == .sheet ? 15 : 13))
-                .foregroundStyle(Tokens.foreground.color)
+            line
                 .focused($focused)
-                .onSubmit(submit)
                 .onListKeys(move: move, escape: leave)
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                #endif
             if !text.isEmpty {
                 IconButton(symbol: .x, help: "Clear", size: .small, circled: false, quiet: true, action: clearText)
             }
@@ -50,6 +42,21 @@ struct SearchField: View {
         }
         .onAppear { if autofocus { focused = true } }
         .onChange(of: focusTrigger) { focused = true }
+    }
+
+    @ViewBuilder private var line: some View {
+        let size: CGFloat = style == .sheet ? 15 : 13
+        #if os(macOS)
+        LineField(placeholder: placeholder, text: $text, font: Platform.font(size), onReturn: submit)
+        #else
+        TextField(placeholder, text: $text)
+            .textFieldStyle(.plain)
+            .font(.ui(size))
+            .foregroundStyle(Tokens.foreground.color)
+            .onSubmit(submit)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        #endif
     }
 
     private var height: CGFloat {

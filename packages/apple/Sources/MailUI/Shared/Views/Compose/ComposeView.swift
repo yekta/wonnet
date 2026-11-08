@@ -222,10 +222,18 @@ struct ComposeView: View {
             }
         }
         FieldRow(label: "Subject", focus: { subjectFocused = true }) {
-            TextField("", text: $compose.draft.subject).textFieldStyle(.plain)
+            subject
                 .focused($subjectFocused)
-                .onSubmit { editing.focus() }
         }
+    }
+
+    @ViewBuilder private var subject: some View {
+        #if os(macOS)
+        LineField(text: $compose.draft.subject, font: TextStyle.body.platformFont) { editing.focus() }
+        #else
+        TextField("", text: $compose.draft.subject).textFieldStyle(.plain)
+            .onSubmit { editing.focus() }
+        #endif
     }
 
     /// The address the message goes from, and the choice of another. Pulled out by the face's
