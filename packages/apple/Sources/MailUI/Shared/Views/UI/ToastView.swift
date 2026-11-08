@@ -16,13 +16,8 @@ struct ToastView: View {
         if let toast = store.toast {
             HStack(spacing: 0) {
                 if let mark = toast.mark {
-                    ZStack {
-                        Mark(mark: mark, start: toast.shown, duration: toast.duration)
-                            .transition(.asymmetric(insertion: .scale(scale: 0.6).combined(with: .opacity), removal: .identity))
-                            .id(mark)
-                    }
-                    .animation(.snappy(duration: 0.3), value: mark)
-                    .frame(width: Self.inner, height: Self.inner)
+                    Mark(mark: mark, start: toast.shown, duration: toast.duration)
+                        .frame(width: Self.inner, height: Self.inner)
                 }
                 Text(toast.message)
                     .textStyle(.label, color: Tokens.foreground.color)
