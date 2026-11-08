@@ -168,10 +168,12 @@ impl Render for Gallery {
             ui::toast(
                 "Sending".into(),
                 Some(("Undo".into(), Rc::new(|_, _, _| {}))),
-                Some((Instant::now() - countdown_lap, COUNTDOWN)),
+                Some(ui::ToastMark::Countdown { shown: Instant::now() - countdown_lap, duration: COUNTDOWN }),
                 cx,
             )
             .into_any_element(),
+            ui::toast("Sending".into(), None, Some(ui::ToastMark::Sending), cx).into_any_element(),
+            ui::toast("Sent".into(), None, Some(ui::ToastMark::Sent), cx).into_any_element(),
             ui::banner(
                 ui::Banner {
                     symbol: Symbol::CircleArrowDown,

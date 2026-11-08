@@ -2,6 +2,7 @@ import {
   CheckIcon,
   FileImageIcon,
   FileTextIcon,
+  LoaderIcon,
   StarIcon,
   XIcon,
   type LucideIcon,
@@ -338,21 +339,28 @@ export function Sheet({
   )
 }
 
-/** The note at the bottom: a line of text and maybe an action. One that counts down (a message
- * about to be sent) starts with a ring that fills until it is done. The ring and the action are
- * 32px capsules inset 6px from the toast's edge on every side (5px of padding inside its 1px
- * border), so their ends are concentric with the toast's. */
+/** What a toast about a message being sent shows before its line: the seconds left of the undo
+ * delay (from `start`, in milliseconds since the epoch), that it is going, or that it went. */
+export type ToastMark =
+  | { kind: "countdown"; start: number; duration: number }
+  | { kind: "sending" }
+  | { kind: "sent" }
+
+/** The note at the bottom: a line of text and maybe an action. One about a message being sent
+ * starts with its mark: a ring that fills as the undo delay runs out, then a spinner in process
+ * while it goes, then a check in success. The mark and the action are 32px capsules inset 6px
+ * from the toast's edge on every side (5px of padding inside its 1px border), so their ends are
+ * concentric with the toast's. */
 export function Toast({
   message,
   action,
   onAction,
-  countdown,
+  mark,
 }: {
   message: string
   action?: string
   onAction?: () => void
-  /** When it started, in milliseconds since the epoch, and how many seconds it lasts. */
-  countdown?: { start: number; duration: number }
+  mark?: ToastMark
 }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-5 z-50 flex justify-center">
@@ -360,11 +368,23 @@ export function Toast({
         className="pointer-events-auto flex h-11 items-center rounded-full border border-(--border-popover) bg-(--popover) p-[5px]"
         style={{ boxShadow: shadow("md", "shadow-stronger") }}
       >
-        {countdown && <Countdown {...countdown} />}
+        {mark?.kind === "countdown" && (
+          <Countdown start={mark.start} duration={mark.duration} />
+        )}
+        {mark?.kind === "sending" && (
+          <MarkBadge tint="process">
+            <LoaderIcon className="size-4 animate-spin" />
+          </MarkBadge>
+        )}
+        {mark?.kind === "sent" && (
+          <MarkBadge tint="success">
+            <CheckIcon className="size-4" />
+          </MarkBadge>
+        )}
         <span
           className={cn(
             "text-[13px] whitespace-nowrap text-(--foreground)",
-            countdown ? "pl-2.5" : "pl-3",
+            mark ? "pl-2.5" : "pl-3",
             action ? "pr-5" : "pr-3"
           )}
         >
@@ -381,6 +401,26 @@ export function Toast({
         )}
       </div>
     </div>
+  )
+}
+
+function MarkBadge({
+  tint,
+  children,
+}: {
+  tint: "process" | "success"
+  children: ReactNode
+}) {
+  return (
+    <span
+      className="flex size-8 shrink-0 items-center justify-center rounded-full"
+      style={{
+        color: `var(--${tint})`,
+        background: `color-mix(in srgb, var(--${tint}) calc(var(--opacity-color-tint) * 100%), transparent)`,
+      }}
+    >
+      {children}
+    </span>
   )
 }
 

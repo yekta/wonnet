@@ -55,6 +55,8 @@ const REFRESH_WAIT: Duration = Duration::from_secs(15);
 const NEW_MAIL_WINDOW: i64 = 2 * 86_400_000;
 /// How long a `Settle` waits at most.
 const SETTLE_WAIT: Duration = Duration::from_secs(25);
+/// How long the demo takes to send a message once its time comes.
+const DEMO_SENDING: Duration = Duration::from_millis(1200);
 /// How long a sender's picture is kept before the server is asked again, and how long that
 /// they have none.
 const AVATAR_KEPT: Duration = Duration::from_secs(30 * 86_400);
@@ -1048,7 +1050,10 @@ impl Core {
 
     /// Sends an op to the server, once its files are up.
     fn dispatch(&mut self, op_id: String, op: Op) {
-        if !self.online() || self.demo {
+        if self.demo {
+            return self.send_in_demo(op_id, op);
+        }
+        if !self.online() {
             return;
         }
         if waits_for_upload(&op) {
@@ -1056,6 +1061,13 @@ impl Core {
             return;
         }
         self.send(ClientMessage::Mutate { op_id, op });
+    }
+
+    /// The demo's sends go at their time, as the server's would, so the apps show them going.
+    fn send_in_demo(&mut self, op_id: String, op: Op) {
+        let Op::Send { send_at, .. } = op else { return };
+        let wait = Duration::from_millis((send_at - mail_protocol::now_ms()).max(0) as u64) + DEMO_SENDING;
+        self.spawn(tokio::time::sleep(wait), move |core, _| core.applied(&op_id, true, None));
     }
 
     fn upload(&mut self, op_id: String, op: Op) {
@@ -2250,6 +2262,27 @@ mod tests {
         assert!(store.outbox_op(&op_id).is_none());
         let drafts = demo.call(json!({ "type": "threads", "mailbox": "drafts" })).await.unwrap();
         assert!(drafts["rows"].as_array().unwrap().iter().any(|row| row["draft_id"] == saved["id"]));
+    }
+
+    #[tokio::test]
+    async fn the_demo_sends_at_the_send_time() {
+        let mut demo = Demo::start();
+        let thread = demo.thread("Photos from the hike").await;
+        let mut draft =
+            demo.call(json!({ "type": "reply_draft", "thread": thread, "kind": "reply" })).await.unwrap()["draft"]
+                .clone();
+        draft["text"] = json!("Yes, same time!");
+        let sent = demo.call(json!({ "type": "send", "draft": draft, "delay": 0 })).await.unwrap();
+        let went = |events: &[Event]| {
+            events.iter().any(|event| matches!(event, Event::Sent { op_id } if *op_id == sent["op_id"]))
+        };
+        for _ in 0..300 {
+            if went(&demo.events.lock().unwrap()) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the send never went");
     }
 
     #[tokio::test]

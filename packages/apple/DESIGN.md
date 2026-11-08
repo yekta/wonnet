@@ -136,7 +136,7 @@ added to the component, not to the view.
 | `Notice` | A line about something, muted or in error tone, with an optional action |
 | `EmptyState` | An icon and a calm line for an empty list |
 | `BodyPlaceholder` | A bar for every line of a message's text, as long as the line, where its page will be until the page is drawn |
-| `Banner`, `ToastView` | A card floating at the bottom that stays, with its icon, a line (or a progress bar beside it), an action and a close (the Mac's update), always the same height; its tint is its state: `process` under way, `primary` waiting on the user, `success` done (its button too: Restart is `success`), `destructive` failed. And the note at the bottom that goes |
+| `Banner`, `ToastView` | A card floating at the bottom that stays, with its icon, a line (or a progress bar beside it), an action and a close (the Mac's update), always the same height; its tint is its state: `process` under way, `primary` waiting on the user, `success` done (its button too: Restart is `success`), `destructive` failed. And the note at the bottom that goes; one about a send shows the undo countdown in a ring, then a `process` spinner while it goes and a `success` check when it went |
 | `Avatar` | Initials in a circle of the address's colour |
 | `SwatchRow` | The account colours on a line, to pick one |
 | `SettingsGroup`, `SettingsCard`, `SettingsRow`, `SettingsLabel`, `SettingsDivider`, `SettingsNote`, `MovableSettingsRow` | The Mac's settings: a group's name over a card of rows, each what it is about on the left and its controls on the right; a control at either end of a row is as far from the card's side as from the row's top and bottom; a row of a `MovableList` on the card, hovering only when it `opens` something |

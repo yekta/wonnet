@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// The note at the bottom: a line of text and maybe an action, gone after a while. A toast that
-/// counts down (a message about to be sent) starts with a ring that fills until it is done.
-/// The ring and the action are capsules inset from the toast's edge by as much on every side,
-/// so their ends are concentric with the toast's.
+/// The note at the bottom: a line of text and maybe an action, gone after a while. A toast about
+/// a message being sent starts with its mark: a ring that fills as the undo delay runs out, then a
+/// spinner in `process` while it goes, then a check in `success`. The mark and the action are
+/// capsules inset from the toast's edge by as much on every side, so their ends are concentric
+/// with the toast's.
 struct ToastView: View {
     @Environment(MailStore.self) private var store
 
@@ -14,12 +15,18 @@ struct ToastView: View {
     var body: some View {
         if let toast = store.toast {
             HStack(spacing: 0) {
-                if toast.countdown {
-                    Countdown(start: toast.shown, duration: toast.duration).frame(width: Self.inner, height: Self.inner)
+                if let mark = toast.mark {
+                    ZStack {
+                        Mark(mark: mark, start: toast.shown, duration: toast.duration)
+                            .transition(.asymmetric(insertion: .scale(scale: 0.6).combined(with: .opacity), removal: .identity))
+                            .id(mark)
+                    }
+                    .animation(.snappy(duration: 0.3), value: mark)
+                    .frame(width: Self.inner, height: Self.inner)
                 }
                 Text(toast.message)
                     .textStyle(.label, color: Tokens.foreground.color)
-                    .padding(.leading, toast.countdown ? Space.s + 2 : Space.m)
+                    .padding(.leading, toast.mark == nil ? Space.m : Space.s + 2)
                     .padding(.trailing, toast.action == nil ? Space.m : Space.xl)
                 if let action = toast.action {
                     Button(action: store.toastTapped) { ActionFace(title: action, height: Self.inner) }.buttonStyle(.press)
@@ -56,6 +63,25 @@ struct ToastView: View {
         }
     }
 
+    private struct Mark: View {
+        let mark: Toast.Mark
+        let start: Date
+        let duration: TimeInterval
+
+        var body: some View {
+            switch mark {
+            case .countdown:
+                Countdown(start: start, duration: duration)
+            case .sending:
+                Circle().fill(Tokens.process.opacity(Opacity.colorTint).color)
+                    .overlay(Spinner(size: 16, tint: Tokens.process.color))
+            case .sent:
+                Circle().fill(Tokens.success.opacity(Opacity.colorTint).color)
+                    .overlay(Image(.check, size: 16).foregroundStyle(Tokens.success.color))
+            }
+        }
+    }
+
     /// The seconds left, in a ring that fills as they run out.
     private struct Countdown: View {
         let start: Date
@@ -70,7 +96,9 @@ struct ToastView: View {
                         .trim(from: 0, to: duration > 0 ? 1 - left / duration : 1)
                         .stroke(Tokens.foreground.color, style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                    Text("\(Int(left.rounded(.up)))").monospacedDigit().textStyle(.labelStrong, color: Tokens.foreground.color)
+                    if left > 0 {
+                        Text("\(Int(left.rounded(.up)))").monospacedDigit().textStyle(.labelStrong, color: Tokens.foreground.color)
+                    }
                 }
                 .padding(Self.line / 2)
             }
