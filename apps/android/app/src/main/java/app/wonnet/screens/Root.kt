@@ -1,7 +1,6 @@
 package app.wonnet.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -142,12 +141,10 @@ fun ToastView(store: MailStore) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             shown.mark?.let { mark ->
-                Crossfade(mark, label = "toast mark") { now ->
-                    when (now) {
-                        ToastMark.Countdown -> Countdown(shown.shown, shown.duration, Modifier.size(ToastInner))
-                        ToastMark.Sending -> MarkBadge(Tokens.process) { Spinner(16f, Tokens.process.color) }
-                        ToastMark.Sent -> MarkBadge(Tokens.success) { Icon(Symbol.Check, 16f, Tokens.success.color) }
-                    }
+                when (mark) {
+                    ToastMark.Countdown -> Countdown(shown.shown, shown.duration, Modifier.size(ToastInner))
+                    ToastMark.Sending -> MarkBadge(Tokens.process) { Spinner(16f, Tokens.process.color) }
+                    ToastMark.Sent -> MarkBadge(Tokens.success) { Icon(Symbol.Check, 16f, Tokens.success.color) }
                 }
             }
             Text(
