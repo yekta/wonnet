@@ -25,6 +25,7 @@ pub use prefs::{CustomRule, CustomSplit, SettingsEntry, SettingsSection, Snippet
 use crate::core::Core;
 use crate::models::*;
 use crate::platform::notify::{Answer, Notifier};
+use crate::ui::ToastMark;
 
 /// A note at the bottom of the window, sometimes with something to do about it.
 #[derive(Clone, Debug, PartialEq)]
@@ -33,9 +34,8 @@ pub struct Toast {
     pub message: String,
     pub action: Option<String>,
     pub seconds: u64,
-    /// Shows the seconds left until it goes: a message's undo delay.
-    pub countdown: bool,
-    pub shown: Instant,
+    /// What it shows about a message being sent.
+    pub mark: Option<ToastMark>,
 }
 
 type StoreAction = Box<dyn FnOnce(&mut Store, &mut Context<Store>)>;
@@ -601,7 +601,10 @@ impl Store {
                 }
                 self.connection = state;
             }
-            Event::Sent { .. } => self.show("Sent.", cx),
+            // Another send's undo is still open.
+            Event::Sent { .. } if matches!(self.toast, Some(Toast { mark: Some(ToastMark::Countdown { .. }), .. })) => {
+            }
+            Event::Sent { .. } => self.show_mark("Sent", 3, ToastMark::Sent, cx),
             Event::SendFailed { error, draft, draft_id, .. } => {
                 let draft = *draft;
                 self.show_with(error, "Edit", 4, cx, move |this, cx| {
@@ -1297,6 +1300,8 @@ impl Store {
                             });
                         } else if delay > 0 {
                             this.show_countdown("Sending", "Undo", delay, cx, move |this, cx| this.undo_send(op, cx));
+                        } else {
+                            this.show_sending(cx);
                         }
                     }
                     Err(error) => {
@@ -1528,17 +1533,23 @@ impl Store {
     // MARK: Toasts
 
     pub fn show(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.show_line(message, 4, None, cx);
+    }
+
+    fn show_mark(&mut self, message: &str, seconds: u64, mark: ToastMark, cx: &mut Context<Self>) {
+        self.show_line(message, seconds, Some(mark), cx);
+    }
+
+    /// A message going out, until it went, or for a while when it is slow to.
+    fn show_sending(&mut self, cx: &mut Context<Self>) {
+        self.show_mark("Sending", 10, ToastMark::Sending, cx);
+    }
+
+    fn show_line(&mut self, message: impl Into<String>, seconds: u64, mark: Option<ToastMark>, cx: &mut Context<Self>) {
         let id = self.next_id();
-        self.toast = Some(Toast {
-            id,
-            message: message.into(),
-            action: None,
-            seconds: 4,
-            countdown: false,
-            shown: Instant::now(),
-        });
+        self.toast = Some(Toast { id, message: message.into(), action: None, seconds, mark });
         self.toast_action = None;
-        self.hide_later(id, 4, cx);
+        self.hide_later(id, seconds, cx);
         cx.notify();
     }
 
@@ -1550,7 +1561,7 @@ impl Store {
         cx: &mut Context<Self>,
         perform: impl FnOnce(&mut Store, &mut Context<Store>) + 'static,
     ) {
-        self.show_toast(message, action, seconds, false, cx, perform);
+        self.show_toast(message, action, seconds, None, cx, perform);
     }
 
     /// A toast with an action that shows the seconds left until it goes.
@@ -1562,7 +1573,8 @@ impl Store {
         cx: &mut Context<Self>,
         perform: impl FnOnce(&mut Store, &mut Context<Store>) + 'static,
     ) {
-        self.show_toast(message, action, seconds, true, cx, perform);
+        let mark = ToastMark::Countdown { shown: Instant::now(), duration: Duration::from_secs(seconds) };
+        self.show_toast(message, action, seconds, Some(mark), cx, perform);
     }
 
     fn show_toast(
@@ -1570,13 +1582,13 @@ impl Store {
         message: impl Into<String>,
         action: &str,
         seconds: u64,
-        countdown: bool,
+        mark: Option<ToastMark>,
         cx: &mut Context<Self>,
         perform: impl FnOnce(&mut Store, &mut Context<Store>) + 'static,
     ) {
         let id = self.next_id();
         let action = Some(action.into());
-        self.toast = Some(Toast { id, message: message.into(), action, seconds, countdown, shown: Instant::now() });
+        self.toast = Some(Toast { id, message: message.into(), action, seconds, mark });
         self.toast_action = Some(Box::new(perform));
         self.hide_later(id, seconds.max(1), cx);
         cx.notify();
@@ -1586,11 +1598,13 @@ impl Store {
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(seconds)).await;
             let _ = this.update(cx, |this, cx| {
-                if this.toast.as_ref().is_some_and(|toast| toast.id == id) {
-                    this.toast = None;
-                    this.toast_action = None;
-                    cx.notify();
+                let Some(toast) = this.toast.as_ref().filter(|toast| toast.id == id) else { return };
+                if matches!(toast.mark, Some(ToastMark::Countdown { .. })) {
+                    return this.show_sending(cx);
                 }
+                this.toast = None;
+                this.toast_action = None;
+                cx.notify();
             });
         })
         .detach();

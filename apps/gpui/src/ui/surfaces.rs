@@ -276,14 +276,26 @@ pub fn banner(banner: Banner, cx: &App) -> impl IntoElement + use<> {
         )
 }
 
-/// The note at the bottom: a line and maybe an action, gone after a while. A toast that counts
-/// down (a message about to be sent) starts with a ring that fills until it is done: `shown`
-/// and how long it lasts. The ring and the action are capsules inset from the toast's edge by as
-/// much on every side, so their ends are concentric with the toast's.
+/// What a toast about a message being sent shows before its line.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ToastMark {
+    /// The seconds left of the undo delay, which started at `shown`.
+    Countdown { shown: Instant, duration: Duration },
+    /// That it is going.
+    Sending,
+    /// That it went.
+    Sent,
+}
+
+/// The note at the bottom: a line and maybe an action, gone after a while. A toast about a
+/// message being sent starts with its mark: a ring that fills as the undo delay runs out, then a
+/// spinner in `PROCESS` while it goes, then a check in `SUCCESS`. The mark and the action are
+/// capsules inset from the toast's edge by as much on every side, so their ends are concentric
+/// with the toast's.
 pub fn toast(
     message: SharedString,
     action: Option<(SharedString, super::OnClick)>,
-    countdown: Option<(Instant, Duration)>,
+    mark: Option<ToastMark>,
     cx: &App,
 ) -> impl IntoElement + use<> {
     let has_action = action.is_some();
@@ -298,12 +310,12 @@ pub fn toast(
         .border_color(cx.color(BORDER_POPOVER))
         .shadow(cx.shadow(ShadowSize::Md, opacity::SHADOW))
         .occlude()
-        .when_some(countdown, |toast, (shown, duration)| toast.child(toast_countdown(shown, duration, cx)))
+        .when_some(mark, |toast, mark| toast.child(toast_mark(mark, cx)))
         .child(
             div()
                 .text_in(TextStyle::Label, FOREGROUND, cx)
                 .whitespace_nowrap()
-                .pl(px(if countdown.is_some() { space::S + 2. } else { space::M }))
+                .pl(px(if mark.is_some() { space::S + 2. } else { space::M }))
                 .pr(px(if has_action { space::XL } else { space::M }))
                 .child(message),
         )
@@ -339,6 +351,26 @@ const TOAST_INSET: f32 = space::XS;
 /// The height of what is in a toast: the ring and the action.
 const TOAST_INNER: f32 = size::LARGE - TOAST_INSET * 2.;
 const COUNTDOWN_LINE: f32 = 2.5;
+
+fn toast_mark(mark: ToastMark, cx: &App) -> AnyElement {
+    let badge = |tint: ThemeColor| {
+        div()
+            .flex_none()
+            .size(px(TOAST_INNER))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .bg(cx.tint(tint, opacity::COLOR_TINT))
+    };
+    match mark {
+        ToastMark::Countdown { shown, duration } => toast_countdown(shown, duration, cx).into_any_element(),
+        ToastMark::Sending => badge(PROCESS).child(spinner(16., cx.color(PROCESS))).into_any_element(),
+        ToastMark::Sent => {
+            badge(SUCCESS).child(icon(Symbol::Check, 16.).text_color(cx.color(SUCCESS))).into_any_element()
+        }
+    }
+}
 
 /// The seconds left, in a ring that fills as they run out, drawn again every frame.
 fn toast_countdown(shown: Instant, duration: Duration, cx: &App) -> impl IntoElement + use<> {

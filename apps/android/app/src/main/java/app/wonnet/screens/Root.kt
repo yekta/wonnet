@@ -1,6 +1,7 @@
 package app.wonnet.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -41,9 +42,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.wonnet.core.AppUpdater
 import app.wonnet.core.MailStore
+import app.wonnet.core.ToastMark
 import app.wonnet.core.Version
 import app.wonnet.theme.ControlSize
 import app.wonnet.theme.Dims
+import app.wonnet.theme.Icon
 import app.wonnet.theme.LocalDark
 import app.wonnet.theme.Opacity
 import app.wonnet.theme.SCALE
@@ -51,6 +54,7 @@ import app.wonnet.theme.ShadowSize
 import app.wonnet.theme.Space
 import app.wonnet.theme.Symbol
 import app.wonnet.theme.Text
+import app.wonnet.theme.ThemeColor
 import app.wonnet.theme.TextStyle
 import app.wonnet.theme.Tokens
 import app.wonnet.theme.shadow
@@ -60,6 +64,7 @@ import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.ConfirmDialog
 import app.wonnet.ui.LocalSheetOverlay
 import app.wonnet.ui.Pressable
+import app.wonnet.ui.Spinner
 import kotlinx.coroutines.delay
 
 /** Changed by the hardware keyboard's `/` to put the cursor in the search field. */
@@ -109,10 +114,11 @@ fun Root(store: MailStore) {
 }
 
 /**
- * The note at the bottom: a line of text and maybe an action, gone after a while. A toast that
- * counts down (a message about to be sent) starts with a ring that fills until it is done. The
- * ring and the action are capsules inset from the toast's edge by as much on every side, so their
- * ends are concentric with the toast's.
+ * The note at the bottom: a line of text and maybe an action, gone after a while. A toast about a
+ * message being sent starts with its mark: a ring that fills as the undo delay runs out, then a
+ * spinner in `process` while it goes, then a check in `success`. The mark and the action are
+ * capsules inset from the toast's edge by as much on every side, so their ends are concentric with
+ * the toast's.
  */
 @Composable
 fun ToastView(store: MailStore) {
@@ -135,12 +141,20 @@ fun ToastView(store: MailStore) {
                 .padding(ToastInset),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (shown.countdown) Countdown(shown.shown, shown.duration, Modifier.size(ToastInner))
+            shown.mark?.let { mark ->
+                Crossfade(mark, label = "toast mark") { now ->
+                    when (now) {
+                        ToastMark.Countdown -> Countdown(shown.shown, shown.duration, Modifier.size(ToastInner))
+                        ToastMark.Sending -> MarkBadge(Tokens.process) { Spinner(16f, Tokens.process.color) }
+                        ToastMark.Sent -> MarkBadge(Tokens.success) { Icon(Symbol.Check, 16f, Tokens.success.color) }
+                    }
+                }
+            }
             Text(
                 shown.message, TextStyle.Label,
                 Modifier
                     .weight(1f, fill = false)
-                    .padding(start = if (shown.countdown) Space.s + 2.dp else Space.m, end = if (shown.action == null) Space.m else Space.xl),
+                    .padding(start = if (shown.mark == null) Space.m else Space.s + 2.dp, end = if (shown.action == null) Space.m else Space.xl),
                 color = Tokens.foreground.color, maxLines = 2,
             )
             shown.action?.let { action ->
@@ -162,6 +176,11 @@ fun ToastView(store: MailStore) {
 
 private val ToastInset = Space.xs * SCALE
 private val ToastInner = Dims.searchHeight - ToastInset * 2
+
+@Composable
+private fun MarkBadge(tint: ThemeColor, content: @Composable () -> Unit) {
+    Box(Modifier.size(ToastInner).background(tint.opacity(Opacity.colorTint).color, CircleShape), contentAlignment = Alignment.Center) { content() }
+}
 
 /** The seconds left, in a ring that fills as they run out. */
 @Composable

@@ -11,12 +11,16 @@ import UIKit
 
 /// A note at the bottom of the window, sometimes with something to do about it.
 struct Toast: Identifiable, Equatable {
+    /// What a toast about a message being sent shows before its line.
+    enum Mark { case countdown, sending, sent }
+
     let id = UUID()
     let message: String
     var action: String?
     var duration: TimeInterval = 4
-    /// Shows the seconds left until it goes: a message's undo delay.
-    var countdown = false
+    /// `countdown` shows the seconds left of the undo delay, `sending` that it is going, and
+    /// `sent` that it went.
+    var mark: Mark?
     let shown = Date()
 
     static func == (lhs: Toast, rhs: Toast) -> Bool { lhs.id == rhs.id }
@@ -564,7 +568,9 @@ public final class MailStore {
                 Notifier.shared.signedOut()
             }
         case .sent:
-            show("Sent.")
+            // Another send's undo is still open.
+            guard toast?.mark != .countdown else { return }
+            show("Sent", duration: 3, mark: .sent)
         case .sendFailed(_, let error, let draft, let draftId):
             show(error, action: "Edit") { [weak self] in
                 self?.compose = Compose(draft: draft, from: "", showCc: !draft.cc.isEmpty, draftId: draftId, keep: true)
@@ -1074,7 +1080,9 @@ public final class MailStore {
                 if let sendAt {
                     show("Sending \(sendAt.formatted(date: .abbreviated, time: .shortened)).", action: "Undo") { self.undoSend(sent.opId) }
                 } else if undoDelay > 0 {
-                    show("Sending", action: "Undo", duration: TimeInterval(undoDelay), countdown: true) { self.undoSend(sent.opId) }
+                    show("Sending", action: "Undo", duration: TimeInterval(undoDelay), mark: .countdown) { self.undoSend(sent.opId) }
+                } else {
+                    showSending()
                 }
             } catch {
                 show(error.localizedDescription)
@@ -1329,9 +1337,14 @@ public final class MailStore {
 
     // MARK: Toasts
 
-    func show(_ message: String, action: String? = nil, duration: TimeInterval = 4, countdown: Bool = false, perform: (() -> Void)? = nil) {
-        toast = Toast(message: message, action: action, duration: duration, countdown: countdown)
+    func show(_ message: String, action: String? = nil, duration: TimeInterval = 4, mark: Toast.Mark? = nil, perform: (() -> Void)? = nil) {
+        toast = Toast(message: message, action: action, duration: duration, mark: mark)
         toastAction = perform
+    }
+
+    /// A message going out, until it went, or for a while when it is slow to.
+    private func showSending() {
+        show("Sending", duration: 10, mark: .sending)
     }
 
     func toastTapped() {
@@ -1343,6 +1356,7 @@ public final class MailStore {
 
     func dismissToast(_ toast: Toast) {
         guard self.toast == toast else { return }
+        guard toast.mark != .countdown else { return showSending() }
         self.toast = nil
         toastAction = nil
     }

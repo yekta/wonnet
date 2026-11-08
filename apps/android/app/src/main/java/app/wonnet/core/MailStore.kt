@@ -26,15 +26,18 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** A note at the bottom of the screen, sometimes with something to do about it. `countdown` shows the seconds left until it goes: a message's undo delay. */
+/** A note at the bottom of the screen, sometimes with something to do about it. `mark` shows what it says of a message being sent. */
 data class Toast(
     val message: String,
     val action: String? = null,
     val duration: Long = 4000,
-    val countdown: Boolean = false,
+    val mark: ToastMark? = null,
     val shown: Long = System.currentTimeMillis(),
     val id: String = UUID.randomUUID().toString(),
 )
+
+/** What a toast about a message being sent shows before its line: the seconds left of the undo delay, that it is going, or that it went. */
+enum class ToastMark { Countdown, Sending, Sent }
 
 /** Threads being labelled, or moved to a label. */
 data class Labeling(val threads: List<String>, val move: Boolean, val id: String = UUID.randomUUID().toString())
@@ -486,7 +489,8 @@ class MailStore(private val context: Context) {
                     Notifier.signedOut()
                 }
             }
-            is CoreEvent.Sent -> show("Sent.")
+            // Another send's undo is still open.
+            is CoreEvent.Sent -> if (toast?.mark != ToastMark.Countdown) show("Sent", duration = 3000, mark = ToastMark.Sent)
             is CoreEvent.SendFailed -> show(event.error, "Edit") {
                 compose = Compose(event.draft, "", event.draft.cc.isNotEmpty(), event.draftId, keep = true)
             }
@@ -947,7 +951,9 @@ class MailStore(private val context: Context) {
                     val time = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(sendAt))
                     show("Sending $time.", "Undo") { undoSend(opId) }
                 } else if (undoDelay > 0) {
-                    show("Sending", "Undo", undoDelay * 1000L, countdown = true) { undoSend(opId) }
+                    show("Sending", "Undo", undoDelay * 1000L, ToastMark.Countdown) { undoSend(opId) }
+                } else {
+                    showSending()
                 }
             } catch (error: CoreError) {
                 show(error.message)
@@ -1198,10 +1204,13 @@ class MailStore(private val context: Context) {
 
     // Toasts
 
-    fun show(message: String, action: String? = null, duration: Long = 4000, countdown: Boolean = false, perform: (() -> Unit)? = null) {
-        toast = Toast(message, action, duration, countdown)
+    fun show(message: String, action: String? = null, duration: Long = 4000, mark: ToastMark? = null, perform: (() -> Unit)? = null) {
+        toast = Toast(message, action, duration, mark)
         toastAction = perform
     }
+
+    /** A message going out, until it went, or for a while when it is slow to. */
+    private fun showSending() = show("Sending", duration = 10_000, mark = ToastMark.Sending)
 
     fun toastTapped() {
         val action = toastAction
@@ -1212,6 +1221,7 @@ class MailStore(private val context: Context) {
 
     fun dismissToast(toast: Toast) {
         if (this.toast != toast) return
+        if (toast.mark == ToastMark.Countdown) return showSending()
         this.toast = null
         toastAction = null
     }

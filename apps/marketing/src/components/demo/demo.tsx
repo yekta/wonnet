@@ -33,6 +33,7 @@ import {
   Toast,
   TrafficLights,
   shadow,
+  type ToastMark,
 } from "./ui"
 
 interface View {
@@ -46,12 +47,33 @@ interface Notice {
   undo?: Thread[]
   /** The draft that was sent, opened again by Undo. */
   reopen?: Draft
-  /** When a send started, for the toast's countdown to its going out. */
-  sending?: number
+  /** What it shows of a message being sent. */
+  mark?: ToastMark
 }
 
 /** How long a toast stays, and a send can be undone: the Mac app's default undo delay. */
 const TOAST_SECONDS = 5
+/** How long a message takes to go once it can't be undone, as in the apps' demo. */
+const SENDING_SECONDS = 1.2
+const SENT_SECONDS = 3
+
+/** The toast that follows one, and after how many seconds: a send goes on to say it is going,
+ * then that it went. */
+function following(notice: Notice): [number, Notice | null] {
+  switch (notice.mark?.kind) {
+    case "countdown":
+      return [
+        notice.mark.duration,
+        { message: "Sending", mark: { kind: "sending" } },
+      ]
+    case "sending":
+      return [SENDING_SECONDS, { message: "Sent", mark: { kind: "sent" } }]
+    case "sent":
+      return [SENT_SECONDS, null]
+    default:
+      return [TOAST_SECONDS, null]
+  }
+}
 
 const FONT = '"Avenir Next", Avenir, "DM Sans Variable", sans-serif'
 
@@ -78,7 +100,8 @@ export function Demo() {
 
   useEffect(() => {
     if (!notice) return
-    const timer = setTimeout(() => setNotice(null), TOAST_SECONDS * 1000)
+    const [seconds, next] = following(notice)
+    const timer = setTimeout(() => setNotice(next), seconds * 1000)
     return () => clearTimeout(timer)
   }, [notice])
 
@@ -225,7 +248,7 @@ export function Demo() {
       message: "Sending",
       undo: threads,
       reopen: draft,
-      sending: Date.now(),
+      mark: { kind: "countdown", start: Date.now(), duration: TOAST_SECONDS },
     })
     if (draft.replyTo) {
       change([draft.replyTo], (thread) => ({
@@ -602,11 +625,7 @@ export function Demo() {
               message={notice.message}
               action={notice.undo ? "Undo" : undefined}
               onAction={undo}
-              countdown={
-                notice.sending === undefined
-                  ? undefined
-                  : { start: notice.sending, duration: TOAST_SECONDS }
-              }
+              mark={notice.mark}
             />
           )}
         </div>
