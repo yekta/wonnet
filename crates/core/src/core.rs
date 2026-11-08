@@ -20,6 +20,7 @@ use mail_protocol::{
     ACCOUNT_COLORS, ACCOUNT_NAME_MAX, Account, Address, Draft, DraftAttachment, Label, Message, MessageState, Op,
     PROTOCOL_VERSION, Preference, Rule, SavedDraft, role,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
@@ -63,6 +64,15 @@ const AVATAR_KEPT: Duration = Duration::from_secs(30 * 86_400);
 const AVATAR_KEPT_NONE: Duration = Duration::from_secs(7 * 86_400);
 /// How many senders' pictures are fetched ahead at once.
 const AVATARS_IN_FLIGHT: usize = 4;
+
+/// The account and address a message was last sent from, kept on this device under this key.
+const LAST_SENDER: &str = "last_sender";
+
+#[derive(Serialize, Deserialize)]
+struct LastSender {
+    account_id: String,
+    from: Option<Address>,
+}
 
 enum Input {
     Link(u64, LinkEvent),
@@ -520,7 +530,7 @@ impl Core {
             }
             Command::Preferences => self.preferences(),
             Command::SetPreference { key, value } => self.set_preference(key, value),
-            Command::NewDraft { account } => self.new_draft(account),
+            Command::NewDraft { mailbox } => self.new_draft(mailbox.as_deref()),
             Command::ReplyDraft { thread, kind, message } => self.reply_draft(&thread, kind, message.as_deref()),
             Command::SaveDraft { draft_id, draft } => self.save_draft(draft_id, draft),
             Command::OpenDraft { draft_id } => self.open_draft(&draft_id),
@@ -1499,15 +1509,25 @@ impl Core {
         }
     }
 
-    fn new_draft(&self, account: Option<String>) -> Result<Value> {
+    /// From the account of an account's own mailbox; from every account's together, the address
+    /// the last message was sent from.
+    fn new_draft(&self, mailbox: Option<&str>) -> Result<Value> {
         let accounts = self.store.accounts()?;
-        let account = match account {
-            Some(id) => accounts.into_iter().find(|account| account.id == id),
-            None => accounts.into_iter().next(),
-        };
+        let shown = mailbox.and_then(parse_mailbox).and_then(|(_, account)| account);
+        let last: Option<LastSender> = self.store.meta(LAST_SENDER).and_then(|json| serde_json::from_str(&json).ok());
+        let wanted = shown.as_deref().or(last.as_ref().map(|last| last.account_id.as_str()));
+        let account = wanted.and_then(|id| accounts.iter().find(|account| account.id == id)).or(accounts.first());
         let Some(account) = account else { bail!("Add an account first.") };
-        let draft = Draft { account_id: account.id, ..Default::default() };
-        Ok(serde_json::to_value(DraftReply { id: None, draft, from: account.address })?)
+        let mut draft = Draft { account_id: account.id.clone(), ..Default::default() };
+        if shown.is_none()
+            && let Some(LastSender { account_id, from: Some(from) }) = last
+            && account_id == account.id
+            && account.identities.iter().any(|identity| identity.email.eq_ignore_ascii_case(&from.email))
+        {
+            draft.from = Some(from);
+        }
+        let from = self.sender_of(&draft);
+        Ok(serde_json::to_value(DraftReply { id: None, draft, from })?)
     }
 
     fn reply_draft(&self, thread: &str, kind: ReplyKind, message: Option<&str>) -> Result<Value> {
@@ -1590,6 +1610,8 @@ impl Core {
             draft.account_id = first.id;
         }
         let original = draft.clone();
+        let sender = LastSender { account_id: draft.account_id.clone(), from: draft.from.clone() };
+        self.store.set_meta(LAST_SENDER, Some(&serde_json::to_string(&sender)?))?;
         let signature = self.signature(&draft);
         let quote = draft.quote.take();
         let quoted = draft.quoted.take().and_then(|id| self.store.body(&id)).and_then(|body| body.html);
@@ -2262,6 +2284,25 @@ mod tests {
         assert!(store.outbox_op(&op_id).is_none());
         let drafts = demo.call(json!({ "type": "threads", "mailbox": "drafts" })).await.unwrap();
         assert!(drafts["rows"].as_array().unwrap().iter().any(|row| row["draft_id"] == saved["id"]));
+    }
+
+    #[tokio::test]
+    async fn a_new_message_is_from_the_shown_account_else_the_address_last_sent_from() {
+        let mut demo = Demo::start();
+        let new = async |demo: &mut Demo, mailbox: &str| {
+            demo.call(json!({ "type": "new_draft", "mailbox": mailbox })).await.unwrap()["from"].clone()
+        };
+        assert_eq!(new(&mut demo, "inbox").await, "sam@example.com", "the first account before any send");
+        assert_eq!(new(&mut demo, "demo-work/inbox").await, "sam@acme.example");
+
+        let mut draft =
+            demo.call(json!({ "type": "new_draft", "mailbox": "demo-work/inbox" })).await.unwrap()["draft"].clone();
+        draft["from"] = json!({ "email": "hello@acme.example" });
+        draft["to"] = json!([{ "email": "a@b.c" }]);
+        demo.call(json!({ "type": "send", "draft": draft, "delay": 60 })).await.unwrap();
+        assert_eq!(new(&mut demo, "inbox").await, "hello@acme.example");
+        assert_eq!(new(&mut demo, "starred").await, "hello@acme.example");
+        assert_eq!(new(&mut demo, "demo-home/label/travel").await, "sam@example.com", "the shown account wins");
     }
 
     #[tokio::test]

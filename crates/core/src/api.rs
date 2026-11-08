@@ -322,10 +322,11 @@ pub enum Command {
         #[serde(default)]
         value: Option<Value>,
     },
-    /// A new message from an account (the first one when none): `{draft, from}`.
+    /// A new message, written in `mailbox`: `{draft, from}`. It is from the mailbox's account, or
+    /// in every account's mailboxes from the address the user last sent from.
     NewDraft {
         #[serde(default)]
-        account: Option<String>,
+        mailbox: Option<String>,
     },
     /// `{draft, from}`. The draft keeps the text quoted in `quote`. It answers `message`, else
     /// the thread's last message from someone else.

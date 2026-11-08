@@ -973,7 +973,7 @@ public final class MailStore {
 
     // MARK: Writing
 
-    /// A new message from the first account.
+    /// A new message from the shown mailbox's account, or the address last sent from.
     func newMessage() {
         startDraft(to: [])
     }
@@ -986,7 +986,7 @@ public final class MailStore {
     private func startDraft(to: [Address]) {
         Task {
             do {
-                let made = try await bridge.call("new_draft", as: DraftReply.self)
+                let made = try await bridge.call("new_draft", ["mailbox": mailbox], as: DraftReply.self)
                 var draft = made.draft
                 draft.to = to
                 compose = Compose(draft: draft, from: made.from, showCc: false)

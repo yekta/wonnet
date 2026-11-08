@@ -424,6 +424,27 @@ fn contacts_rank_people_written_to_and_match_names_and_addresses() {
 }
 
 #[test]
+fn contacts_rank_whom_the_user_writes_to_often_and_lately() {
+    const DAY: i64 = 86_400_000;
+    let mut store = store();
+    let mut messages = Vec::new();
+    for week in 0..20 {
+        messages.push(mine(&format!("old{week}"), &format!("o{week}"), "neg.old@x.com", week * 7 * DAY));
+    }
+    let now = 200 * DAY;
+    messages.push(mine("new", "n", "neg.new@x.com", now - DAY));
+    for day in 0..3 {
+        messages.push(mine(&format!("often{day}"), &format!("f{day}"), "neg.often@x.com", now - (10 + day) * DAY));
+    }
+    let mut heard = message("heard", "h", "Neg", now);
+    heard.from = Address::new(Some("Neg"), "neg.heard@x.com");
+    messages.push(heard);
+    apply(&mut store, &[account()], &messages, 1);
+    let found: Vec<String> = store.contacts("neg", 8).unwrap().into_iter().map(|address| address.email).collect();
+    assert_eq!(found, ["neg.often@x.com", "neg.new@x.com", "neg.heard@x.com", "neg.old@x.com"]);
+}
+
+#[test]
 fn contacts_match_the_typed_address_first_and_are_named_by_their_own_mail() {
     let mut store = store();
     let mut close = mine("m1", "t1", "pa@y.com.tr", 1_000);
@@ -707,7 +728,7 @@ fn reads_use_indexes() {
         "SELECT thread FROM thread_people WHERE email = 'a@x.com' ORDER BY last_date DESC LIMIT 30".into(),
         "SELECT c.email FROM contacts c WHERE c.email IN (SELECT email FROM contact_words WHERE word >= 'a' AND word < 'b')"
             .into(),
-        "SELECT email FROM contacts ORDER BY (sent * 4 + received) DESC, last DESC LIMIT 8".into(),
+        "SELECT email FROM contacts ORDER BY rank DESC LIMIT 8".into(),
         "SELECT m.thread FROM search JOIN messages m ON m.search_id = search.rowid WHERE search MATCH 'x' \
          ORDER BY search.rowid DESC"
             .into(),
