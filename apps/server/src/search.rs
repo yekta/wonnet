@@ -89,8 +89,17 @@ pub async fn run(db: &PgPool, user_id: Uuid, account: Option<Uuid>, text: &str) 
 
 /// Adds what `query` asks of a message to a query on `messages`.
 pub fn narrow(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, query: Query) {
+    narrow_within(sql, user_id, query, None);
+}
+
+/// As `narrow`, the words found only in the parts of the search `weights` names, as `{a,b,c}`.
+pub fn narrow_within(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, query: Query, weights: Option<&str>) {
     if !query.words.is_empty() {
-        sql.push(" AND search @@ websearch_to_tsquery('simple', ").push_bind(query.words).push(")");
+        match weights {
+            Some(weights) => sql.push(" AND ts_filter(search, ").push_bind(weights.to_string()).push("::\"char\"[])"),
+            None => sql.push(" AND search"),
+        };
+        sql.push(" @@ websearch_to_tsquery('simple', ").push_bind(query.words).push(")");
     }
     for filter in query.filters {
         sql.push(" AND ");
@@ -98,7 +107,7 @@ pub fn narrow(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, query: Query) {
     }
 }
 
-fn condition(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, filter: Filter) {
+pub fn condition(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, filter: Filter) {
     match filter {
         Filter::Matches(part) => sql.push("search @@ to_tsquery('simple', ").push_bind(part).push(")"),
         Filter::HasAttachment => sql.push("attachments <> '[]'::jsonb"),
@@ -144,7 +153,7 @@ fn tokens(text: &str) -> Vec<String> {
 
 /// The words of `value` as to_tsquery lexemes, each with `suffix` (a weight, maybe a prefix
 /// match), joined by `joiner`. Addresses stay whole.
-fn lexemes(value: &str, suffix: &str, joiner: &str) -> Option<String> {
+pub fn lexemes(value: &str, suffix: &str, joiner: &str) -> Option<String> {
     let words: Vec<String> = value
         .split(|character: char| !(character.is_alphanumeric() || "@._+-".contains(character)))
         .map(|word| word.trim_matches(['.', '-', '+', '_']).to_lowercase())
@@ -170,7 +179,7 @@ fn mailbox(value: &str) -> Option<Filter> {
     })
 }
 
-fn date(value: &str) -> Option<DateTime<Utc>> {
+pub fn date(value: &str) -> Option<DateTime<Utc>> {
     let date = NaiveDate::parse_from_str(value, "%Y/%m/%d").or_else(|_| NaiveDate::parse_from_str(value, "%Y-%m-%d"));
     Some(date.ok()?.and_hms_opt(0, 0, 0)?.and_utc())
 }

@@ -894,6 +894,24 @@ pub async fn grants(db: &PgPool, user_id: Uuid) -> sqlx::Result<Vec<GrantRow>> {
     .await
 }
 
+/// Changes what a connected app may do. Only its user can; to anyone else it isn't there.
+pub async fn set_access(db: &PgPool, user_id: Uuid, grant_id: Uuid, access: &Access) -> sqlx::Result<bool> {
+    let mut tx = db.begin().await?;
+    let changed =
+        sqlx::query("UPDATE oauth_grants SET access = $3 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL")
+            .bind(grant_id)
+            .bind(user_id)
+            .bind(JsonColumn(access))
+            .execute(&mut *tx)
+            .await?;
+    if changed.rows_affected() == 0 {
+        return Ok(false);
+    }
+    hub::notify_apps(&mut tx, user_id).await?;
+    tx.commit().await?;
+    Ok(true)
+}
+
 /// Ends a connected app. Only its user can; to anyone else it isn't there.
 pub async fn revoke(db: &PgPool, user_id: Uuid, grant_id: Uuid) -> sqlx::Result<bool> {
     let mut tx = db.begin().await?;

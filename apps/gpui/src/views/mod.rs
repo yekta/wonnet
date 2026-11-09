@@ -62,6 +62,8 @@ pub struct MailWindow {
     onboarding: Option<Entity<onboarding::OnboardingView>>,
     gallery: Option<Entity<gallery::Gallery>>,
     contact: Option<(String, Entity<person::PersonView>)>,
+    /// The sheet of an application asking to connect, or of one connected being changed.
+    connect: Option<(u64, Entity<connect::ConnectView>)>,
     /// The first key of a longer one, as G of G I, and when it was pressed.
     started: Option<(String, Instant)>,
     focus_search: bool,
@@ -147,6 +149,7 @@ impl MailWindow {
             onboarding: None,
             gallery: None,
             contact: None,
+            connect: None,
             started: None,
             focus_search: false,
             applied: None,
@@ -233,6 +236,7 @@ impl MailWindow {
             self.settings.is_some(),
             self.gallery.is_some(),
             self.contact.is_some(),
+            self.connect.is_some(),
         );
         self.make_views(window, cx);
         let open_now = (
@@ -241,12 +245,14 @@ impl MailWindow {
             self.settings.is_some(),
             self.gallery.is_some(),
             self.contact.is_some(),
+            self.connect.is_some(),
         );
         let closed = (open_before.0 && !open_now.0)
             || (open_before.1 && !open_now.1)
             || (open_before.2 && !open_now.2)
             || (open_before.3 && !open_now.3)
-            || (open_before.4 && !open_now.4);
+            || (open_before.4 && !open_now.4)
+            || (open_before.5 && !open_now.5);
         if closed {
             window.focus(&self.focus, cx);
         }
@@ -260,6 +266,15 @@ impl MailWindow {
         let onboarding = store.booted && !store.signed_in;
         let gallery = store.gallery_open;
         let contact = store.contact.clone();
+        let connect = store.connect.as_ref().map(|sheet| sheet.id);
+        match connect {
+            Some(id) if self.connect.as_ref().map(|(open, _)| *open) != Some(id) => {
+                let store = self.store.clone();
+                self.connect = Some((id, cx.new(|cx| connect::ConnectView::new(store, window, cx))));
+            }
+            None if self.connect.is_some() => self.connect = None,
+            _ => {}
+        }
         match compose {
             Some(compose) if self.compose.as_ref().map(|(id, _)| *id) != Some(compose.id) => {
                 let store = self.store.clone();
@@ -635,7 +650,7 @@ impl MailWindow {
                 .into_any_element(),
             );
         }
-        overlays.extend(connect::connect_sheet(&self.store, cx));
+        overlays.extend(self.connect.as_ref().map(|(_, sheet)| sheet.clone().into_any_element()));
         if let Some(confirmation) = store.confirmation.clone() {
             overlays.push(confirmation_alert(self.store.clone(), confirmation, cx).into_any_element());
         }

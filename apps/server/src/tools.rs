@@ -16,9 +16,10 @@ use sqlx::types::Json;
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
-use crate::access::{Caller, Privilege};
+use crate::access::{Access, Caller, Part};
 use crate::db::{ACCOUNT_COLUMNS, AccountRow, MESSAGE_COLUMNS, MessageRow};
 use crate::ops::{self, Outcome};
+use crate::reach::{self, CC, RECIPIENTS, address_is, recipient_is};
 use crate::{AppState, mime, search, sync, unsubscribe};
 
 pub type Answer = Result<Value, String>;
@@ -100,7 +101,8 @@ fn unsubscribe_way(row: &MessageRow) -> Option<&'static str> {
     }
 }
 
-fn message_json(row: &MessageRow, labels: &HashMap<String, String>) -> Value {
+/// A message as the tools answer it, with the parts the access reads.
+fn message_json(row: &MessageRow, labels: &HashMap<String, String>, access: &Access) -> Value {
     let label_names: Vec<&str> =
         row.labels.iter().map(|label| labels.get(label).map(String::as_str).unwrap_or(label)).collect();
     let emails = |addresses: &[mail_protocol::Address]| -> Vec<String> {
@@ -113,15 +115,21 @@ fn message_json(row: &MessageRow, labels: &HashMap<String, String>) -> Value {
         "date": row.date.to_rfc3339(),
         "from": { "name": row.from_name, "email": row.from_email },
         "to": emails(&row.recipients.to),
-        "subject": row.subject,
-        "snippet": row.snippet,
         "unread": row.unread,
         "starred": row.starred,
         "labels": label_names,
         "bulk": row.bulk,
         "unsubscribe": unsubscribe_way(row),
-        "attachments": row.attachments.len(),
     });
+    if access.reads(Part::Subject) {
+        message["subject"] = json!(row.subject);
+    }
+    if access.reads(Part::Body) {
+        message["snippet"] = json!(row.snippet);
+    }
+    if access.reads(Part::Attachments) {
+        message["attachments"] = json!(row.attachments.0);
+    }
     if !row.recipients.cc.is_empty() {
         message["cc"] = json!(emails(&row.recipients.cc));
     }
@@ -131,9 +139,59 @@ fn message_json(row: &MessageRow, labels: &HashMap<String, String>) -> Value {
     message
 }
 
-/// What the agent narrows mail by beyond the search's words and operators.
-#[derive(Debug, Default, Deserialize, JsonSchema)]
+/// What the agent narrows mail by beyond the search's words and operators. Every field given
+/// must hold. A list of senders, recipients or file names takes any one of its entries; a list
+/// of subject or body text, or of labels, takes all of them; a not_ list leaves out mail with
+/// any one of its entries.
+#[derive(Debug, Default, PartialEq, Deserialize, JsonSchema)]
 pub struct Filters {
+    /// Senders: an address, @domain for everyone there and at its subdomains, or other text the
+    /// sender's name or address contains, case aside.
+    #[serde(default)]
+    pub from: Vec<String>,
+    /// Senders to leave out, as `from`.
+    #[serde(default)]
+    pub not_from: Vec<String>,
+    /// Recipients in To, Cc or Bcc, as `from`.
+    #[serde(default)]
+    pub to: Vec<String>,
+    /// Recipients to leave out, as `to`.
+    #[serde(default)]
+    pub not_to: Vec<String>,
+    /// Recipients in Cc only, as `from`.
+    #[serde(default)]
+    pub cc: Vec<String>,
+    /// Text the subject contains, case aside, exactly as written: "[org/repo]", "invoice #".
+    #[serde(default)]
+    pub subject: Vec<String>,
+    /// Subject text to leave out, as `subject`.
+    #[serde(default)]
+    pub not_subject: Vec<String>,
+    /// Words or "phrases" in the body. A body that hasn't been downloaded yet is matched by its
+    /// opening lines.
+    #[serde(default)]
+    pub body: Vec<String>,
+    /// Body words or phrases to leave out, as `body`.
+    #[serde(default)]
+    pub not_body: Vec<String>,
+    /// Labels the mail has: a name or id from list_labels, a mailbox (inbox, sent, drafts, trash,
+    /// spam), or archive for mail in none of inbox, trash and spam.
+    #[serde(default)]
+    pub labels: Vec<String>,
+    /// Labels or mailboxes to leave out, as `labels`.
+    #[serde(default)]
+    pub not_labels: Vec<String>,
+    pub unread: Option<bool>,
+    pub starred: Option<bool>,
+    pub snoozed: Option<bool>,
+    pub has_attachment: Option<bool>,
+    /// Text an attachment's file name contains, case aside: ".pdf", "invoice".
+    #[serde(default)]
+    pub attachment: Vec<String>,
+    /// Only mail from this time on: YYYY-MM-DD (midnight UTC) or RFC 3339.
+    pub after: Option<String>,
+    /// Only mail before this time, as `after`.
+    pub before: Option<String>,
     /// true: only mail sent to a list or by a machine (newsletters, notifications, receipts).
     /// false: only mail from people.
     pub bulk: Option<bool>,
@@ -146,24 +204,206 @@ pub struct Filters {
     pub unanswered: Option<bool>,
 }
 
-/// `SELECT {select} FROM messages` narrowed to the caller's accounts, the search and the filters.
-fn matching(
-    select: &str,
-    caller: &Caller,
+impl Filters {
+    fn is_empty(&self) -> bool {
+        *self == Filters::default()
+    }
+}
+
+/// The mail a tool looks at: the accounts it looks in, the user's own addresses and the labels
+/// of those accounts.
+struct Scope<'a> {
+    caller: &'a Caller,
     accounts: Vec<Uuid>,
     me: Vec<String>,
-    text: &str,
-    filters: &Filters,
-) -> QueryBuilder<Postgres> {
+    labels: Vec<LabelName>,
+}
+
+async fn scope<'a>(state: &AppState, caller: &'a Caller, account_id: Option<&str>) -> Result<Scope<'a>, String> {
+    let reached = reached(state, caller).await?;
+    let accounts = chosen(&reached, account_id)?;
+    let labels = labels_of(state, &accounts).await?;
+    Ok(Scope { caller, me: own_addresses(&reached), accounts, labels })
+}
+
+fn cleaned(entries: &[String]) -> Vec<String> {
+    entries.iter().map(|entry| entry.trim().to_lowercase()).filter(|entry| !entry.is_empty()).collect()
+}
+
+/// ` AND` one of `items` holds, or with `negated` none does. Nothing without items.
+fn any_of<T>(
+    sql: &mut QueryBuilder<Postgres>,
+    negated: bool,
+    items: &[T],
+    push: impl Fn(&mut QueryBuilder<Postgres>, &T),
+) {
+    if items.is_empty() {
+        return;
+    }
+    sql.push(if negated { " AND NOT coalesce((" } else { " AND ((" });
+    for (index, item) in items.iter().enumerate() {
+        if index > 0 {
+            sql.push(" OR ");
+        }
+        push(sql, item);
+    }
+    sql.push(if negated { "), false)" } else { "))" });
+}
+
+/// What a `labels` entry takes: the ids of the labels it names, maybe a mailbox, or the archive.
+enum LabelMatch {
+    Any(Vec<String>),
+    Archived,
+}
+
+fn label_match(labels: &[LabelName], entry: &str) -> Result<LabelMatch, String> {
+    let entry = entry.trim();
+    if ["archive", "archived"].contains(&entry.to_lowercase().as_str()) {
+        return Ok(LabelMatch::Archived);
+    }
+    let mut ids: Vec<String> = labels
+        .iter()
+        .filter(|label| label.id.to_string() == entry || label.name.eq_ignore_ascii_case(entry))
+        .map(|label| label.id.to_string())
+        .collect();
+    ids.extend(role::ALL.iter().find(|role| role.eq_ignore_ascii_case(entry)).map(|role| role.to_string()));
+    match ids.is_empty() {
+        true => Err(format!("No label {entry:?}. list_labels lists them.")),
+        false => Ok(LabelMatch::Any(ids)),
+    }
+}
+
+fn push_label(sql: &mut QueryBuilder<Postgres>, user_id: Uuid, label: &LabelMatch) {
+    match label {
+        LabelMatch::Any(ids) => sql.push("labels && ").push_bind(ids.clone()).push("::text[]"),
+        LabelMatch::Archived => {
+            search::condition(sql, user_id, search::Filter::Archived);
+            sql
+        }
+    };
+}
+
+fn moment(text: &str) -> Result<DateTime<Utc>, String> {
+    let text = text.trim();
+    if let Ok(time) = DateTime::parse_from_rfc3339(text) {
+        return Ok(time.with_timezone(&Utc));
+    }
+    search::date(text).ok_or_else(|| format!("{text:?} isn't a date (YYYY-MM-DD) or an RFC 3339 time."))
+}
+
+fn body_words(entry: &str) -> Result<String, String> {
+    reach::body_words(entry).ok_or_else(|| format!("{entry:?} has no words to look for in a body."))
+}
+
+/// The parts of the search the access may look for words in, as `ts_filter` takes them: the
+/// sender (A) and the recipients (B) always, the subject (C) and the body (D) when it reads them.
+/// None when it reads both, so the whole search is used.
+fn readable_weights(access: &Access) -> Option<&'static str> {
+    match (access.reads(Part::Subject), access.reads(Part::Body)) {
+        (true, true) => None,
+        (true, false) => Some("{a,b,c}"),
+        (false, true) => Some("{a,b,d}"),
+        (false, false) => Some("{a,b}"),
+    }
+}
+
+/// A search can't look into a part the access doesn't read, or it could learn what it says.
+fn refuse_unread_parts(access: &Access, query: &search::Query, filters: &Filters) -> Result<(), String> {
+    fn asks(filter: &search::Filter, part: Part) -> bool {
+        match filter {
+            search::Filter::Matches(part_query) => part == Part::Subject && part_query.contains(":C"),
+            search::Filter::HasAttachment => part == Part::Attachments,
+            search::Filter::Not(inner) => asks(inner, part),
+            _ => false,
+        }
+    }
+    let asked = |part: Part| -> bool {
+        let by_filters = match part {
+            Part::Subject => !filters.subject.is_empty() || !filters.not_subject.is_empty(),
+            Part::Body => !filters.body.is_empty() || !filters.not_body.is_empty(),
+            Part::Attachments => !filters.attachment.is_empty() || filters.has_attachment.is_some(),
+        };
+        by_filters || query.filters.iter().any(|filter| asks(filter, part))
+    };
+    match Part::ALL.into_iter().find(|part| asked(*part) && !access.reads(*part)) {
+        Some(part) => {
+            Err(format!("This connection doesn't read the {} of messages, so it can't search by it.", part.as_str()))
+        }
+        None => Ok(()),
+    }
+}
+
+/// `SELECT {select} FROM messages` narrowed to the scope's accounts, the search and the filters.
+fn matching(select: &str, scope: &Scope, text: &str, filters: &Filters) -> Result<QueryBuilder<Postgres>, String> {
+    let user_id = scope.caller.user_id;
+    let access = &scope.caller.access;
+    let query = search::parse(text, Utc::now());
+    refuse_unread_parts(access, &query, filters)?;
     let mut sql = QueryBuilder::new(format!("SELECT {select} FROM messages WHERE NOT deleted AND user_id = "));
-    sql.push_bind(caller.user_id).push(" AND account_id = ANY(").push_bind(accounts).push(")");
-    search::narrow(&mut sql, caller.user_id, search::parse(text, Utc::now()));
+    sql.push_bind(user_id).push(" AND account_id = ANY(").push_bind(scope.accounts.clone()).push(")");
+    reach::push(&mut sql, access, "messages");
+    search::narrow_within(&mut sql, user_id, query, readable_weights(access));
+
+    let sender = |sql: &mut QueryBuilder<Postgres>, entry: &String| address_is(sql, "from_email", "from_name", entry);
+    any_of(&mut sql, false, &cleaned(&filters.from), sender);
+    any_of(&mut sql, true, &cleaned(&filters.not_from), sender);
+    let recipient = |sql: &mut QueryBuilder<Postgres>, entry: &String| recipient_is(sql, RECIPIENTS, entry);
+    any_of(&mut sql, false, &cleaned(&filters.to), recipient);
+    any_of(&mut sql, true, &cleaned(&filters.not_to), recipient);
+    any_of(&mut sql, false, &cleaned(&filters.cc), |sql, entry| recipient_is(sql, CC, entry));
+
+    let in_subject = |sql: &mut QueryBuilder<Postgres>, text: &String| reach::subject_has(sql, text);
+    for text in cleaned(&filters.subject) {
+        any_of(&mut sql, false, &[text], in_subject);
+    }
+    any_of(&mut sql, true, &cleaned(&filters.not_subject), in_subject);
+
+    let in_body = |sql: &mut QueryBuilder<Postgres>, words: &String| reach::body_has(sql, words);
+    for words in cleaned(&filters.body) {
+        any_of(&mut sql, false, &[body_words(&words)?], in_body);
+    }
+    let not_body: Vec<String> =
+        cleaned(&filters.not_body).iter().map(|words| body_words(words)).collect::<Result<_, _>>()?;
+    any_of(&mut sql, true, &not_body, in_body);
+
+    let label = |sql: &mut QueryBuilder<Postgres>, label: &LabelMatch| push_label(sql, user_id, label);
+    for entry in filters.labels.iter().filter(|entry| !entry.trim().is_empty()) {
+        any_of(&mut sql, false, &[label_match(&scope.labels, entry)?], label);
+    }
+    let not_labels: Vec<LabelMatch> = filters
+        .not_labels
+        .iter()
+        .filter(|entry| !entry.trim().is_empty())
+        .map(|entry| label_match(&scope.labels, entry))
+        .collect::<Result<_, _>>()?;
+    any_of(&mut sql, true, &not_labels, label);
+
+    any_of(&mut sql, false, &cleaned(&filters.attachment), |sql, text| reach::attachment_named(sql, text));
+    for (wanted, filter) in [
+        (filters.unread, search::Filter::Unread),
+        (filters.starred, search::Filter::Starred),
+        (filters.snoozed, search::Filter::Snoozed),
+        (filters.has_attachment, search::Filter::HasAttachment),
+    ] {
+        let Some(wanted) = wanted else { continue };
+        sql.push(" AND ");
+        let filter = if wanted { filter } else { search::Filter::Not(Box::new(filter)) };
+        search::condition(&mut sql, user_id, filter);
+    }
+    if let Some(after) = &filters.after {
+        sql.push(" AND date >= ").push_bind(moment(after)?);
+    }
+    if let Some(before) = &filters.before {
+        sql.push(" AND date < ").push_bind(moment(before)?);
+    }
+
     if let Some(bulk) = filters.bulk {
         sql.push(if bulk { " AND bulk" } else { " AND NOT bulk" });
     }
     if let Some(unsubscribable) = filters.unsubscribable {
         sql.push(if unsubscribable { " AND unsubscribe IS NOT NULL" } else { " AND unsubscribe IS NULL" });
     }
+    let me = scope.me.clone();
     let others = " FROM messages other WHERE other.account_id = messages.account_id
         AND other.thread_id = messages.thread_id AND NOT other.deleted AND NOT (other.from_email = ANY(";
     if let Some(important) = filters.important {
@@ -178,7 +418,7 @@ fn matching(
         );
         sql.push(if unanswered { " <> ALL(" } else { " = ANY(" }).push_bind(me).push(")");
     }
-    sql
+    Ok(sql)
 }
 
 // ---------- reading ----------
@@ -190,6 +430,8 @@ pub async fn list_accounts(state: &AppState, caller: &Caller) -> Answer {
         "access": {
             "role": access.role.as_str(),
             "all_accounts": access.all_accounts,
+            "some_mail_only": access.filtered(),
+            "reads": access.reads.iter().map(|part| part.as_str()).collect::<Vec<_>>(),
             "privileges": access.privileges.iter().map(|privilege| privilege.as_str()).collect::<Vec<_>>(),
         },
         "accounts": accounts.iter().map(|account| json!({
@@ -244,11 +486,9 @@ fn read_cursor(cursor: &str) -> Result<(DateTime<Utc>, Uuid), String> {
 }
 
 pub async fn search(state: &AppState, caller: &Caller, args: SearchArgs) -> Answer {
-    let accounts = reached(state, caller).await?;
-    let me = own_addresses(&accounts);
-    let ids = chosen(&accounts, args.account_id.as_deref())?;
+    let scope = scope(state, caller, args.account_id.as_deref()).await?;
     let limit = args.limit.unwrap_or(PAGE).clamp(1, MOST);
-    let mut sql = matching(MESSAGE_COLUMNS, caller, ids.clone(), me, &args.query, &args.filters);
+    let mut sql = matching(MESSAGE_COLUMNS, &scope, &args.query, &args.filters)?;
     if let Some(cursor) = args.cursor.as_deref().filter(|cursor| !cursor.is_empty()) {
         let (date, id) = read_cursor(cursor)?;
         sql.push(" AND (date, id) < (").push_bind(date).push(", ").push_bind(id).push(")");
@@ -257,10 +497,10 @@ pub async fn search(state: &AppState, caller: &Caller, args: SearchArgs) -> Answ
     let mut rows: Vec<MessageRow> = sql.build_query_as().fetch_all(&state.db).await.map_err(failed)?;
     let more = rows.len() > limit as usize;
     rows.truncate(limit as usize);
-    let labels = names(&labels_of(state, &ids).await?);
+    let labels = names(&scope.labels);
     let next = rows.last().filter(|_| more).map(|row| format!("{}_{}", crate::db::millis(row.date), row.id));
     Ok(json!({
-        "messages": rows.iter().map(|row| message_json(row, &labels)).collect::<Vec<_>>(),
+        "messages": rows.iter().map(|row| message_json(row, &labels, &caller.access)).collect::<Vec<_>>(),
         "next_cursor": next,
     }))
 }
@@ -302,9 +542,7 @@ struct SenderRow {
 }
 
 pub async fn list_senders(state: &AppState, caller: &Caller, args: SendersArgs) -> Answer {
-    let accounts = reached(state, caller).await?;
-    let me = own_addresses(&accounts);
-    let ids = chosen(&accounts, args.account_id.as_deref())?;
+    let scope = scope(state, caller, args.account_id.as_deref()).await?;
     let limit = args.limit.unwrap_or(50).clamp(1, MOST);
     let offset = args.offset.unwrap_or(0);
     let key = match args.group_by.unwrap_or(GroupBy::Sender) {
@@ -319,8 +557,8 @@ pub async fn list_senders(state: &AppState, caller: &Caller, args: SendersArgs) 
          (array_agg(unsubscribe ORDER BY date DESC) FILTER (WHERE unsubscribe IS NOT NULL))[1] AS unsubscribe,
          (array_agg(subject ORDER BY date DESC))[1:3] AS subjects"
     );
-    let mut sql = matching(&select, caller, ids, me.clone(), &args.query, &args.filters);
-    sql.push(" AND from_email <> '' AND NOT (from_email = ANY(").push_bind(me).push("))");
+    let mut sql = matching(&select, &scope, &args.query, &args.filters)?;
+    sql.push(" AND from_email <> '' AND NOT (from_email = ANY(").push_bind(scope.me.clone()).push("))");
     sql.push(" GROUP BY 1 ORDER BY messages DESC, sender LIMIT ").push_bind(i64::from(limit) + 1);
     sql.push(" OFFSET ").push_bind(i64::from(offset));
     let mut rows: Vec<SenderRow> = sql.build_query_as().fetch_all(&state.db).await.map_err(failed)?;
@@ -334,7 +572,7 @@ pub async fn list_senders(state: &AppState, caller: &Caller, args: SendersArgs) 
                 (_, Some(_)) => "email",
                 _ => "web",
             });
-            json!({
+            let mut sender = json!({
                 "sender": row.sender,
                 "name": row.name,
                 "messages": row.messages,
@@ -343,8 +581,11 @@ pub async fn list_senders(state: &AppState, caller: &Caller, args: SendersArgs) 
                 "newest": row.newest.to_rfc3339(),
                 "bulk": row.bulk,
                 "unsubscribe": way,
-                "subjects": row.subjects,
-            })
+            });
+            if caller.access.reads(Part::Subject) {
+                sender["subjects"] = json!(row.subjects);
+            }
+            sender
         })
         .collect();
     let next = more.then(|| offset + limit);
@@ -357,11 +598,24 @@ pub struct ThreadArgs {
     pub message_id: String,
 }
 
+/// A message the caller reaches: in one of its accounts, in a thread its access reaches.
 async fn message_reached(state: &AppState, caller: &Caller, id: &str) -> Result<MessageRow, String> {
     let id = uuid(id, "message")?;
     let row = crate::db::message(&state.db, caller.user_id, id).await.map_err(failed)?;
-    row.filter(|row| !row.deleted && caller.access.reaches(&row.account_id.to_string()))
-        .ok_or_else(|| "No such message.".into())
+    let row = row
+        .filter(|row| !row.deleted && caller.access.reaches(&row.account_id.to_string()))
+        .ok_or_else(|| "No such message.".to_string())?;
+    if !caller.access.filtered() {
+        return Ok(row);
+    }
+    let mut sql = QueryBuilder::<Postgres>::new("SELECT count(*) FROM messages WHERE id = ");
+    sql.push_bind(row.id);
+    reach::push(&mut sql, &caller.access, "messages");
+    let found: i64 = sql.build_query_scalar().fetch_one(&state.db).await.map_err(failed)?;
+    match found {
+        0 => Err("No such message.".into()),
+        _ => Ok(row),
+    }
 }
 
 async fn thread_rows(
@@ -386,11 +640,11 @@ pub async fn get_thread(state: &AppState, caller: &Caller, args: ThreadArgs) -> 
     let message = message_reached(state, caller, &args.message_id).await?;
     let rows = thread_rows(state, caller, message.account_id, &message.thread_id).await?;
     let labels = names(&labels_of(state, &[message.account_id]).await?);
-    let reads = caller.access.has(Privilege::ReadBodies);
+    let reads = caller.access.reads(Part::Body);
     let first_body = rows.len().saturating_sub(THREAD_BODIES);
     let mut messages = Vec::new();
     for (index, row) in rows.iter().enumerate() {
-        let mut json = message_json(row, &labels);
+        let mut json = message_json(row, &labels, &caller.access);
         if reads && index >= first_body {
             match sync::body(state, caller.user_id, &row.id.to_string()).await {
                 Ok(body) => {
@@ -410,11 +664,13 @@ pub async fn get_thread(state: &AppState, caller: &Caller, args: ThreadArgs) -> 
     let mut thread = json!({
         "account_id": message.account_id,
         "thread_id": message.thread_id,
-        "subject": rows.first().map(|row| row.subject.as_str()).unwrap_or_default(),
         "messages": messages,
     });
+    if caller.access.reads(Part::Subject) {
+        thread["subject"] = json!(rows.first().map(|row| row.subject.as_str()).unwrap_or_default());
+    }
     if !reads {
-        thread["note"] = json!("Bodies need the read_bodies privilege; these are the snippets.");
+        thread["note"] = json!("This connection doesn't read bodies, so they are left out.");
     }
     Ok(thread)
 }
@@ -445,16 +701,17 @@ pub struct ModifyArgs {
     /// Messages to act on. Each one's whole thread is changed, as the apps do.
     #[serde(default)]
     pub message_ids: Vec<String>,
-    /// Or a search, as `search` takes it: every thread it matches is changed.
+    /// Or a search, as `search` takes it, with or without the filters: every thread with a
+    /// message it matches is changed.
     pub query: Option<String>,
     pub account_id: Option<String>,
     #[serde(flatten)]
     pub filters: Filters,
-    /// For add_label and remove_label: the label's id, or its name in each account.
+    /// For add_label and remove_label: the label to add or remove, its id or its name in each account.
     pub label: Option<String>,
     /// For snooze: when the threads come back, RFC 3339.
     pub until: Option<String>,
-    /// With a query: false, the default, only counts the threads it would change and shows some.
+    /// With a search: false, the default, only counts the threads it would change and shows some.
     #[serde(default)]
     pub confirm: bool,
 }
@@ -602,14 +859,10 @@ fn one_label(
 }
 
 pub async fn modify(state: &AppState, caller: &Caller, args: ModifyArgs) -> Answer {
-    let accounts = reached(state, caller).await?;
-    let ids = chosen(&accounts, args.account_id.as_deref())?;
-    let me = own_addresses(&accounts);
+    let scope = scope(state, caller, args.account_id.as_deref()).await?;
     let labels = match (args.action, &args.label) {
         (Action::AddLabel | Action::RemoveLabel, None) => return Err("Say which label.".into()),
-        (Action::AddLabel | Action::RemoveLabel, Some(label)) => {
-            label_per_account(label, &labels_of(state, &ids).await?)?
-        }
+        (Action::AddLabel | Action::RemoveLabel, Some(label)) => label_per_account(label, &scope.labels)?,
         _ => HashMap::new(),
     };
     let until = match (args.action, &args.until) {
@@ -622,22 +875,24 @@ pub async fn modify(state: &AppState, caller: &Caller, args: ModifyArgs) -> Answ
     if until != 0 && until <= Utc::now().timestamp_millis() {
         return Err("Snooze until a time to come.".into());
     }
-    let (keys, more) = match &args.query {
-        Some(query) if args.message_ids.is_empty() => {
-            let mut sql = matching("DISTINCT account_id, thread_id", caller, ids.clone(), me, query, &args.filters);
+    let searched = args.query.is_some() || !args.filters.is_empty();
+    let (keys, more) = match (searched, args.message_ids.is_empty()) {
+        (true, false) => return Err("Give message_ids or a search, not both.".into()),
+        (false, true) => return Err("Give message_ids, or a query or filters to search with.".into()),
+        (true, true) => {
+            let query = args.query.as_deref().unwrap_or_default();
+            let mut sql = matching("DISTINCT account_id, thread_id", &scope, query, &args.filters)?;
             sql.push(" LIMIT ").push_bind(MOST_THREADS + 1);
             let mut keys: Vec<(Uuid, String)> = sql.build_query_as().fetch_all(&state.db).await.map_err(failed)?;
             let more = keys.len() as i64 > MOST_THREADS;
             keys.truncate(MOST_THREADS as usize);
             (keys, more)
         }
-        Some(_) => return Err("Give message_ids or a query, not both.".into()),
-        None if args.message_ids.is_empty() => return Err("Give message_ids or a query.".into()),
-        None => {
+        (false, false) => {
             let mut keys = Vec::new();
             for id in &args.message_ids {
                 let message = message_reached(state, caller, id).await?;
-                if ids.contains(&message.account_id) {
+                if scope.accounts.contains(&message.account_id) {
                     keys.push((message.account_id, message.thread_id));
                 }
             }
@@ -645,11 +900,12 @@ pub async fn modify(state: &AppState, caller: &Caller, args: ModifyArgs) -> Answ
         }
     };
     let threads = threads_of(state, caller, keys).await?;
-    if args.query.is_some() && !args.confirm {
-        let all_labels = names(&labels_of(state, &ids).await?);
+    if searched && !args.confirm {
+        let all_labels = names(&scope.labels);
         let mut newest: Vec<&MessageRow> = threads.values().filter_map(|messages| messages.last()).collect();
         newest.sort_by_key(|message| std::cmp::Reverse(message.date));
-        let sample: Vec<Value> = newest.iter().take(SAMPLE).map(|row| message_json(row, &all_labels)).collect();
+        let sample: Vec<Value> =
+            newest.iter().take(SAMPLE).map(|row| message_json(row, &all_labels, &caller.access)).collect();
         return Ok(json!({
             "would_change_threads": threads.len(),
             "more_than_that": more,
@@ -829,7 +1085,19 @@ struct RuleCandidate {
     starred: bool,
 }
 
+/// Rules and splits act on all new mail, beyond what an access that reaches only some mail may.
+fn all_mail(caller: &Caller) -> Result<(), String> {
+    match caller.access.filtered() {
+        true => Err("This connection reaches only some of the mail, and this acts on all of it.".into()),
+        false => Ok(()),
+    }
+}
+
 pub async fn create_rule(state: &AppState, caller: &Caller, args: CreateRuleArgs) -> Answer {
+    all_mail(caller)?;
+    if !caller.access.reads(Part::Subject) && args.subject.iter().any(|words| !words.trim().is_empty()) {
+        return Err("This connection doesn't read subjects, so its rules can't match them.".into());
+    }
     let accounts = reached(state, caller).await?;
     let all: Vec<Uuid> = accounts.iter().map(|account| account.id).collect();
     let labels = labels_of(state, &all).await?;
@@ -1013,6 +1281,7 @@ pub async fn create_split(state: &AppState, caller: &Caller, args: CreateSplitAr
     if from.is_empty() && args.label.is_none() {
         return Err("Give the split senders or a label to take.".into());
     }
+    all_mail(caller)?;
     let accounts = reached(state, caller).await?;
     let all: Vec<Uuid> = accounts.iter().map(|account| account.id).collect();
     let labels = labels_of(state, &all).await?;
@@ -1086,15 +1355,16 @@ async fn unsubscribe_one(
     then: Option<Then>,
 ) -> Value {
     let sender = sender.trim().to_lowercase();
-    let newest: Result<Option<MessageRow>, sqlx::Error> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT {MESSAGE_COLUMNS} FROM messages WHERE user_id = $1 AND account_id = ANY($2) AND from_email = $3
-             AND NOT deleted AND unsubscribe IS NOT NULL ORDER BY date DESC LIMIT 1"
-    )))
-    .bind(caller.user_id)
-    .bind(accounts)
-    .bind(&sender)
-    .fetch_optional(&state.db)
-    .await;
+    let from_sender = |select: &str| {
+        let mut sql = QueryBuilder::<Postgres>::new(format!("SELECT {select} FROM messages WHERE user_id = "));
+        sql.push_bind(caller.user_id).push(" AND account_id = ANY(").push_bind(accounts.to_vec());
+        sql.push(") AND from_email = ").push_bind(sender.clone()).push(" AND NOT deleted");
+        reach::push(&mut sql, &caller.access, "messages");
+        sql
+    };
+    let mut newest = from_sender(MESSAGE_COLUMNS);
+    newest.push(" AND unsubscribe IS NOT NULL ORDER BY date DESC LIMIT 1");
+    let newest: Result<Option<MessageRow>, sqlx::Error> = newest.build_query_as().fetch_optional(&state.db).await;
     let message = match newest {
         Ok(Some(message)) => message,
         Ok(None) => {
@@ -1113,15 +1383,8 @@ async fn unsubscribe_one(
     }
     let mut answer = json!({ "sender": sender, "result": "unsubscribed", "by": unsubscribe_way(&message) });
     let Some(then) = then else { return answer };
-    let keys: Result<Vec<(Uuid, String)>, sqlx::Error> = sqlx::query_as(
-        "SELECT DISTINCT account_id, thread_id FROM messages
-         WHERE user_id = $1 AND account_id = ANY($2) AND from_email = $3 AND NOT deleted",
-    )
-    .bind(caller.user_id)
-    .bind(accounts)
-    .bind(&sender)
-    .fetch_all(&state.db)
-    .await;
+    let keys: Result<Vec<(Uuid, String)>, sqlx::Error> =
+        from_sender("DISTINCT account_id, thread_id").build_query_as().fetch_all(&state.db).await;
     let moved = async {
         let threads = threads_of(state, caller, keys.map_err(failed)?).await?;
         let action = match then {

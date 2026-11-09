@@ -857,8 +857,10 @@ impl SettingsView {
         ]
     }
 
-    /// An application let in: its name, what it may do and when it was used; and Revoke.
+    /// An application let in: its name, what it may do and when it was used; Change and Revoke.
     fn connected_app_row(&self, app: &ConnectedApp, revoking: bool, cx: &App) -> AnyElement {
+        let change = self.store.clone();
+        let changed = app.id.clone();
         let revoke = self.store.clone();
         let revoked = app.clone();
         let verified = app.verified.then(|| {
@@ -874,6 +876,13 @@ impl SettingsView {
                 cx,
             ),
             vec![
+                ActionButton::new(SharedString::from(format!("change-{}", app.id)), "Change")
+                    .surface(ui::Surface::Card)
+                    .on_click(move |_, _, cx| {
+                        let changed = changed.clone();
+                        change.update(cx, |store, cx| store.edit_connected_app(changed, cx))
+                    })
+                    .into_any_element(),
                 ActionButton::new(SharedString::from(format!("revoke-{}", app.id)), "Revoke")
                     .surface(ui::Surface::Card)
                     .pending(revoking)

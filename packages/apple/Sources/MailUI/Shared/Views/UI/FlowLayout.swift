@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// Lays its views out in lines, wrapping as text does. The last one takes the rest of its line,
-/// for a text field after an address field's chips.
+/// for a text field after an address field's chips, unless `stretchesLast` is off.
 struct FlowLayout: Layout {
     var spacing: CGFloat = Space.xs
     var lineSpacing: CGFloat = Space.xs
+    var stretchesLast = true
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -33,7 +34,7 @@ struct FlowLayout: Layout {
                 y += lineHeight + lineSpacing
                 lineHeight = 0
             }
-            if index == subviews.count - 1, width.isFinite {
+            if stretchesLast, index == subviews.count - 1, width.isFinite {
                 size.width = max(size.width, width - x)
             }
             size.width = min(size.width, width)

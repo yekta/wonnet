@@ -107,6 +107,8 @@ pub enum SearchStyle {
     Sheet,
     /// The same, smaller, at the top of a popup.
     Popup,
+    /// As `Popup`, at the bottom of a popup drawn over its face: its hairline on top.
+    PopupBottom,
     /// The top bar's capsule.
     Bar,
 }
@@ -117,6 +119,20 @@ pub fn search_field(
     state: &Entity<InputState>,
     style: SearchStyle,
     symbol: Symbol,
+    keys: FieldKeys,
+    clear: Rc<dyn Fn(&mut Window, &mut App)>,
+    cx: &App,
+) -> impl IntoElement + use<> {
+    tagged_search_field(id, state, style, symbol, None, keys, clear, cx)
+}
+
+/// A search field with a tag before its words, as the kind a filter's menu is narrowed to.
+pub fn tagged_search_field(
+    id: &str,
+    state: &Entity<InputState>,
+    style: SearchStyle,
+    symbol: Symbol,
+    tag: Option<AnyElement>,
     keys: FieldKeys,
     clear: Rc<dyn Fn(&mut Window, &mut App)>,
     cx: &App,
@@ -136,6 +152,7 @@ pub fn search_field(
         .cursor_text()
         .on_mouse_down(MouseButton::Left, move |_, window, cx| window.focus(&focus, cx))
         .child(icon(symbol, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)))
+        .children(tag.map(|tag| div().flex_none().child(tag)))
         .child(
             div()
                 .flex_1()
@@ -158,6 +175,7 @@ pub fn search_field(
         SearchStyle::Bar => field.rounded_full().border_1().border_color(cx.color(BORDER_INPUT)),
         SearchStyle::Sheet => field.border_b_1().border_color(cx.color(BORDER_CARD)),
         SearchStyle::Popup => field.border_b_1().border_color(cx.color(BORDER_POPOVER)),
+        SearchStyle::PopupBottom => field.border_t_1().border_color(cx.color(BORDER_POPOVER)),
     };
     with_list_keys(div().w_full().child(field), &state.read(cx).focus_handle(cx), keys, cx)
 }

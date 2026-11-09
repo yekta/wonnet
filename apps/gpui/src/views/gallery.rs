@@ -164,16 +164,22 @@ impl Render for Gallery {
                 .w(px(320.))
                 .child(ui::settings_card(
                     vec![
-                        ui::mark_list(vec![
-                            ui::MarkRow::new("gallery-mark-1", "Reader", ui::Mark::Radio, |_, _, _| {})
-                                .detail("Searches and reads the first lines.")
-                                .lead(Lead::Symbol(Symbol::Eye))
-                                .checked(true)
-                                .into_any_element(),
-                            ui::MarkRow::new("gallery-mark-2", "Read whole messages", ui::Mark::Check, |_, _, _| {})
-                                .lead(Lead::Symbol(Symbol::FileText))
-                                .into_any_element(),
-                        ])
+                        ui::mark_list(
+                            vec![
+                                ui::MarkRow::new("gallery-mark-1", "Reader", ui::Mark::Radio, |_, _, _| {})
+                                    .detail("Searches and reads the first lines.")
+                                    .lead(Lead::Symbol(Symbol::Eye))
+                                    .checked(true),
+                                ui::MarkRow::new(
+                                    "gallery-mark-2",
+                                    "Read whole messages",
+                                    ui::Mark::Check,
+                                    |_, _, _| {},
+                                )
+                                .lead(Lead::Symbol(Symbol::FileText)),
+                            ],
+                            cx,
+                        )
                         .into_any_element(),
                     ],
                     cx,

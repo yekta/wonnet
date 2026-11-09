@@ -751,14 +751,15 @@ private struct ConnectedAppsPage: View {
         .id("connect")
         SettingsListSection(
             "Connected apps",
-            footer: "They reach your mail as you chose when you approved them. Swipe one to revoke it: its access ends at once."
+            footer: "They reach your mail as you chose. Tap one to change what it may do; swipe it to revoke it: its access ends at once."
         ) {
             if let apps = model.apps {
                 if apps.isEmpty {
                     Text("No applications are connected yet.").foregroundStyle(Tokens.mutedForeground.color)
                 }
                 ForEach(apps) { app in
-                    appRow(app)
+                    Button { store.change(app) } label: { appRow(app) }
+                        .buttonStyle(.plain)
                         .swipeActions {
                             Button("Revoke", role: .destructive) { revoking = app }
                         }
@@ -799,12 +800,15 @@ private struct ConnectedAppsPage: View {
                 Text(app.access).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
                 Text(app.used).textStyle(.caption, color: Tokens.mutedStrongerForeground.color)
             }
+            Spacer(minLength: Space.s)
             if model.revoking.contains(app.id) {
-                Spacer(minLength: Space.s)
                 Spinner()
+            } else {
+                Image(.chevronRight, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color)
             }
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 

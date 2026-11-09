@@ -63,6 +63,15 @@ enum TextStyle {
         return .ui(size, weight)
     }
 
+    /// How tall a line of the style is, to keep room for some lines.
+    var lineHeight: CGFloat {
+        #if os(macOS)
+        NSLayoutManager().defaultLineHeight(for: platformFont)
+        #else
+        platformFont.lineHeight
+        #endif
+    }
+
     /// `font` for what AppKit and UIKit draw themselves.
     var platformFont: PlatformFont {
         guard self != .mono else { return .monospacedSystemFont(ofSize: size * Platform.scale, weight: .regular) }

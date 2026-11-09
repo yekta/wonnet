@@ -16,6 +16,7 @@ enum Symbol: String {
     case bell = "\u{e059}"
     case bellOff = "\u{e05a}"
     case box = "\u{e061}"
+    case calendar = "\u{e063}"
     case calendarClock = "\u{e304}"
     case check = "\u{e06c}"
     case checkCheck = "\u{e38e}"
@@ -49,6 +50,7 @@ enum Symbol: String {
     case inbox = "\u{e0f7}"
     case keyboard = "\u{e284}"
     case listFilter = "\u{e460}"
+    case lock = "\u{e10b}"
     case loader = "\u{e109}"
     case logOut = "\u{e10e}"
     case mail = "\u{e10f}"
@@ -80,9 +82,12 @@ enum Symbol: String {
     case starFilled = "star-filled"
     case sun = "\u{e178}"
     case tag = "\u{e17f}"
+    case text = "\u{e185}"
     case trash = "\u{e18e}"
+    case type = "\u{e198}"
     case undo = "\u{e2a1}"
     case user = "\u{e19f}"
+    case users = "\u{e1a4}"
     case wifiOff = "\u{e1af}"
     case x = "\u{e1b2}"
     case zap = "\u{e1b4}"
@@ -102,6 +107,14 @@ enum Symbol: String {
         case "mail-x": .mailX
         case "shield-alert": .shieldAlert
         case "trash": .trash
+        case "user": .user
+        case "users": .users
+        case "type": .type
+        case "text": .text
+        case "paperclip": .paperclip
+        case "calendar": .calendar
+        case "search": .search
+        case "lock": .lock
         default: .tag
         }
     }

@@ -1,27 +1,24 @@
 import SwiftUI
 
 /// An application asking to reach the mail, opened by the `wonnet://connect` link of the page it
-/// sent the browser to: who is asking, which accounts it reaches, its role and its privileges.
-/// Deny and Approve sit side by side under the choices; closing the sheet denies too, so the
-/// browser doesn't wait on an answer that won't come.
+/// sent the browser to, or a connected app whose access is changed: who it is, which accounts and
+/// which of their mail it reaches (the filter), what it reads of each message and what it can do,
+/// with the sentence that says it all over them. Deny and Approve (Cancel and Save for a connected
+/// app) sit under the choices; closing a request's sheet denies it too, so the browser doesn't
+/// wait on an answer that won't come.
 struct ConnectSheet: View {
-    let url: String
+    let connecting: Connecting
     @Environment(MailStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var phase: Phase = .loading
-    @State private var everyAccount = true
-    @State private var accounts: Set<String> = []
-    @State private var role = "reader"
-    @State private var privileges: Set<String> = []
     @State private var approving = false
     @State private var denying = false
-    @State private var failure: String?
     @State private var answered = false
 
     private enum Phase {
         case loading
         case failed(String)
-        case asking(ConnectRequest)
+        case asking(AccessDraft)
         case approved(String)
     }
 
@@ -32,33 +29,38 @@ struct ConnectSheet: View {
                 Spinner(size: 20).frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 ended(symbol: .circleAlert, tint: Tokens.destructive, title: "This request can't go on", message: message)
-            case .asking(let request):
-                asking(request)
+            case .asking(let draft):
+                asking(draft)
             case .approved(let client):
                 ended(
                     symbol: .circleCheck, tint: Tokens.success, title: "Approved",
-                    message: "Your browser takes you back to \(client). You can revoke it in Settings → Connected apps."
+                    message: "Your browser takes you back to \(client). You can change or revoke it in Settings → Connected apps."
                 )
             }
         }
         .task { await load() }
+        // A swipe would answer the request, or drop the changes, without a word: Deny, Cancel or
+        // the X say it.
+        .interactiveDismissDisabled()
         .onDisappear {
-            guard !answered, case .asking(let request) = phase else { return }
-            store.denyQuietly(request)
+            guard !answered, case .asking(let draft) = phase, !draft.editing else { return }
+            store.denyQuietly(draft.request)
         }
     }
 
     private var title: String {
         switch phase {
-        case .asking(let request): "Connect \(request.client)"
+        case .asking(let draft): draft.editing ? "Change \(draft.request.client)" : "Connect \(draft.request.client)"
         case .approved(let client): "Connect \(client)"
-        default: "Connect an application"
+        default: connecting.app == nil ? "Connect an application" : "Change an application"
         }
     }
 
     private func load() async {
         do {
-            phase = .asking(try await store.connectRequest(url))
+            let draft = AccessDraft(request: try await store.connectRequest(connecting))
+            draft.refresh(store)
+            phase = .asking(draft)
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -66,16 +68,16 @@ struct ConnectSheet: View {
 
     // MARK: Asking
 
-    @ViewBuilder private func asking(_ request: ConnectRequest) -> some View {
+    @ViewBuilder private func asking(_ draft: AccessDraft) -> some View {
         #if os(iOS)
-        iosForm(request)
+        iosForm(draft)
         #else
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xl) {
-                    Asker(request: request)
-                    choices(request)
-                    if let failure {
+                    Asker(request: draft.request)
+                    choices(draft)
+                    if let failure = draft.failure {
                         Notice(text: failure, tone: .error, symbol: .circleAlert)
                     }
                 }
@@ -83,13 +85,21 @@ struct ConnectSheet: View {
                 .frame(maxWidth: Theme.settingsPageWidth)
                 .frame(maxWidth: .infinity)
             }
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                ActionButton(title: "Deny", variant: .ghost, pending: denying) { deny(request) }
-                    .disabled(approving)
-                ActionButton(title: "Approve", symbol: .check, variant: .primary, pending: approving) { approve(request) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!(everyAccount || !accounts.isEmpty) || denying)
+            // What it all comes to, beside the button that approves it. Down here it grows into the
+            // bar, so nothing on the page moves when it changes.
+            HStack(alignment: .center, spacing: Space.l) {
+                SentenceText(parts: draft.summary?.sentence ?? [])
+                    .padding(.leading, Theme.buttonGap / 2)
+                HStack(spacing: 0) {
+                    ActionButton(title: draft.editing ? "Cancel" : "Deny", variant: .ghost, pending: denying) { deny(draft) }
+                        .disabled(approving)
+                    ActionButton(title: draft.editing ? "Save" : "Approve", symbol: .check, variant: .primary, pending: approving) {
+                        approve(draft)
+                    }
+                    .keyboardShortcut(draft.menuOpen ? nil : .defaultAction)
+                    .disabled(!ready(draft) || denying)
+                }
+                .fixedSize()
             }
             .padding(.horizontal, Space.xl - Theme.buttonGap / 2)
             .padding(.vertical, Space.m)
@@ -98,150 +108,217 @@ struct ConnectSheet: View {
         #endif
     }
 
+    private func ready(_ draft: AccessDraft) -> Bool {
+        guard let summary = draft.summary else { return false }
+        return summary.problem == nil
+    }
+
+    #if os(macOS)
+    @ViewBuilder private func choices(_ draft: AccessDraft) -> some View {
+        let request = draft.request
+        let access = draft.access
+        FormSection(title: "Accounts", detail: "Whose mail it can reach.") {
+            SettingsCard {
+                MarkRow(title: "Every account", detail: "Including the ones you add later.", symbol: .inbox, checked: access.allAccounts) {
+                    draft.change(store) { $0.allAccounts = true }
+                }
+                SettingsDivider()
+                MarkRow(title: "Only some accounts", detail: "Only the ones you pick.", symbol: .listFilter, checked: !access.allAccounts) {
+                    draft.change(store) { $0.allAccounts = false }
+                }
+                if !access.allAccounts {
+                    ForEach(request.accounts) { account in
+                        SettingsDivider()
+                        MarkRow(
+                            title: account.title, detail: account.detail, dot: Theme.accountColor(account.color ?? "").color, kind: .any,
+                            indent: Space.xl, checked: access.accounts.contains(account.id)
+                        ) { draft.toggle(account.id, in: \.accounts, store) }
+                    }
+                }
+            }
+        }
+        FormSection(title: "Filter", detail: "Which of that mail it can find. What's kept out isn't there for it.") {
+            FilterCard(draft: draft)
+        }
+        FormSection(title: "What it reads", detail: "Of each message it can reach.") {
+            SettingsCard {
+                MarkRow(
+                    title: request.always.title, detail: request.always.detail, symbol: request.always.symbol.map(Symbol.named), kind: .any,
+                    locked: true, checked: true
+                ) {}
+                ForEach(request.reads) { choice in
+                    SettingsDivider()
+                    MarkRow(
+                        title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), kind: .any,
+                        checked: access.reads.contains(choice.id)
+                    ) { draft.toggle(choice.id, in: \.reads, store) }
+                }
+            }
+        }
+        FormSection(title: "What it can do", detail: "With the mail it reaches.") {
+            SettingsCard {
+                ForEach(request.roles) { choice in
+                    if choice != request.roles.first { SettingsDivider() }
+                    MarkRow(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), checked: access.role == choice.id) {
+                        draft.change(store) { $0.role = choice.id }
+                    }
+                }
+                ForEach(request.privileges) { choice in
+                    SettingsDivider()
+                    MarkRow(
+                        title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), kind: .any,
+                        checked: access.privileges.contains(choice.id)
+                    ) { draft.toggle(choice.id, in: \.privileges, store) }
+                }
+            }
+        }
+    }
+    #endif
+
     #if os(iOS)
     /// On iOS the system's own: a list of inset groups, a checkmark on the choice in force,
-    /// switches for the privileges, and the system's buttons under it.
-    private func iosForm(_ request: ConnectRequest) -> some View {
-        SettingsList {
+    /// switches for the rest, the filter's lines as pages, and the system's buttons under it.
+    private func iosForm(_ draft: AccessDraft) -> some View {
+        let request = draft.request
+        let access = draft.access
+        return SettingsList {
             Section {
                 Asker(request: request, card: false)
             }
-            SettingsListSection("Accounts", footer: "Which mail it can reach.") {
-                CheckCell(title: "Every account", detail: "Including the ones you add later.", symbol: .inbox, checked: everyAccount) {
-                    everyAccount = true
+            SettingsListSection("Accounts", footer: "Whose mail it can reach.") {
+                CheckCell(title: "Every account", detail: "Including the ones you add later.", symbol: .inbox, checked: access.allAccounts) {
+                    draft.change(store) { $0.allAccounts = true }
                 }
-                CheckCell(title: "Only some accounts", detail: "Only the ones you pick.", symbol: .listFilter, checked: !everyAccount) {
-                    everyAccount = false
+                CheckCell(title: "Only some accounts", detail: "Only the ones you pick.", symbol: .listFilter, checked: !access.allAccounts) {
+                    draft.change(store) { $0.allAccounts = false }
                 }
             }
-            if !everyAccount {
-                SettingsListSection(footer: accounts.isEmpty ? "Pick at least one account." : nil) {
+            if !access.allAccounts {
+                SettingsListSection(footer: draft.summary?.problem) {
                     ForEach(request.accounts) { account in
                         CheckCell(
                             title: account.title, detail: account.detail, dot: Theme.accountColor(account.color ?? "").color,
-                            checked: accounts.contains(account.id)
-                        ) { toggle(account.id, in: &accounts) }
+                            checked: access.accounts.contains(account.id)
+                        ) { draft.toggle(account.id, in: \.accounts, store) }
                     }
                 }
             }
-            SettingsListSection("Role", footer: "The most it can do with that mail.") {
-                ForEach(request.roles) { choice in
-                    CheckCell(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), checked: role == choice.id) {
-                        role = choice.id
+            Section {
+                NavigationLink { FilterLinePage(draft: draft, line: .only) } label: {
+                    LabeledContent { Text(count(draft, .only, none: "All mail")) } label: {
+                        CellLabel(title: "Only", symbol: .listFilter)
                     }
                 }
+                NavigationLink { FilterLinePage(draft: draft, line: .never) } label: {
+                    LabeledContent { Text(count(draft, .never, none: "Nothing")) } label: {
+                        CellLabel(title: "Never", symbol: .ban)
+                    }
+                }
+            } header: {
+                Text("Filter").textStyle(.subheading).textCase(nil)
+            } footer: {
+                ReachFooter(summary: draft.summary)
             }
-            SettingsListSection("Privileges", footer: "What the role doesn't cover.") {
-                ForEach(request.privileges) { choice in
-                    Toggle(isOn: Binding(get: { privileges.contains(choice.id) }, set: { _ in toggle(choice.id, in: &privileges) })) {
+            SettingsListSection("What it reads", footer: "Of each message it can reach.") {
+                HStack(spacing: Space.m) {
+                    CellLabel(title: request.always.title, detail: request.always.detail, symbol: request.always.symbol.map(Symbol.named))
+                    Spacer(minLength: Space.s)
+                    Image(.lock, size: 15).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                }
+                ForEach(request.reads) { choice in
+                    Toggle(isOn: Binding(get: { access.reads.contains(choice.id) }, set: { _ in draft.toggle(choice.id, in: \.reads, store) })) {
                         CellLabel(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named))
                     }
                 }
             }
-            if let failure {
+            SettingsListSection("What it can do", footer: "With the mail it reaches.") {
+                ForEach(request.roles) { choice in
+                    CheckCell(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), checked: access.role == choice.id) {
+                        draft.change(store) { $0.role = choice.id }
+                    }
+                }
+                ForEach(request.privileges) { choice in
+                    Toggle(
+                        isOn: Binding(get: { access.privileges.contains(choice.id) }, set: { _ in draft.toggle(choice.id, in: \.privileges, store) })
+                    ) {
+                        CellLabel(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named))
+                    }
+                }
+            }
+            if let failure = draft.failure {
                 Section {
                     Label { Text(failure) } icon: { Image(.circleAlert, size: 17) }
                         .foregroundStyle(Tokens.destructive.color)
                 }
             }
         }
+        // What it all comes to, over the buttons that answer: down here it grows into the bar, so
+        // the rows don't move under a finger when it changes.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SentenceText(parts: draft.summary?.sentence ?? [])
+                .padding(.horizontal, Space.xl)
+                .padding(.vertical, Space.m)
+                .background(Tokens.background.color)
+                .rule(.top)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {
                 Spacer()
-                Button("Deny") { deny(request) }
+                Button(draft.editing ? "Cancel" : "Deny") { deny(draft) }
                     .tint(Tokens.foreground.color)
                     .disabled(approving || denying)
-                Button { approve(request) } label: {
-                    if approving { ProgressView() } else { Text("Approve") }
+                Button { approve(draft) } label: {
+                    if approving { ProgressView() } else { Text(draft.editing ? "Save" : "Approve") }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!(everyAccount || !accounts.isEmpty) || denying || approving)
+                .disabled(!ready(draft) || denying || approving)
             }
         }
+    }
+
+    private func count(_ draft: AccessDraft, _ line: FilterLine, none: String) -> String {
+        let chips = draft.summary?.chips(line).count ?? 0
+        return chips == 0 ? none : "\(chips)"
     }
     #endif
 
-    @ViewBuilder private func choices(_ request: ConnectRequest) -> some View {
-        FormSection(title: "Accounts", detail: "Which mail it can reach.") {
-            SettingsCard {
-                MarkRow(title: "Every account", detail: "Including the ones you add later.", symbol: .inbox, checked: everyAccount) {
-                    everyAccount = true
-                }
-                SettingsDivider()
-                MarkRow(title: "Only some accounts", detail: "Only the ones you pick.", symbol: .listFilter, checked: !everyAccount) {
-                    everyAccount = false
-                }
-                if !everyAccount {
-                    ForEach(request.accounts) { account in
-                        SettingsDivider()
-                        MarkRow(
-                            title: account.title, detail: account.detail, dot: Theme.accountColor(account.color ?? "").color, kind: .any,
-                            indent: Space.xl, checked: accounts.contains(account.id)
-                        ) { toggle(account.id, in: &accounts) }
-                    }
-                }
-            }
-        }
-        FormSection(title: "Role", detail: "The most it can do with that mail.") {
-            SettingsCard {
-                ForEach(request.roles) { choice in
-                    if choice != request.roles.first { SettingsDivider() }
-                    MarkRow(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), checked: role == choice.id) {
-                        role = choice.id
-                    }
-                }
-            }
-        }
-        FormSection(title: "Privileges", detail: "What the role doesn't cover.") {
-            SettingsCard {
-                ForEach(request.privileges) { choice in
-                    if choice != request.privileges.first { SettingsDivider() }
-                    MarkRow(
-                        title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), kind: .any,
-                        checked: privileges.contains(choice.id)
-                    ) { toggle(choice.id, in: &privileges) }
-                }
-            }
-        }
-    }
-
-    private func toggle(_ id: String, in set: inout Set<String>) {
-        if set.contains(id) { set.remove(id) } else { set.insert(id) }
-    }
-
-    private func approve(_ request: ConnectRequest) {
-        let access: [String: Any] = [
-            "role": role,
-            "all_accounts": everyAccount,
-            "accounts": everyAccount ? [] : request.accounts.map(\.id).filter(accounts.contains),
-            "privileges": request.privileges.map(\.id).filter(privileges.contains),
-        ]
+    private func approve(_ draft: AccessDraft) {
         approving = true
-        failure = nil
+        draft.failure = nil
         Task {
             defer { approving = false }
+            await draft.settled()
+            guard ready(draft) else { return }
             do {
-                try await store.approve(request, access: access)
-                answered = true
-                withAnimation { phase = .approved(request.client) }
+                if let app = draft.request.app {
+                    try await store.saveAccess(app, access: draft.access)
+                    answered = true
+                    store.show("Saved.")
+                    dismiss()
+                } else {
+                    try await store.approve(draft.request, access: draft.access)
+                    answered = true
+                    withAnimation { phase = .approved(draft.request.client) }
+                }
             } catch {
-                failure = error.localizedDescription
+                draft.failure = error.localizedDescription
             }
         }
     }
 
-    private func deny(_ request: ConnectRequest) {
+    private func deny(_ draft: AccessDraft) {
+        guard !draft.editing else { return dismiss() }
         denying = true
-        failure = nil
+        draft.failure = nil
         Task {
             defer { denying = false }
             do {
-                try await store.deny(request)
+                try await store.deny(draft.request)
                 answered = true
-                store.show("Denied \(request.client).")
+                store.show("Denied \(draft.request.client).")
                 dismiss()
             } catch {
-                failure = error.localizedDescription
+                draft.failure = error.localizedDescription
             }
         }
     }
@@ -268,6 +345,22 @@ struct ConnectSheet: View {
         .frame(maxWidth: Theme.formWidth)
         .padding(Space.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The sentence that says what an app may do, its strong runs in bold.
+struct SentenceText: View {
+    let parts: [SentencePart]
+
+    var body: some View {
+        parts.reduce(Text("")) { sentence, part in
+            sentence + Text(part.text).fontWeight(part.strong ? .semibold : .regular)
+        }
+        .textStyle(.body)
+        .foregroundStyle(Tokens.foreground.color)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(nil, value: parts)
     }
 }
 
@@ -300,11 +393,13 @@ private struct Asker: View {
             }
             VStack(alignment: .leading, spacing: Space.xs) {
                 fact(.globe, request.publisher)
-                fact(.arrowRight, request.backTo)
-                if request.onDevice {
-                    fact(.monitor, "Sends you back to an application on this device", warning: true)
+                if request.app == nil {
+                    fact(.arrowRight, request.backTo)
+                    if request.onDevice {
+                        fact(.monitor, "Sends you back to an application on this device", warning: true)
+                    }
+                    fact(.circleAlert, "Only approve if you started this yourself", warning: true)
                 }
-                fact(.circleAlert, "Only approve if you started this yourself", warning: true)
             }
         }
     }
@@ -319,8 +414,179 @@ private struct Asker: View {
 }
 
 #if os(iOS)
+/// How much mail the access reaches, under the filter's group, and a condition that changes
+/// nothing, in the warning colour.
+private struct ReachFooter: View {
+    let summary: AccessSummary?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.xxs) {
+            Text(summary?.reach ?? " ").textStyle(.caption, color: Tokens.mutedForeground.color)
+            if let warning = summary?.warning {
+                Text(warning).textStyle(.caption, color: Tokens.warning.color)
+            }
+        }
+    }
+}
+
+/// A line of the filter as a page of its own: its conditions, each swiped to remove it or tapped
+/// to change it, and Add.
+private struct FilterLinePage: View {
+    let draft: AccessDraft
+    let line: FilterLine
+    @Environment(MailStore.self) private var store
+    @State private var menu: FilterMenu?
+
+    var body: some View {
+        let chips = draft.summary?.chips(line) ?? []
+        SettingsList {
+            Section {
+                ForEach(chips) { chip in
+                    Button { menu = FilterMenu(line: line, editing: chip) } label: {
+                        HStack(spacing: Space.m) {
+                            CellLabel(
+                                title: chip.title, detail: chip.empty ? "No mail matches it" : chip.help, symbol: chip.kind.symbol,
+                                tint: chip.empty ? Tokens.warning : nil
+                            )
+                            Spacer(minLength: Space.s)
+                            Image(.chevronRight, size: 13).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions {
+                        Button("Remove", role: .destructive) {
+                            draft.refresh(store, edit: FilterEdit(line: line, remove: chip.filterValue))
+                        }
+                        .tint(Tokens.destructive.color)
+                    }
+                }
+                Button { menu = FilterMenu(line: line, editing: nil) } label: {
+                    Label {
+                        Text(line == .only && chips.isEmpty ? "Narrow it" : "Add")
+                    } icon: {
+                        Image(.plus, size: 17).frame(width: 28)
+                    }
+                    .foregroundStyle(Tokens.primary.color)
+                }
+            } footer: {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(explanation).textStyle(.caption, color: Tokens.mutedForeground.color)
+                    ReachFooter(summary: draft.summary)
+                }
+            }
+        }
+        .navigationTitle(line == .only ? "Only" : "Never")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $menu) { menu in
+            FilterPicker(menu: menu, draft: draft).environment(store)
+        }
+    }
+
+    private var explanation: String {
+        switch line {
+        case .only: "It reaches only the threads with a message that matches these: one of each kind."
+        case .never: "Threads with a message that matches any of these are kept from \(draft.request.client)."
+        }
+    }
+}
+
+/// The filter's menu as a sheet of the whole screen: the kinds, or what in the mail matches the
+/// words typed in the search box along the bottom.
+private struct FilterPicker: View {
+    @Bindable var menu: FilterMenu
+    let draft: AccessDraft
+    @Environment(MailStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Sheet(title: menu.title) {
+            SettingsList {
+                if menu.scope != nil, let scope = menu.options?.scope, menu.editing == nil {
+                    Section {
+                        Button { menu.narrow(to: nil) } label: {
+                            HStack(spacing: Space.m) {
+                                CellLabel(title: scope, detail: "Show every kind", symbol: menu.scope?.symbol)
+                                Spacer(minLength: Space.s)
+                                Image(.x, size: 15).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                ForEach(menu.options?.sections ?? []) { section in
+                    Section {
+                        ForEach(section.options) { option in
+                            Button { pick(option) } label: { OptionCell(option: option) }
+                                .buttonStyle(.plain)
+                        }
+                    } header: {
+                        if let title = section.title { Text(title).textCase(nil) }
+                    }
+                }
+                if let note = menu.options?.note {
+                    Section { Text(note).foregroundStyle(Tokens.mutedForeground.color) }
+                }
+                if let editing = menu.editing {
+                    Section {
+                        Button("Remove", role: .destructive) {
+                            draft.refresh(store, edit: FilterEdit(line: menu.line, remove: editing.filterValue))
+                            dismiss()
+                        }
+                        .foregroundStyle(Tokens.destructive.color)
+                    }
+                }
+            }
+            .searchField(text: $menu.query, prompt: menu.options?.placeholder ?? "Search")
+        }
+        .task(id: "\(menu.scope?.rawValue ?? "")|\(menu.query)") { await menu.load(store, access: draft.access) }
+    }
+
+    private func pick(_ option: FilterOption) {
+        guard let edit = menu.edit(for: option) else { return menu.narrow(to: option.kind) }
+        draft.refresh(store, edit: edit)
+        dismiss()
+    }
+}
+
+/// An option of the filter's menu as a row of the list: its avatar or symbol, its title with its
+/// detail, its count, and the check's place, kept in every row.
+private struct OptionCell: View {
+    let option: FilterOption
+
+    var body: some View {
+        HStack(spacing: Space.m) {
+            Group {
+                if let avatar = option.avatar {
+                    Avatar(initials: avatar.initials, email: avatar.email, size: 28)
+                } else if let symbol = option.symbol {
+                    Image(Symbol.named(symbol), size: 17).foregroundStyle(Tokens.foreground.color)
+                }
+            }
+            .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.title).foregroundStyle(Tokens.foreground.color).lineLimit(1)
+                if let detail = option.detail, option.count != nil {
+                    Text(detail).textStyle(.caption, color: Tokens.mutedForeground.color).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            Spacer(minLength: Space.s)
+            if let count = option.count ?? option.detail {
+                Text(count).textStyle(.caption, color: Tokens.mutedForeground.color).monospacedDigit().lineLimit(1)
+            }
+            Image(.check, size: 17).foregroundStyle(Tokens.primary.color).opacity(option.checked ? 1 : 0)
+                .accessibilityHidden(!option.checked)
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .accessibilityAddTraits(option.checked ? .isSelected : [])
+    }
+}
+
 /// A choice as a row of iOS's list: its symbol or an account's dot, its name and a line, and the
-/// system's checkmark at its end when it is in force. The whole row is the button.
+/// system's checkmark at its end when it is in force, its place kept when it isn't. The whole
+/// row is the button.
 private struct CheckCell: View {
     let title: String
     var detail: String?
@@ -334,9 +600,7 @@ private struct CheckCell: View {
             HStack(spacing: Space.m) {
                 CellLabel(title: title, detail: detail, symbol: symbol, dot: dot)
                 Spacer(minLength: Space.s)
-                if checked {
-                    Image(.check, size: 17).foregroundStyle(Tokens.primary.color)
-                }
+                Image(.check, size: 17).foregroundStyle(Tokens.primary.color).opacity(checked ? 1 : 0)
             }
             .contentShape(Rectangle())
         }
@@ -346,11 +610,13 @@ private struct CheckCell: View {
 }
 
 /// A row's words with its picture before them: a symbol in the row's tile, or an account's dot.
+/// `tint` colours both, for a row that warns.
 private struct CellLabel: View {
     let title: String
     var detail: String?
     var symbol: Symbol?
     var dot: Color?
+    var tint: ThemeColor?
 
     var body: some View {
         HStack(spacing: Space.m) {
@@ -358,14 +624,14 @@ private struct CellLabel: View {
                 if let dot {
                     Circle().fill(dot).frame(width: 10, height: 10)
                 } else if let symbol {
-                    Image(symbol, size: 17).foregroundStyle(Tokens.foreground.color)
+                    Image(symbol, size: 17).foregroundStyle((tint ?? Tokens.foreground).color)
                 }
             }
             .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).foregroundStyle(Tokens.foreground.color)
+                Text(title).foregroundStyle((tint ?? Tokens.foreground).color)
                 if let detail {
-                    Text(detail).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
+                    Text(detail).textStyle(.caption, color: (tint ?? Tokens.mutedForeground).color).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

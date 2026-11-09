@@ -451,7 +451,7 @@ private struct ConnectedAppsSettings: View {
         }
         SettingsGroup(
             id: "connected", title: "Connected apps",
-            detail: "They reach your mail as you chose when you approved them. Revoke one to end its access at once."
+            detail: "They reach your mail as you chose. Change what one may do, or revoke it to end its access at once."
         ) {
             if let apps = model.apps {
                 if apps.isEmpty {
@@ -461,8 +461,11 @@ private struct ConnectedAppsSettings: View {
                     SettingsRow {
                         AppLabel(app: app)
                     } trailing: {
-                        ActionButton(title: "Revoke", variant: .outline, pending: model.revoking.contains(app.id)) {
-                            model.confirmRevoking(app, store)
+                        HStack(spacing: 0) {
+                            ActionButton(title: "Change", variant: .ghost) { store.change(app) }
+                            ActionButton(title: "Revoke", variant: .outline, pending: model.revoking.contains(app.id)) {
+                                model.confirmRevoking(app, store)
+                            }
                         }
                     }
                     if app != apps.last { SettingsDivider() }

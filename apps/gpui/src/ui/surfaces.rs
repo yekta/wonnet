@@ -1,12 +1,14 @@
 //! What things rest on: the bar across a page, a sheet over the window, cards, popovers, the
 //! banner and the toast at the bottom, notices and the empty state.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Bounds, Div, MouseButton, Path, PathBuilder, Pixels, Point, SharedString, Window, canvas, div, px,
+    AnyElement, App, AvailableSpace, Bounds, Div, Element, ElementId, GlobalElementId, InspectorElementId, LayoutId,
+    MouseButton, Path, PathBuilder, Pixels, Point, SharedString, Size, Window, canvas, div, point, px,
 };
 
 use super::{ActionButton, IconButton, Surface, Symbol, Variant, icon, line, paragraph_in, rule, spinner};
@@ -158,6 +160,134 @@ pub fn popup_card(cx: &App) -> Div {
         .border_1()
         .border_color(cx.color(BORDER_POPOVER))
         .shadow(cx.shadow(ShadowSize::Md, opacity::SHADOW_STRONGER))
+}
+
+/// Draws `popup` under `face`, left-aligned with it and in from the window's edges, over
+/// everything and clipped by nothing it is in; above it when there's no room below. `faces`
+/// gathers where every face is, so a click on one is left to it rather than to the popup's
+/// click outside.
+pub struct PopupUnder {
+    face: AnyElement,
+    popup: Option<AnyElement>,
+    faces: Option<Rc<RefCell<Vec<Bounds<Pixels>>>>>,
+    /// The popup as it is drawn over its face, and the most it grows to, by which it goes under
+    /// or over once and for all: it doesn't flip as it grows and shrinks.
+    over: Option<(AnyElement, Pixels)>,
+}
+
+pub fn popup_under(face: impl IntoElement, popup: Option<AnyElement>) -> PopupUnder {
+    PopupUnder { face: face.into_any_element(), popup, faces: None, over: None }
+}
+
+impl PopupUnder {
+    /// The popup laid out for over its face (what is nearest the face at its bottom), used when
+    /// one `tallest` doesn't fit under it.
+    pub fn over(mut self, over: Option<AnyElement>, tallest: f32) -> Self {
+        self.over = over.map(|over| (over, px(tallest)));
+        self
+    }
+
+    pub fn faces(mut self, faces: Rc<RefCell<Vec<Bounds<Pixels>>>>) -> Self {
+        self.faces = Some(faces);
+        self
+    }
+}
+
+/// Between a popup and its face, and the least between a popup and the window's edges.
+const POPUP_GAP: f32 = space::XS;
+const POPUP_MARGIN: f32 = space::S;
+
+/// Where a popup of `popup` goes under (or above) `face`, in a window of `viewport`.
+pub fn popup_origin(face: Bounds<Pixels>, popup: Size<Pixels>, viewport: Size<Pixels>) -> Point<Pixels> {
+    let (gap, margin) = (px(POPUP_GAP), px(POPUP_MARGIN));
+    let x = face.left().min(viewport.width - popup.width - margin).max(margin);
+    let below = face.bottom() + gap;
+    let above = face.top() - gap - popup.height;
+    let room_below = viewport.height - margin - below;
+    let room_above = face.top() - gap - margin;
+    let y = if popup.height > room_below && room_above > room_below { above.max(margin) } else { below };
+    point(x, y)
+}
+
+impl IntoElement for PopupUnder {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for PopupUnder {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, ()) {
+        (self.face.request_layout(window, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.face.prepaint(window, cx);
+        if let Some(faces) = &self.faces {
+            faces.borrow_mut().push(bounds);
+        }
+        let Some(mut popup) = self.popup.take() else { return };
+        let viewport = window.viewport_size();
+        let space = gpui::size(AvailableSpace::Definite(viewport.width), AvailableSpace::Definite(viewport.height));
+        if let Some((mut over, tallest)) = self.over.take() {
+            let (gap, margin) = (px(POPUP_GAP), px(POPUP_MARGIN));
+            let room_below = viewport.height - margin - (bounds.bottom() + gap);
+            let room_above = bounds.top() - gap - margin;
+            let goes_over = tallest > room_below && room_above > room_below;
+            let chosen = if goes_over { &mut over } else { &mut popup };
+            // It takes no more than the room on its side; what it holds scrolls inside that.
+            let room = if goes_over { room_above } else { room_below };
+            let space = gpui::size(AvailableSpace::Definite(viewport.width), AvailableSpace::Definite(room));
+            let size = chosen.layout_as_root(space, window, cx);
+            let x = bounds.left().min(viewport.width - size.width - margin).max(margin);
+            let y = if goes_over { (bounds.top() - gap - size.height).max(margin) } else { bounds.bottom() + gap };
+            let chosen = if goes_over { over } else { popup };
+            window.defer_draw(chosen, point(x, y), 10, None);
+            return;
+        }
+        let size = popup.layout_as_root(space, window, cx);
+        let origin = popup_origin(bounds, size, viewport);
+        window.defer_draw(popup, origin, 10, None);
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut (),
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.face.paint(window, cx);
+    }
 }
 
 /// A section's name, and maybe a muted line about it.
@@ -497,4 +627,22 @@ pub fn form_buttons(
                 .disabled(save_disabled)
                 .on_click(move |event, window, cx| on_save(event, window, cx)),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{Bounds, point, px, size};
+
+    use super::popup_origin;
+
+    #[test]
+    fn puts_a_popup_under_its_face_or_above_it_and_in_from_the_sides() {
+        let viewport = size(px(800.), px(600.));
+        let face = Bounds::new(point(px(100.), px(100.)), size(px(60.), px(28.)));
+        assert_eq!(popup_origin(face, size(px(300.), px(200.)), viewport), point(px(100.), px(134.)));
+        let right = Bounds::new(point(px(700.), px(100.)), size(px(60.), px(28.)));
+        assert_eq!(popup_origin(right, size(px(300.), px(200.)), viewport).x, px(492.));
+        let low = Bounds::new(point(px(100.), px(500.)), size(px(60.), px(28.)));
+        assert_eq!(popup_origin(low, size(px(300.), px(200.)), viewport), point(px(100.), px(294.)));
+    }
 }

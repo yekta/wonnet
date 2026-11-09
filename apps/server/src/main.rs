@@ -18,6 +18,7 @@ mod ops;
 mod pages;
 mod providers;
 mod push;
+mod reach;
 mod rules;
 mod scheduler;
 mod seal;
@@ -111,7 +112,7 @@ fn router(state: AppState) -> Router {
         .route("/api/accounts/jmap", post(api::add_jmap))
         .route("/api/connect/{key}", get(connect::request).post(connect::answer))
         .route("/api/connected-apps", get(connect::connected_apps))
-        .route("/api/connected-apps/{id}", delete(connect::revoke))
+        .route("/api/connected-apps/{id}", delete(connect::revoke).put(connect::change))
         .route("/api/dev/login", post(api::dev_login))
         .route("/api/messages/{id}/attachments/{index}", get(api::attachment))
         .route("/api/avatar", get(avatars::avatar))

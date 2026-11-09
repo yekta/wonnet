@@ -205,6 +205,9 @@ struct ComboboxPopup {
     let anchor: Anchor<CGRect>
     let height: CGFloat
     let view: AnyView
+    /// The most it grows to: whether it goes under its face or over it is decided by that, so it
+    /// doesn't flip as it grows and shrinks.
+    var tallest: CGFloat?
 }
 
 struct ComboboxPopups: PreferenceKey {
@@ -223,14 +226,43 @@ private struct ComboboxHost: ViewModifier {
             GeometryReader { geometry in
                 ForEach(popups, id: \.id) { popup in
                     let face = geometry[popup.anchor]
-                    let below = face.maxY + Space.xxs + popup.height <= geometry.size.height
-                    popup.view.offset(
-                        x: min(face.minX, max(geometry.size.width - Theme.popupWidth - Space.s, 0)),
-                        y: below ? face.maxY + Space.xxs : face.minY - Space.xxs - popup.height
-                    )
+                    let below = face.maxY + Space.xxs + (popup.tallest ?? popup.height) <= geometry.size.height
+                    // Over its face, it takes no more than the room there is, from the top's margin.
+                    let room = face.minY - Space.xxs - Space.s
+                    let height = below ? popup.height : min(popup.height, room)
+                    popup.view
+                        .environment(\.popupAbove, !below)
+                        .environment(\.popupRoom, below ? .infinity : room)
+                        .offset(
+                            x: min(face.minX, max(geometry.size.width - Theme.popupWidth - Space.s, 0)),
+                            y: below ? face.maxY + Space.xxs : face.minY - Space.xxs - height
+                        )
                 }
             }
         }
+    }
+}
+
+private struct PopupAboveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private struct PopupRoomKey: EnvironmentKey {
+    static let defaultValue = CGFloat.infinity
+}
+
+extension EnvironmentValues {
+    /// Whether a popup is drawn over its face, for want of room under it: what is nearest the face
+    /// goes at its bottom.
+    var popupAbove: Bool {
+        get { self[PopupAboveKey.self] }
+        set { self[PopupAboveKey.self] = newValue }
+    }
+
+    /// The most height a popup has where it is drawn; its list scrolls inside that.
+    var popupRoom: CGFloat {
+        get { self[PopupRoomKey.self] }
+        set { self[PopupRoomKey.self] = newValue }
     }
 }
 
@@ -241,9 +273,9 @@ extension View {
     }
 }
 
-/// Where a combobox's face and its popup are, so a click anywhere else closes the popup while
-/// one on the face is left to the face, which toggles it.
-private final class PopupTracker {
+/// Where a popup's face and the popup are, so a click anywhere else closes the popup while one on
+/// the face is left to the face, which toggles it. A combobox's and the filter's menu.
+final class PopupTracker {
     weak var face: NSView?
     weak var popup: NSView?
     var monitor: Any?
@@ -268,7 +300,7 @@ private final class PopupTracker {
     }
 }
 
-private struct PopupPart: NSViewRepresentable {
+struct PopupPart: NSViewRepresentable {
     enum Role {
         case face, popup
     }

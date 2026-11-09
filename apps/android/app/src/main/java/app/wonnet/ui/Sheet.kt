@@ -59,7 +59,8 @@ val LocalSheetOverlay = compositionLocalOf<@Composable BoxScope.() -> Unit> { {}
  * What every sheet is made of: a bar with its title and a way to close it, and its content, over
  * the whole screen. The close is an X at the bar's start, or a word such as Cancel; `trailing`
  * is what the sheet is for, at the bar's end. The close's face is as far from the sheet's side as
- * from the bar's top and bottom. The back gesture closes it too.
+ * from the bar's top and bottom. The back gesture closes it too. On a page pushed inside it,
+ * `back` takes the close's place with an arrow, and the back gesture goes back.
  */
 @Composable
 fun Sheet(
@@ -67,10 +68,11 @@ fun Sheet(
     onClose: () -> Unit,
     close: String = "Close",
     background: ThemeColor = Tokens.background,
+    back: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(back ?: onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val dark = LocalDark.current
         val view = LocalView.current
         SideEffect {
@@ -93,7 +95,9 @@ fun Sheet(
                 HeaderBar(
                     inset = Dims.barButtonInset,
                     leading = {
-                        if (close == "Close") {
+                        if (back != null) {
+                            IconButton(Symbol.ArrowLeft, "Back", circled = false, strong = true, onClick = back)
+                        } else if (close == "Close") {
                             IconButton(Symbol.X, "Close", circled = false, strong = true, onClick = onClose)
                         } else {
                             ActionButton(close, variant = ButtonVariant.Ghost, onClick = onClose)

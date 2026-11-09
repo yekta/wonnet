@@ -57,6 +57,9 @@ added to the component, not to the view.
   lines up with the content and the hit area reaches past it.
 - No words end in "…": not a button, a menu item, a status or a placeholder. "Remove Account",
   "Syncing", never "Remove Account…".
+- A check in a row, a menu or a dropdown never moves anything: every row keeps the check's place
+  at its end, and the check only shows or hides there. Words and counts stay where they are when
+  a row becomes the one in force.
 - Every button can carry an icon and has a `pending` state; while pending, the spinner stands
   where the icon goes and the button waits.
 - Everything is shown as soon as it is known; what is being fetched again is shown quietly
@@ -115,20 +118,21 @@ added to the component, not to the view.
 | `InputField` | A text field with its label above, or a text box of `lines` |
 | `LineField` | The Mac's one line to type in, under `InputField`, `SearchField` and the compose fields: an AppKit field whose cell keeps its text in from its sides, so the caret after the last letter isn't cut off as in SwiftUI's plain field. Return is its `onReturn` |
 | `FieldArea` | Behind a field's box, makes all of it the field: a click anywhere on it puts the caret in the field, and the pointer is the I-beam over it. Every field has one |
-| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.popup` the same, smaller, at the top of a popup; `.bar` as the top bar's capsule |
+| `SearchField` | The search icon, the words, Clear; `.sheet` on a hairline with list keys, in a `SearchedList`, over the list on the Mac: on iOS `SearchedList` gives the list the system's search box along the bottom instead, unfocused until tapped; `.popup` the same, smaller, at the top of a popup; `.bar` as the top bar's capsule; a `tag` before the words, with its x, for the kind a menu is narrowed to |
 | `Dropdown` | A choice from a short list, with a label |
 | `Combobox` | A choice from a list that can grow, found by typing: its face shows the one in force, a `.field` with a label or `.inline` words; opens a popup with a `SearchField` over a `ChoiceList` on the Mac, drawn by the window's or the sheet's `comboboxHost` so nothing is over it, a sheet on iOS |
 | `ChoiceMenu` | One of a few choices, as a button with a chevron that opens them |
 | `ToggleRow` | A switch with its words, flipped by a click anywhere on the row, which hovers |
-| `MarkRow` | One of a few choices on a card, picked by a click anywhere on it: a round mark for one of them, a square one for any of them, filled in the primary colour with a check once picked; a symbol or an account's dot, its name and a line; `indent` for a row under the one it belongs to; what an application may do when it asks to connect |
+| `MarkRow` | One of a few choices on a card, picked by a click anywhere on it: a round mark for one of them, a square one for any of them, filled in the primary colour with a check once picked; a symbol or an account's dot, its name and a line; `indent` for a row under the one it belongs to; `locked` for one that is always so, a lock in its mark's place; what an application may do when it asks to connect |
 | `Disclosure` | A line that opens more |
 | `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid`, and `success` or `warning` for a state in its colour (an application verified or not) |
+| `ConditionChip`, `AddChip` | A filter's condition as a chip, its kind's word muted before its value, clicked to change it and an x to take it away; `open` while its menu is, `empty` in the warning colour when no mail matches it. And the dashed chip that adds one |
 | `AttachmentCard` | A message's file under it, as Gmail shows them: its picture (or its kind's icon) over its name, kind and size; `pending` |
 | `FoldedCount` | A long thread's run of folded messages tucked into one line, their count in a circle where the avatars stand; it shows them |
 | `Spinner` | Lucide's loader turning, in the muted text colour or a `tint`, for what is still coming: a mailbox syncing after its title, the next page of a list, a pending button, an update. Never the system's `ProgressView`, which the Mac won't colour |
 | `ItemRow` | A thing in a list with its controls at the end |
 | `NavRow` | A row that goes somewhere, with a count and a selected state; without an action, its face for a `MovableList` |
-| `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, with a check when it is the one in force; and the list that scrolls to the highlighted one |
+| `ChoiceRow`, `ChoiceList` | One choice under a field, starting with an icon, an account's dot or a person's `Avatar`, a `subtitle` under its name and a `detail` at its end, with a check when it is the one in force, its place kept in every row; and the list that scrolls to the highlighted one |
 | `PopupCard` | A card over the page for suggestions; `inset` is the space to its edges |
 | `TabStrip` | Tabs on a line with counts, the chosen one underlined, hovering in a rounded fill |
 | `PillTabs` | Tabs on a line with an icon and a count, the chosen one filled in a rounded rectangle; dragged to reorder, with a menu on each |

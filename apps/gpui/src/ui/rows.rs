@@ -271,18 +271,22 @@ pub fn reordered(mut ids: Vec<String>, dragged: &str, target: &str, after: bool)
     ids
 }
 
-/// One choice of a short list: a suggestion, a time, a snippet, a sender. `checked` is the one
-/// in force; `highlighted` the one the arrow keys are on.
+/// One choice of a short list: a suggestion, a time, a snippet, a sender. `subtitle` is a smaller
+/// line under its title, `detail` a word at its end. `checked` is the one in force, with a check
+/// at its end: the check's place is kept in every row, so nothing moves when it shows.
+/// `highlighted` is the one the arrow keys are on.
 #[derive(IntoElement)]
 pub struct ChoiceRow {
     id: SharedString,
     title: SharedString,
+    subtitle: Option<SharedString>,
     detail: Option<SharedString>,
     lead: Lead,
     checked: bool,
     highlighted: bool,
     on_popover: bool,
     on_click: OnClick,
+    on_hover: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
 }
 
 impl ChoiceRow {
@@ -294,13 +298,26 @@ impl ChoiceRow {
         Self {
             id: id.into(),
             title: title.into(),
+            subtitle: None,
             detail: None,
             lead: Lead::None,
             checked: false,
             highlighted: false,
             on_popover: false,
             on_click: Rc::new(on_click),
+            on_hover: None,
         }
+    }
+
+    /// What the pointer coming onto it does, as highlighting it.
+    pub fn on_hover(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_hover = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
+        self.subtitle = Some(subtitle.into());
+        self
     }
 
     pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
@@ -329,6 +346,11 @@ impl ChoiceRow {
     }
 }
 
+/// The side of a choice's check, and of the place kept for it.
+pub const CHECK: f32 = 14.;
+/// The width of what a choice starts with: an avatar's, and the place a symbol or a dot stands in.
+const LEAD: f32 = 24.;
+
 impl RenderOnce for ChoiceRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (hover, highlight): (Hsla, Hsla) = if self.on_popover {
@@ -341,38 +363,57 @@ impl RenderOnce for ChoiceRow {
             Lead::Symbol(symbol) => {
                 Some(icon(*symbol, 14.).text_color(cx.color(MUTED_STRONGER_FOREGROUND)).into_any_element())
             }
-            Lead::Dot(color) => Some(
-                div()
-                    .w(px(14.))
-                    .flex()
-                    .justify_center()
-                    .child(div().size(px(8.)).rounded_full().bg(cx.color(*color)))
-                    .into_any_element(),
-            ),
+            Lead::Dot(color) => Some(div().size(px(8.)).rounded_full().bg(cx.color(*color)).into_any_element()),
             Lead::Avatar(address) => {
-                Some(Avatar::new(&crate::models::initials(address), &address.email, 24.).into_any_element())
+                Some(Avatar::new(&crate::models::initials(address), &address.email, LEAD).into_any_element())
             }
         };
+        // Whatever a row starts with, its words start where the others' do.
+        let lead = lead.map(|lead| div().flex_none().w(px(LEAD)).flex().justify_center().child(lead));
         let on_click = self.on_click.clone();
+        let words = div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .child(line(self.title.clone(), TextStyle::Body, cx))
+            .when_some(self.subtitle.clone(), |words, subtitle| {
+                words.child(line_in(subtitle, TextStyle::Footnote, MUTED_FOREGROUND, cx))
+            });
         div()
             .id(self.id.clone())
             .flex()
             .items_center()
             .gap(px(space::S + 2.))
+            // A list that scrolls is a column that would squeeze its rows to fit: a row keeps its height.
+            .flex_none()
             .min_h(px(size::ROW))
             .px(px(space::S + 2.))
+            .when(self.subtitle.is_some(), |row| row.py(px(space::XXS)))
             .rounded(px(radius::SM))
             .cursor_pointer()
             .when(self.highlighted, |row| row.bg(highlight))
             .when(!self.highlighted, |row| row.hover(move |row| row.bg(hover)))
             .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
             .on_click(move |event, window, cx| on_click(event, window, cx))
+            .when_some(self.on_hover.clone(), |row, on_hover| {
+                row.on_hover(move |hovered, window, cx| {
+                    if *hovered {
+                        on_hover(window, cx);
+                    }
+                })
+            })
             .children(lead)
-            .child(line(self.title.clone(), TextStyle::Body, cx).flex_1())
+            .child(words)
             .when_some(self.detail.clone(), |row, detail| {
                 row.child(line(detail, TextStyle::Caption, cx).flex_shrink(1.).max_w(px(220.)))
             })
-            .when(self.checked, |row| row.child(icon(Symbol::Check, 14.).text_color(cx.color(FOREGROUND))))
+            .child(
+                div().flex_none().size(px(CHECK)).when(self.checked, |place| {
+                    place.child(icon(Symbol::Check, CHECK).text_color(cx.color(FOREGROUND)))
+                }),
+            )
     }
 }
 /// Tabs on a line with counts, the chosen one underlined: a split inbox's. A tab hovers in a

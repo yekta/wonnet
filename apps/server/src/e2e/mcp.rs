@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use mail_protocol::{Address, Provider, Recipients, Unsubscribe};
+use mail_protocol::{Address, Attachment, Provider, Recipients, Unsubscribe};
 use reqwest::Url;
 use reqwest::header::{COOKIE, LOCATION, SET_COOKIE, WWW_AUTHENTICATE};
 use serde_json::{Value, json};
@@ -214,7 +214,7 @@ fn reader() -> Value {
 }
 
 fn organizer() -> Value {
-    json!({ "role": "organizer", "all_accounts": true })
+    json!({ "role": "organizer", "all_accounts": true, "reads": ["subject", "body", "attachments"] })
 }
 
 #[sqlx::test]
@@ -571,6 +571,260 @@ async fn an_organizer_splits_the_inbox_by_label(db: PgPool) {
     server.call(&access, "delete_split", json!({ "id": id })).await.unwrap();
     let splits = server.call(&access, "list_splits", json!({})).await.unwrap();
     assert!(splits["splits"].as_array().unwrap().is_empty());
+}
+
+async fn subjects(server: &Server, token: &str, filters: Value) -> Vec<String> {
+    let found = server.call(token, "search", filters).await.unwrap();
+    let mut subjects: Vec<String> =
+        found["messages"].as_array().unwrap().iter().map(|m| m["subject"].as_str().unwrap().to_string()).collect();
+    subjects.sort();
+    subjects
+}
+
+#[sqlx::test]
+async fn filters_pick_mail_by_each_of_its_parts(db: PgPool) {
+    let server = Server::start(db).await;
+    let (session, _, account) = server.gmail_user("ann@gmail.com").await;
+    let invoice = Attachment { name: "Invoice-0042.PDF".into(), mime: "application/pdf".into(), size: 1000 };
+    let books = Address::new(Some("Billing Team"), "books@acme.example");
+    mail(
+        &server,
+        &account,
+        &[
+            RemoteMessage {
+                recipients: Recipients {
+                    to: vec![Address::new(None, "ann@gmail.com")],
+                    cc: vec![books],
+                    ..Default::default()
+                },
+                snippet: "Payment is due on Friday, see the attached".into(),
+                attachments: vec![invoice],
+                unread: true,
+                ..message("i1", "billing@mail.stripe.com", "[Acme/Billing] Invoice #42", &["inbox"])
+            },
+            message("i2", "billing@stripe.com.evil.example", "Invoice #43", &["inbox"]),
+            message("n1", "news@stripe.com", "What's new at Stripe", &["inbox"]),
+            RemoteMessage {
+                from: Address::new(Some("Cy Twombly"), "cy@example.com"),
+                ..message("p1", "cy@example.com", "Re: invoice", &[])
+            },
+        ],
+    )
+    .await;
+    let (_, tokens) = server.connect(&session, organizer()).await;
+    let access = token(&tokens, "access_token");
+    let (invoice_42, invoice_43, news, reply) =
+        ("[Acme/Billing] Invoice #42", "Invoice #43", "What's new at Stripe", "Re: invoice");
+
+    assert_eq!(subjects(&server, &access, json!({ "from": ["@Stripe.com"] })).await, [news, invoice_42]);
+    let not_news = json!({ "from": ["@stripe.com"], "not_from": ["news@stripe.com"] });
+    assert_eq!(subjects(&server, &access, not_news).await, [invoice_42]);
+    assert_eq!(subjects(&server, &access, json!({ "from": ["twombly"] })).await, [reply]);
+    assert_eq!(subjects(&server, &access, json!({ "cc": ["@acme.example"] })).await, [invoice_42]);
+    assert_eq!(subjects(&server, &access, json!({ "to": ["billing team"] })).await, [invoice_42]);
+    assert_eq!(subjects(&server, &access, json!({ "subject": ["[acme/billing]"] })).await, [invoice_42]);
+    let invoices = json!({ "subject": ["invoice", "#4"], "not_subject": ["re:"] });
+    assert_eq!(subjects(&server, &access, invoices).await, [invoice_43, invoice_42]);
+    assert_eq!(subjects(&server, &access, json!({ "body": ["due on Friday"] })).await, [invoice_42]);
+    assert!(subjects(&server, &access, json!({ "body": ["Friday due"] })).await.is_empty());
+    assert_eq!(subjects(&server, &access, json!({ "attachment": [".pdf"] })).await, [invoice_42]);
+    assert_eq!(subjects(&server, &access, json!({ "labels": ["archive"] })).await, [reply]);
+    assert_eq!(subjects(&server, &access, json!({ "not_labels": ["Inbox"] })).await, [reply]);
+    assert_eq!(subjects(&server, &access, json!({ "unread": true, "has_attachment": true })).await, [invoice_42]);
+    assert_eq!(subjects(&server, &access, json!({ "after": "2000-01-01", "query": "invoice" })).await.len(), 3);
+    assert!(subjects(&server, &access, json!({ "before": "2000-01-01T00:00:00Z" })).await.is_empty());
+    let late = server.call(&access, "search", json!({ "after": "yesterday" })).await;
+    assert!(late.unwrap_err().contains("isn't a date"));
+
+    server.call(&access, "create_label", json!({ "account_id": account.id, "name": "Money" })).await.unwrap();
+    let missing = server.call(&access, "search", json!({ "labels": ["Moneys"] })).await;
+    assert!(missing.unwrap_err().contains("No label"));
+    let label = json!({ "action": "add_label", "label": "Money", "from": ["@stripe.com"], "not_subject": ["new"] });
+    let counted = server.call(&access, "modify", label.clone()).await.unwrap();
+    assert_eq!(counted["would_change_threads"], 1);
+    let mut confirmed = label;
+    confirmed["confirm"] = json!(true);
+    let labelled = server.call(&access, "modify", confirmed).await;
+    assert_eq!(labelled.unwrap()["changed_messages"], 1);
+    assert_eq!(subjects(&server, &access, json!({ "labels": ["money", "inbox"] })).await, [invoice_42]);
+    let senders = server.call(&access, "list_senders", json!({ "labels": ["inbox"], "not_labels": ["Money"] })).await;
+    let senders: Vec<Value> =
+        senders.unwrap()["senders"].as_array().unwrap().iter().map(|s| s["sender"].clone()).collect();
+    assert_eq!(senders.len(), 2);
+}
+
+fn in_thread(id: &str, thread: &str, from: &str, subject: &str, snippet: &str) -> RemoteMessage {
+    RemoteMessage { thread_id: thread.into(), snippet: snippet.into(), ..message(id, from, subject, &["inbox"]) }
+}
+
+fn keys_of(message: &Value) -> Vec<String> {
+    let mut keys: Vec<String> = message.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    keys
+}
+
+#[sqlx::test]
+async fn an_app_reaches_and_reads_only_what_it_was_given(db: PgPool) {
+    let server = Server::start(db).await;
+    let (session, _, account) = server.gmail_user("ann@gmail.com").await;
+    mail(
+        &server,
+        &account,
+        &[
+            in_thread("c1", "bank", "bob@example.com", "About the loan", "Here is what Chase said"),
+            in_thread("c2", "bank", "alerts@mail.chase.com", "Fwd: Your statement", "Balance due Friday"),
+            in_thread("l1", "lunch", "cy@example.com", "Lunch plans", "Tacos at noon"),
+            in_thread("n1", "news", "news@shop.example", "Deals", "Everything is on sale"),
+        ],
+    )
+    .await;
+
+    let limited = json!({ "role": "reader", "all_accounts": true, "reads": [], "never": { "from": ["@chase.com"] } });
+    let (_, tokens) = server.connect(&session, limited).await;
+    let access = token(&tokens, "access_token");
+
+    let accounts = server.call(&access, "list_accounts", json!({})).await.unwrap();
+    assert_eq!(accounts["access"]["reads"], json!([]));
+    assert_eq!(accounts["access"]["some_mail_only"], true);
+    let all = server.call(&access, "search", json!({})).await.unwrap();
+    let messages = all["messages"].as_array().unwrap();
+    let senders: Vec<&str> = messages.iter().map(|m| m["from"]["email"].as_str().unwrap()).collect();
+    assert_eq!(messages.len(), 2, "the whole bank thread is kept out: {senders:?}");
+    assert!(!senders.contains(&"bob@example.com"));
+    for message in messages {
+        let keys = keys_of(message);
+        assert!(!keys.contains(&"subject".into()) && !keys.contains(&"snippet".into()), "{keys:?}");
+        assert!(!keys.contains(&"attachments".into()));
+    }
+    let lunch = messages.iter().find(|m| m["from"]["email"] == "cy@example.com").unwrap();
+    let id = lunch["id"].as_str().unwrap();
+    assert!(
+        server.call(&access, "search", json!({ "query": "tacos" })).await.unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        server.call(&access, "search", json!({ "query": "lunch" })).await.unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        server.call(&access, "search", json!({ "query": "cy@example.com" })).await.unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let by_subject = server.call(&access, "search", json!({ "subject": ["lunch"] })).await;
+    assert!(by_subject.unwrap_err().contains("doesn't read the subject"));
+    let by_operator = server.call(&access, "search", json!({ "query": "subject:lunch" })).await;
+    assert!(by_operator.unwrap_err().contains("doesn't read the subject"));
+    let by_body = server.call(&access, "search", json!({ "body": ["tacos"] })).await;
+    assert!(by_body.unwrap_err().contains("doesn't read the body"));
+    let by_file = server.call(&access, "search", json!({ "query": "has:attachment" })).await;
+    assert!(by_file.unwrap_err().contains("doesn't read the attachments"));
+
+    let thread = server.call(&access, "get_thread", json!({ "message_id": id })).await.unwrap();
+    assert!(thread.get("subject").is_none() && thread["messages"][0].get("body").is_none());
+    let bank: Uuid = sqlx::query_scalar("SELECT id FROM messages WHERE provider_id = 'c1'")
+        .fetch_one(&server.state.db)
+        .await
+        .unwrap();
+    let hidden = server.call(&access, "get_thread", json!({ "message_id": bank })).await;
+    assert_eq!(hidden.unwrap_err(), "No such message.");
+    let senders = server.call(&access, "list_senders", json!({})).await.unwrap();
+    let listed: Vec<&str> =
+        senders["senders"].as_array().unwrap().iter().map(|s| s["sender"].as_str().unwrap()).collect();
+    assert!(!listed.contains(&"alerts@mail.chase.com") && !listed.contains(&"bob@example.com"), "{listed:?}");
+    assert!(senders["senders"][0].get("subjects").is_none());
+
+    let apps: Value = server.get("/api/connected-apps", Some(&session)).await.json().await.unwrap();
+    let grant = apps["apps"][0]["id"].as_str().unwrap().to_string();
+    assert_eq!(apps["apps"][0]["access"]["never"], json!({ "from": ["@chase.com"] }));
+    let wider = json!({ "access": { "role": "organizer", "all_accounts": true, "reads": ["body", "subject"],
+        "only": { "from": ["@example.com"], "labels": ["inbox"] } } });
+    let changed = server
+        .http
+        .put(format!("{}/api/connected-apps/{grant}", server.base))
+        .bearer_auth(&session)
+        .json(&wider)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(changed.status(), 200, "{}", changed.text().await.unwrap());
+    let found = server.call(&access, "search", json!({})).await.unwrap();
+    let subjects: Vec<&str> =
+        found["messages"].as_array().unwrap().iter().map(|m| m["subject"].as_str().unwrap()).collect();
+    assert_eq!(subjects.len(), 3, "every message of a thread with mail from @example.com: {subjects:?}");
+    assert!(!subjects.contains(&"Deals"));
+    assert_eq!(
+        server.call(&access, "search", json!({ "query": "tacos" })).await.unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let tools = server.tool_names(&access).await;
+    assert!(tools.contains(&"modify".to_string()) && !tools.contains(&"block_sender".to_string()), "{tools:?}");
+    let rule = server.call(&access, "create_rule", json!({ "from": ["@shop.example"], "skip_inbox": true })).await;
+    assert!(rule.unwrap_err().contains("only some of the mail"));
+    let news: Uuid = sqlx::query_scalar("SELECT id FROM messages WHERE provider_id = 'n1'")
+        .fetch_one(&server.state.db)
+        .await
+        .unwrap();
+    let elsewhere = server.call(&access, "modify", json!({ "action": "archive", "message_ids": [news] })).await;
+    assert_eq!(elsewhere.unwrap_err(), "No such message.");
+
+    let unknown_label = json!({ "access": { "role": "reader", "all_accounts": true, "reads": [],
+        "never": { "labels": [Uuid::new_v4()] } } });
+    let refused = server
+        .http
+        .put(format!("{}/api/connected-apps/{grant}", server.base))
+        .bearer_auth(&session)
+        .json(&unknown_label)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 400);
+    let bad_age = json!({ "access": { "role": "reader", "all_accounts": true, "only": { "newer_than": "soon" } } });
+    let refused = server
+        .http
+        .put(format!("{}/api/connected-apps/{grant}", server.base))
+        .bearer_auth(&session)
+        .json(&bad_age)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 400);
+    let (other_session, ..) = server.gmail_user("eve@gmail.com").await;
+    let stranger = server
+        .http
+        .put(format!("{}/api/connected-apps/{grant}", server.base))
+        .bearer_auth(&other_session)
+        .json(&wider)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stranger.status(), 404);
+}
+
+#[sqlx::test]
+async fn an_access_approved_before_parts_keeps_what_it_read(db: PgPool) {
+    let server = Server::start(db).await;
+    let (session, _, account) = server.gmail_user("ann@gmail.com").await;
+    mail(&server, &account, &[message("m1", "cy@example.com", "Plan for Monday", &["inbox"])]).await;
+    let (_, tokens) = server
+        .connect(&session, json!({ "role": "reader", "all_accounts": true, "privileges": ["read_bodies"] }))
+        .await;
+    let access = token(&tokens, "access_token");
+    let found = server.call(&access, "search", json!({})).await.unwrap();
+    assert_eq!(found["messages"][0]["subject"], "Plan for Monday");
+    assert_eq!(found["messages"][0]["snippet"], "Plan for Monday, in short");
+    let accounts = server.call(&access, "list_accounts", json!({})).await.unwrap();
+    assert_eq!(accounts["access"]["reads"], json!(["subject", "body"]));
+    assert_eq!(accounts["access"]["privileges"], json!([]));
 }
 
 async fn shared_mailbox(server: &Server, user_id: Uuid) -> AccountRow {
