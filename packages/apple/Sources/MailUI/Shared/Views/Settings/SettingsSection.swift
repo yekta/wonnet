@@ -2,7 +2,7 @@ import Foundation
 
 /// A page of the settings, listed beside it on the Mac and pushed from the list on iOS.
 enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
-    case general, accounts, inbox, reading, writing, keybindings
+    case general, accounts, inbox, reading, writing, keybindings, connected
 
     var id: String { rawValue }
 
@@ -19,6 +19,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .general: "General"
         case .accounts: "Accounts"
+        case .connected: "Connected apps"
         case .inbox: "Inbox"
         case .reading: "Reading"
         case .writing: "Writing"
@@ -30,6 +31,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .general: .settings
         case .accounts: .atSign
+        case .connected: .plug
         case .inbox: .inbox
         case .reading: .mailOpen
         case .writing: .pencil
@@ -54,6 +56,8 @@ struct SettingsEntry: Identifiable, Hashable {
         SettingsEntry(id: "accounts", title: "Accounts", section: .accounts, keywords: "add remove gmail outlook microsoft hotmail jmap fastmail colour color notifications"),
         SettingsEntry(id: "signatures", title: "Signatures", section: .accounts, keywords: "sign off footer"),
         SettingsEntry(id: "sign-out", title: "Sign out", section: .accounts, keywords: "log out leave"),
+        SettingsEntry(id: "connect", title: "MCP Server", section: .connected, keywords: "connect application mcp claude chatgpt cursor ai agent assistant address url copy"),
+        SettingsEntry(id: "connected", title: "Connected apps", section: .connected, keywords: "revoke access mcp ai agents"),
         SettingsEntry(id: "split-inbox", title: "Split Inbox", section: .inbox, keywords: "important other newsletters notifications splits"),
         SettingsEntry(id: "rules", title: "Rules", section: .inbox, keywords: "filters rules automatic label skip inbox mark read"),
         SettingsEntry(id: "tabs", title: "Tabs", section: .inbox, keywords: "mailboxes over the list order"),

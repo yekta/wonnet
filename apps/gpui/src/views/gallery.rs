@@ -81,9 +81,18 @@ impl Render for Gallery {
             Chip::new("gallery-chip-2", "not an address").invalid(true).remove(|_, _, _| {}).into_any_element(),
             Chip::new("gallery-chip-3", "Receipts").symbol(Symbol::Tag).into_any_element(),
             Chip::new("gallery-chip-4", "report.pdf").symbol(Symbol::Paperclip).detail("1.2 MB").into_any_element(),
+            Chip::new("gallery-chip-5", "Verified")
+                .symbol(Symbol::ShieldCheck)
+                .tone(ui::Tone::Success)
+                .into_any_element(),
+            Chip::new("gallery-chip-6", "Unverified")
+                .symbol(Symbol::CircleAlert)
+                .tone(ui::Tone::Warning)
+                .into_any_element(),
         ];
         let toggle = this.clone();
         let misc = vec![
+            div().w(px(320.)).child(ui::CopyField::new("gallery-copy", "https://wonnet.app/mcp")).into_any_element(),
             ui::Avatar::new("AL", "ann@example.com", 34.).into_any_element(),
             ui::spinner(16., cx.color(MUTED_FOREGROUND)).into_any_element(),
             ui::key_caps(crate::keys::caps("mod+k"), cx).into_any_element(),
@@ -150,6 +159,25 @@ impl Render for Gallery {
                         .lead(Lead::Avatar(Address { name: Some("Ann Lee".into()), email: "ann@example.com".into() }))
                         .checked(true),
                 )
+                .into_any_element(),
+            div()
+                .w(px(320.))
+                .child(ui::settings_card(
+                    vec![
+                        ui::mark_list(vec![
+                            ui::MarkRow::new("gallery-mark-1", "Reader", ui::Mark::Radio, |_, _, _| {})
+                                .detail("Searches and reads the first lines.")
+                                .lead(Lead::Symbol(Symbol::Eye))
+                                .checked(true)
+                                .into_any_element(),
+                            ui::MarkRow::new("gallery-mark-2", "Read whole messages", ui::Mark::Check, |_, _, _| {})
+                                .lead(Lead::Symbol(Symbol::FileText))
+                                .into_any_element(),
+                        ])
+                        .into_any_element(),
+                    ],
+                    cx,
+                ))
                 .into_any_element(),
         ];
         let countdown_lap = Duration::from_secs_f32(self.opened.elapsed().as_secs_f32() % COUNTDOWN.as_secs_f32());

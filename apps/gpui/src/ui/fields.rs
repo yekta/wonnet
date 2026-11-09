@@ -1,17 +1,18 @@
 //! Fields, on GPUI Component's text inputs: a field with its label above, the search field that
-//! narrows a list (with the keys that move through it), and the face of a combobox.
+//! narrows a list (with the keys that move through it), the face of a combobox, and text to copy.
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Div, Entity, FocusHandle, Focusable as _, Global, Keystroke, MouseButton, SharedString, Window,
-    div, px,
+    AnyElement, App, ClipboardItem, Div, Entity, FocusHandle, Focusable as _, Global, Keystroke, MouseButton,
+    SharedString, Window, div, px,
 };
 use gpui_component::input::{Input, InputState};
 
-use super::{IconButton, MenuEntry, Symbol, icon, line, menu_under, open_menu};
+use super::{ActionButton, IconButton, MenuEntry, Symbol, icon, line, menu_under, open_menu};
 use crate::theme::*;
 
 /// What a field does with the keys that move through the list under it. True when it took one.
@@ -192,6 +193,90 @@ pub fn input_field(id: &str, label: Option<&str>, state: &Entity<InputState>, cx
                 .on_mouse_down(MouseButton::Left, move |_, window, cx| window.focus(&focus, cx))
                 .child(div().flex_1().min_w_0().child(bare_input(state))),
         )
+}
+
+/// Text to take elsewhere, in a field's box that isn't typed in, with the button beside it that
+/// copies it: the MCP server's address. The button shows a check for two seconds once it has.
+#[derive(IntoElement)]
+pub struct CopyField {
+    id: SharedString,
+    text: SharedString,
+}
+
+impl CopyField {
+    pub fn new(id: impl Into<SharedString>, text: impl Into<SharedString>) -> Self {
+        Self { id: id.into(), text: text.into() }
+    }
+}
+
+/// How many times a copy field's button was clicked, and whether it shows its check.
+#[derive(Default)]
+struct Copied {
+    clicks: u64,
+    shown: bool,
+}
+
+impl RenderOnce for CopyField {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let text = self.text.clone();
+        let field = window.use_keyed_state(SharedString::from(format!("{}-text", self.id)), cx, |window, cx| {
+            InputState::new(window, cx).default_value(text.clone())
+        });
+        if field.read(cx).value() != self.text {
+            let text = self.text.clone();
+            field.update(cx, |field, cx| field.set_value(text, window, cx));
+        }
+        let copied =
+            window.use_keyed_state(SharedString::from(format!("{}-copied", self.id)), cx, |_, _| Copied::default());
+        let shown = copied.read(cx).shown;
+        let button =
+            ActionButton::new(SharedString::from(format!("{}-copy", self.id)), if shown { "Copied" } else { "Copy" })
+                .symbol(if shown { Symbol::Check } else { Symbol::Copy })
+                .icon_only(true)
+                .on_click(move |_, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+                    let click = copied.update(cx, |copied, cx| {
+                        copied.clicks += 1;
+                        copied.shown = true;
+                        cx.notify();
+                        copied.clicks
+                    });
+                    let copied = copied.clone();
+                    cx.spawn(async move |cx| {
+                        cx.background_executor().timer(Duration::from_secs(2)).await;
+                        copied.update(cx, |copied, cx| {
+                            if copied.clicks == click {
+                                copied.shown = false;
+                                cx.notify();
+                            }
+                        })
+                    })
+                    .detach();
+                });
+        div()
+            .flex()
+            .items_center()
+            .gap(px(space::S - size::BUTTON_GAP / 2.))
+            .w_full()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .h(px(size::FIELD))
+                    .px(px(space::S + 2.))
+                    .rounded(px(radius::SM))
+                    .bg(cx.color(INPUT))
+                    .border_1()
+                    .border_color(cx.color(BORDER_INPUT))
+                    .font_family(FONT)
+                    .text_size(px(TextStyle::Body.size()))
+                    .text_color(cx.color(FOREGROUND))
+                    .child(div().flex_1().min_w_0().child(bare_input(&field).readonly(true))),
+            )
+            .child(div().mr(px(-size::BUTTON_GAP / 2.)).child(button))
+    }
 }
 
 /// A box of several lines, with its label above if it has one.

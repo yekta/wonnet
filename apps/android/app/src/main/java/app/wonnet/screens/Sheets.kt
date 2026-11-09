@@ -51,7 +51,7 @@ import app.wonnet.ui.SearchField
 import app.wonnet.ui.Sheet
 import kotlinx.coroutines.delay
 
-/** The sheets over everything, one at a time: the palette, the labels, the snooze times, the settings and the gallery. */
+/** The sheets over everything, one at a time: the palette, the labels, the snooze times, the settings, the gallery and an application asking to connect. */
 @Composable
 fun Sheets(store: MailStore) {
     store.palette?.let { scope -> CommandPalette(store, scope) }
@@ -59,6 +59,7 @@ fun Sheets(store: MailStore) {
     store.snoozing?.let { threads -> SnoozePicker(store, threads) }
     if (store.settings != null) SettingsSheet(store) { store.closeSettings() }
     if (store.galleryOpen) Gallery { store.galleryOpen = false }
+    store.connecting?.let { link -> androidx.compose.runtime.key(link.id) { ConnectSheet(store, link) } }
 }
 
 /** A sheet's list and the field that narrows it, the field over the list. */

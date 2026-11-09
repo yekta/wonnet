@@ -24,6 +24,7 @@ mail-builder.workspace = true
 mail-parser.workspace = true
 percent-encoding = "2"
 psl = "2"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 resvg = { version = "0.48", default-features = false }
 reqwest = { workspace = true, features = ["http2"] }
 ring = "0.17"

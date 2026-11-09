@@ -167,16 +167,18 @@ pub enum SettingsSection {
     Reading,
     Writing,
     Keybindings,
+    Connected,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 6] =
-        [Self::General, Self::Accounts, Self::Inbox, Self::Reading, Self::Writing, Self::Keybindings];
+    pub const ALL: [SettingsSection; 7] =
+        [Self::General, Self::Accounts, Self::Inbox, Self::Reading, Self::Writing, Self::Keybindings, Self::Connected];
 
     pub fn title(self) -> &'static str {
         match self {
             Self::General => "General",
             Self::Accounts => "Accounts",
+            Self::Connected => "Connected apps",
             Self::Inbox => "Inbox",
             Self::Reading => "Reading",
             Self::Writing => "Writing",
@@ -188,6 +190,7 @@ impl SettingsSection {
         match self {
             Self::General => Symbol::Settings,
             Self::Accounts => Symbol::AtSign,
+            Self::Connected => Symbol::Plug,
             Self::Inbox => Symbol::Inbox,
             Self::Reading => Symbol::MailOpen,
             Self::Writing => Symbol::Pencil,
@@ -244,6 +247,8 @@ impl SettingsEntry {
             Self::new("sending", "Undo send", Writing, "delay cancel sending"),
             Self::new("snippets", "Snippets", Writing, "templates canned replies text"),
             Self::new("keybindings", "Keybindings", Keybindings, "keyboard shortcuts keys hotkeys superhuman"),
+            Self::new("connect", "MCP Server", Connected, "mcp claude chatgpt cursor ai agent assistant address"),
+            Self::new("connected", "Connected apps", Connected, "revoke access mcp ai agents"),
         ]
     }
 
@@ -385,6 +390,9 @@ impl Store {
         self.settings_target = target;
         self.sidebar_open &= self.local.keep_sidebar;
         self.load_preferences(cx);
+        if section == SettingsSection::Connected {
+            self.load_connected(cx);
+        }
         cx.notify();
     }
 

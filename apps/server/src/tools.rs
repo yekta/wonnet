@@ -52,7 +52,7 @@ async fn reached(state: &AppState, caller: &Caller) -> Result<Vec<AccountRow>, S
     .fetch_all(&state.db)
     .await
     .map_err(failed)?;
-    Ok(rows.into_iter().filter(|account| caller.access.reaches(account.id)).collect())
+    Ok(rows.into_iter().filter(|account| caller.access.reaches(&account.id.to_string())).collect())
 }
 
 /// The reached accounts a tool looks in: all of them, or the one asked for.
@@ -360,7 +360,8 @@ pub struct ThreadArgs {
 async fn message_reached(state: &AppState, caller: &Caller, id: &str) -> Result<MessageRow, String> {
     let id = uuid(id, "message")?;
     let row = crate::db::message(&state.db, caller.user_id, id).await.map_err(failed)?;
-    row.filter(|row| !row.deleted && caller.access.reaches(row.account_id)).ok_or_else(|| "No such message.".into())
+    row.filter(|row| !row.deleted && caller.access.reaches(&row.account_id.to_string()))
+        .ok_or_else(|| "No such message.".into())
 }
 
 async fn thread_rows(

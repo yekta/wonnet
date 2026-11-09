@@ -30,6 +30,7 @@
 
 use std::collections::BTreeMap;
 
+use mail_protocol::access::Access;
 use mail_protocol::api::Platform;
 use mail_protocol::{Address, Attachment, Draft, Identity, Rule};
 use serde::{Deserialize, Serialize};
@@ -418,6 +419,27 @@ pub enum Command {
     UnreadInInbox {
         threads: Vec<String>,
     },
+    /// `{address}` at once: the MCP server applications connect to.
+    McpServer,
+    /// A `ConnectedAppsView`, from the server.
+    ConnectedApps,
+    /// Ends an application's access at once. `{}`.
+    RevokeConnectedApp {
+        app: String,
+    },
+    /// A `ConnectRequestView`: the request a `wonnet://connect?key=…` URL opens, from the server.
+    ConnectRequest {
+        url: String,
+    },
+    /// The user's answer to a request. `access` is needed to approve it: `{"role": "reader" |
+    /// "organizer", "all_accounts": true, "accounts": [account ids], "privileges": ["read_bodies",
+    /// "unsubscribe"]}`. `{}`.
+    AnswerConnectRequest {
+        key: String,
+        approve: bool,
+        #[serde(default)]
+        access: Option<Access>,
+    },
 }
 
 fn default_limit() -> usize {
@@ -666,4 +688,55 @@ pub struct DraftReply {
 #[derive(Debug, Clone, Serialize)]
 pub struct Contacts {
     pub contacts: Vec<Address>,
+}
+
+/// The answer to `ConnectedApps`: the address applications connect to, and the ones the user let
+/// in, newest first.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectedAppsView {
+    pub address: String,
+    pub apps: Vec<ConnectedAppView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ConnectedAppView {
+    pub id: String,
+    pub name: String,
+    pub verified: bool,
+    /// What it may do: "Organizer · Every account · Reads whole messages".
+    pub access: String,
+    /// "Approved Nov 5 · Used 5 minutes ago".
+    pub used: String,
+}
+
+/// The answer to `ConnectRequest`: who is asking, and the choices of what it may do, ready to
+/// draw. Asked first, Every account and Reader with no privileges.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectRequestView {
+    /// For `AnswerConnectRequest`.
+    pub key: String,
+    pub client: String,
+    pub verified: bool,
+    /// "Published by claude.ai", or that it registered itself.
+    pub publisher: String,
+    /// "Sends you back to claude.ai".
+    pub back_to: String,
+    /// It goes back to an application on this device, not to a website: a warning.
+    pub on_device: bool,
+    pub accounts: Vec<AccessChoice>,
+    pub roles: Vec<AccessChoice>,
+    pub privileges: Vec<AccessChoice>,
+}
+
+/// One choice of what an application may do. `id` is an account's id, a role or a privilege;
+/// `symbol` is the Lucide icon it is drawn with, `color` an account's.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AccessChoice {
+    pub id: String,
+    pub title: String,
+    pub detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }

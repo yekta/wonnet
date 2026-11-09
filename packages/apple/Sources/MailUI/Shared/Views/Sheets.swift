@@ -9,6 +9,7 @@ enum Modal: Identifiable {
     /// iOS's settings; the Mac's take the window.
     case settings
     case gallery
+    case connect(Connecting)
 
     var id: String {
         switch self {
@@ -17,6 +18,7 @@ enum Modal: Identifiable {
         case .snooze(let threads): "snooze/\(threads.joined(separator: ","))"
         case .settings: "settings"
         case .gallery: "gallery"
+        case .connect(let connecting): "connect/\(connecting.id)"
         }
     }
 }
@@ -24,6 +26,7 @@ enum Modal: Identifiable {
 extension MailStore {
     var modal: Modal? {
         get {
+            if let connecting { return .connect(connecting) }
             if let palette { return .palette(palette) }
             if let labeling { return .label(labeling) }
             if let snoozing { return .snooze(snoozing) }
@@ -34,6 +37,7 @@ extension MailStore {
         }
         set {
             guard newValue == nil else { return }
+            if connecting != nil { return connecting = nil }
             palette = nil
             labeling = nil
             snoozing = nil
@@ -68,6 +72,7 @@ private struct MailSheets: ViewModifier {
                         SettingsSheet()
                         #endif
                     case .gallery: GalleryView()
+                    case .connect(let connecting): ConnectSheet(url: connecting.url)
                     }
                 }
                 .environment(store)

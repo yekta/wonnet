@@ -134,7 +134,7 @@ The server is an MCP server at `{PUBLIC_URL}/mcp`, for Claude, ChatGPT, Cursor o
 claude mcp add --transport http wonnet http://localhost:3000/mcp
 ```
 
-The agent registers itself and sends you to a page of the server's own, where you sign in with the address you started Wonnet with and choose what it may do: every account or only some, read or also organize (archive, label, trash, block, rules), and whether it may read whole messages and unsubscribe from lists. It can then search your mail, see who sends the most of it, sort it, split the inbox into tabs, find what matters and leave lists. `{PUBLIC_URL}/connected-apps` lists the agents you let in and revokes them.
+The agent registers itself and opens a page of the server's own, which opens Wonnet (or shows a QR code for your phone). In Wonnet you choose what it may do: every account or only some, read or also organize (archive, label, trash, block, rules), and whether it may read whole messages and unsubscribe from lists. It can then search your mail, see who sends the most of it, sort it, split the inbox into tabs, find what matters and leave lists. Settings → Connected apps shows the address, lists the agents you let in and revokes them.
 
 ## Development
 

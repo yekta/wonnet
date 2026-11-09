@@ -32,6 +32,11 @@ import app.wonnet.ui.BodyPlaceholder
 import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.Card
 import app.wonnet.ui.Chip
+import app.wonnet.ui.CopyButton
+import app.wonnet.ui.CopyField
+import app.wonnet.ui.PickRow
+import app.wonnet.ui.RowsCard
+import app.wonnet.ui.RowsCardRule
 import app.wonnet.ui.ChoiceMenu
 import app.wonnet.ui.ChoiceRow
 import app.wonnet.ui.EmptyState
@@ -76,6 +81,8 @@ fun Gallery(close: () -> Unit) {
                     for (variant in ButtonVariant.entries) ActionButton(variant.name, variant = variant) {}
                     ActionButton("Pending", symbol = Symbol.Send, variant = ButtonVariant.Primary, pending = true) {}
                     ActionButton("Disabled", enabled = false) {}
+                    CopyButton("https://example.com", "the address")
+                    CopyButton("https://example.com", "the address", iconOnly = true)
                     ActionButton("Icon", symbol = Symbol.Archive, iconOnly = true) {}
                     for (size in ControlSize.entries) ActionButton(size.name, symbol = Symbol.Reply, size = size) {}
                 }
@@ -107,6 +114,7 @@ fun Gallery(close: () -> Unit) {
                 SearchField("Search", text, { text = it })
                 SearchField("Search", text, { text = it }, style = SearchStyle.Bar)
                 ToggleRow("A switch", on, detail = "With a line about it") { on = it }
+                CopyField("https://wonnet.app/mcp", "the address")
             }
             FormSection("Chips") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
@@ -115,6 +123,8 @@ fun Gallery(close: () -> Unit) {
                     Chip("Travel", symbol = Symbol.Tag)
                     Chip("report.pdf", symbol = Symbol.Paperclip, detail = "1.2 MB", pending = true)
                     Chip("•••", onClick = {})
+                    Chip("Verified", symbol = Symbol.ShieldCheck, tint = Tokens.success)
+                    Chip("Unverified", symbol = Symbol.CircleAlert, tint = Tokens.warning)
                 }
             }
             FormSection("Rows") {
@@ -124,6 +134,13 @@ fun Gallery(close: () -> Unit) {
                     ItemRow("An item", detail = "With a detail", symbol = Symbol.Tag)
                     ChoiceRow("Tomorrow", detail = "Tue 8:00 AM", highlighted = true) {}
                     ChoiceRow("Ann Lee", detail = "ann@example.com", avatar = Address("Ann Lee", "ann@example.com"), checked = true) {}
+                }
+                RowsCard {
+                    PickRow("One of them", checked, detail = "A line about it", symbol = Symbol.Inbox) { checked = true }
+                    RowsCardRule()
+                    PickRow("Another", !checked, symbol = Symbol.ListFilter) { checked = false }
+                    RowsCardRule()
+                    PickRow("Several", on, detail = "Picked with others", dot = Dims.accountColor("account-3").color, multiple = true) { on = !on }
                 }
                 TabStrip(listOf("Important", "Other"), { it }, tab, { it }, { if (it == "Other") 3 else 0 }) { tab = it }
                 OptionButton("Continue with Google", "Gmail and Google Workspace", {}) { GoogleMark() }
@@ -138,6 +155,7 @@ fun Gallery(close: () -> Unit) {
                 }
                 Notice("A muted line about something.")
                 Notice("Something went wrong.", error = true, symbol = Symbol.CircleAlert, action = "Retry")
+                Notice("Something to beware of.", warning = true, symbol = Symbol.CircleAlert)
                 Banner(Symbol.CircleArrowDown, "v1.2.0 is out", "You have v1.1.0.", tint = Tokens.primary, action = { ActionButton("Update", variant = ButtonVariant.Primary, size = ControlSize.Small) {} }, close = {})
                 Banner(Symbol.CircleArrowDown, "Downloading v1.2.0", "40%", tint = Tokens.process, progress = 0.4)
             }

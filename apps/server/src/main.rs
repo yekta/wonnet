@@ -3,6 +3,7 @@ mod api;
 mod avatars;
 mod changes;
 mod config;
+mod connect;
 mod db;
 #[cfg(test)]
 mod e2e;
@@ -26,7 +27,6 @@ mod sign_in;
 mod sync;
 mod tools;
 mod unsubscribe;
-mod web;
 mod workers;
 
 use std::sync::Arc;
@@ -97,11 +97,10 @@ fn router(state: AppState) -> Router {
     let header = |name, value| SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value));
     Router::new()
         .merge(for_agents(&state))
-        .route("/oauth/authorize", get(web::authorize).post(web::decide))
-        .route("/connected-apps", get(web::connected_apps))
-        .route("/connected-apps/revoke", post(web::revoke))
-        .route("/web/jmap", post(web::jmap_sign_in))
-        .route("/web/sign-out", post(web::sign_out))
+        .route("/oauth/authorize", get(connect::authorize))
+        .route("/oauth/requests/{id}", get(connect::status))
+        .route("/oauth/requests/{id}/finish", get(connect::finish))
+        .route("/connect/{key}", get(connect::open))
         .route("/healthz", get(|| async { "ok" }))
         .route("/auth/google/start", get(sign_in::google_start))
         .route("/auth/google/callback", get(sign_in::google_callback))
@@ -110,6 +109,9 @@ fn router(state: AppState) -> Router {
         .route("/api/auth/exchange", post(api::exchange))
         .route("/api/link-ticket", post(api::link_ticket))
         .route("/api/accounts/jmap", post(api::add_jmap))
+        .route("/api/connect/{key}", get(connect::request).post(connect::answer))
+        .route("/api/connected-apps", get(connect::connected_apps))
+        .route("/api/connected-apps/{id}", delete(connect::revoke))
         .route("/api/dev/login", post(api::dev_login))
         .route("/api/messages/{id}/attachments/{index}", get(api::attachment))
         .route("/api/avatar", get(avatars::avatar))

@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// A small pill: an address in a field, a file, a thread's label. `invalid` is an address that
-/// can't be sent to. `removeHelp` is what the x says it does, "Remove" and the title without it.
+/// can't be sent to; `success` and `warning` are a state in its colour, as an application that is
+/// verified or not, on a smaller pill that sits beside a name. `removeHelp` is what the x says it does, "Remove" and the title without it.
 struct Chip: View {
     enum Variant {
-        case plain, invalid
+        case plain, invalid, success, warning
     }
 
     let title: String
@@ -30,8 +31,8 @@ struct Chip: View {
     }
 
     private var content: some View {
-        HStack(spacing: Space.xs) {
-            ButtonIcon(symbol: symbol, pending: pending, size: 12, tint: variant == .invalid ? Tokens.destructive.color : Tokens.mutedForeground.color)
+        HStack(spacing: badge ? Space.xxs : Space.xs) {
+            ButtonIcon(symbol: symbol, pending: pending, size: badge ? 11 : 12, tint: tone?.color ?? Tokens.mutedForeground.color)
             Text(title).font(.ui(.caption)).lineLimit(1).truncationMode(.middle)
             if let detail {
                 Text(detail).textStyle(.footnote).lineLimit(1)
@@ -44,15 +45,32 @@ struct Chip: View {
                     .padding(.trailing, -(Space.s + 2))
             }
         }
-        .padding(.horizontal, Space.s + 2)
-        .frame(height: Theme.chipHeight * Platform.scale)
-        .foregroundStyle(variant == .invalid ? Tokens.destructive.color : Tokens.foreground.color)
+        // A badge's words end a little further from its edge than its icon starts, so the round
+        // end doesn't crowd them.
+        .padding(.leading, badge ? Space.xs : Space.s + 2)
+        .padding(.trailing, badge ? Space.s : Space.s + 2)
+        .frame(height: (badge ? Theme.badgeHeight : Theme.chipHeight) * Platform.scale)
+        .foregroundStyle(tone?.color ?? Tokens.foreground.color)
         .background(Capsule().fill(fill.color))
         .overlay(Capsule().strokeBorder(variant == .invalid ? Tokens.destructive.opacity(Opacity.colorBorder).color : .clear, lineWidth: Theme.hairline))
         .contentShape(Capsule())
     }
 
+    /// A state beside a name, smaller than a chip that is a thing of its own.
+    private var badge: Bool { variant == .success || variant == .warning }
+
+    /// The colour of a chip that says something with it.
+    private var tone: ThemeColor? {
+        switch variant {
+        case .plain: nil
+        case .invalid: Tokens.destructive
+        case .success: Tokens.success
+        case .warning: Tokens.warning
+        }
+    }
+
     private var fill: ThemeColor {
+        if variant == .success || variant == .warning, let tone { return tone.opacity(Opacity.colorTint) }
         let hovering = hovered && action != nil
         if onCard { return hovering ? Theme.cardAccentStronger : Theme.cardAccent }
         return hovering ? Tokens.backgroundSecondaryAccent : Tokens.backgroundSecondary

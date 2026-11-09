@@ -1,4 +1,5 @@
-//! The server's HTTP API: signing in, adding accounts, and the files of sends and attachments.
+//! The server's HTTP API: signing in, adding accounts, connected apps, and the files of sends and
+//! attachments.
 
 use std::time::Duration;
 
@@ -45,6 +46,10 @@ pub async fn post<T: DeserializeOwned>(
         request = request.bearer_auth(token);
     }
     Ok(answered(request).await?.json().await?)
+}
+
+pub async fn get<T: DeserializeOwned>(http: &reqwest::Client, server: &str, path: &str, token: &str) -> Result<T> {
+    Ok(answered(http.get(url(server, path)).bearer_auth(token)).await?.json().await?)
 }
 
 pub async fn delete(http: &reqwest::Client, server: &str, path: &str, token: &str) -> Result<()> {

@@ -10,7 +10,7 @@ use gpui::prelude::*;
 use gpui::{App, ClickEvent, Global, ObjectFit, SharedString, Window, canvas, div, img, px, svg};
 use mail_core::api::Command;
 
-use super::{OnClick, PlainButton, Symbol, Tooltip, icon, line, line_in, spinner};
+use super::{OnClick, PlainButton, Symbol, Tone, Tooltip, icon, line, line_in, spinner};
 use crate::core::Core;
 use crate::models::{AvatarReply, ShapeLine};
 use crate::theme::*;
@@ -90,7 +90,8 @@ impl RenderOnce for Avatar {
     }
 }
 
-/// A small pill: an address, a file, a thread's label. `invalid` can't be sent to.
+/// A small pill: an address, a file, a thread's label. `invalid` can't be sent to; a `tone` other
+/// than muted is a state in a wash of its colour, as "Verified", on a smaller pill.
 #[derive(IntoElement)]
 pub struct Chip {
     id: SharedString,
@@ -98,6 +99,7 @@ pub struct Chip {
     symbol: Option<Symbol>,
     detail: Option<SharedString>,
     invalid: bool,
+    tone: Tone,
     pending: bool,
     on_card: bool,
     help: Option<SharedString>,
@@ -114,6 +116,7 @@ impl Chip {
             symbol: None,
             detail: None,
             invalid: false,
+            tone: Tone::Muted,
             pending: false,
             on_card: false,
             help: None,
@@ -135,6 +138,11 @@ impl Chip {
 
     pub fn invalid(mut self, invalid: bool) -> Self {
         self.invalid = invalid;
+        self
+    }
+
+    pub fn tone(mut self, tone: Tone) -> Self {
+        self.tone = tone;
         self
     }
 
@@ -172,8 +180,13 @@ impl RenderOnce for Chip {
         } else {
             (BACKGROUND_SECONDARY, BACKGROUND_SECONDARY_ACCENT)
         };
-        let color = if self.invalid { DESTRUCTIVE } else { FOREGROUND };
-        let glyph_color = if self.invalid { DESTRUCTIVE } else { MUTED_FOREGROUND };
+        let toned = self.tone != Tone::Muted;
+        let color = match (self.invalid, toned) {
+            (true, _) => DESTRUCTIVE,
+            (false, true) => self.tone.color(),
+            (false, false) => FOREGROUND,
+        };
+        let glyph_color = if self.invalid || toned { color } else { MUTED_FOREGROUND };
         let help = self.help.clone().unwrap_or_else(|| self.title.clone());
         let clickable = self.action.is_some() && self.remove.is_none();
         let action = self.action.clone();
@@ -207,22 +220,27 @@ impl RenderOnce for Chip {
                     remove(event, window, cx);
                 })
         });
+        let glyph_side = if toned { 11. } else { 12. };
         let glyph = if self.pending {
-            Some(spinner(12., cx.color(glyph_color)).into_any_element())
+            Some(spinner(glyph_side, cx.color(glyph_color)).into_any_element())
         } else {
-            self.symbol.map(|symbol| icon(symbol, 12.).text_color(cx.color(glyph_color)).into_any_element())
+            self.symbol.map(|symbol| icon(symbol, glyph_side).text_color(cx.color(glyph_color)).into_any_element())
         };
         div()
             .id(self.id.clone())
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(space::XS))
-            .h(px(size::CHIP))
-            .px(px(space::S + 2.))
+            .when(!toned, |chip| chip.gap(px(space::XS)).h(px(size::CHIP)).px(px(space::S + 2.)))
+            .when(toned, |chip| {
+                chip.gap(px(space::XXS))
+                    .h(px(size::STATUS_CHIP))
+                    .pl(px(if self.symbol.is_some() { space::XS } else { space::S }))
+                    .pr(px(space::S))
+            })
             .max_w(px(320.))
             .rounded_full()
-            .bg(cx.color(fill))
+            .bg(if toned { cx.tint(color, opacity::COLOR_TINT) } else { cx.color(fill) })
             .text_in(TextStyle::Caption, color, cx)
             .when(self.invalid, |chip| chip.border_1().border_color(cx.tint(DESTRUCTIVE, opacity::COLOR_BORDER)))
             .when(clickable, |chip| chip.cursor_pointer().hover(|chip| chip.bg(cx.color(hover))))
@@ -559,7 +577,8 @@ pub fn swatch_row(
     }))
 }
 
-/// A switch, in the primary colour when on.
+/// A switch, in the primary colour when on, padding half the button gap inside its hit area as
+/// buttons do.
 pub fn switch(
     id: impl Into<SharedString>,
     on: bool,
@@ -569,14 +588,8 @@ pub fn switch(
     let (width, height) = (32., 18.);
     div()
         .id(id.into())
-        .w(px(width))
-        .h(px(height))
         .flex_none()
-        .rounded_full()
-        .p(px(2.))
-        .flex()
-        .when(on, |track| track.justify_end())
-        .bg(if on { cx.color(PRIMARY) } else { cx.color(BACKGROUND_ACCENT_STRONGEST) })
+        .px(px(size::BUTTON_GAP / 2.))
         .cursor_pointer()
         .on_click(move |_, window, cx| {
             cx.stop_propagation();
@@ -584,10 +597,20 @@ pub fn switch(
         })
         .child(
             div()
-                .size(px(height - 4.))
+                .w(px(width))
+                .h(px(height))
                 .rounded_full()
-                .bg(cx.color(CARD))
-                .shadow(cx.shadow(ShadowSize::Sm, opacity::SHADOW)),
+                .p(px(2.))
+                .flex()
+                .when(on, |track| track.justify_end())
+                .bg(if on { cx.color(PRIMARY) } else { cx.color(BACKGROUND_ACCENT_STRONGEST) })
+                .child(
+                    div()
+                        .size(px(height - 4.))
+                        .rounded_full()
+                        .bg(cx.color(CARD))
+                        .shadow(cx.shadow(ShadowSize::Sm, opacity::SHADOW)),
+                ),
         )
 }
 
@@ -610,7 +633,8 @@ pub fn toggle_row(
         .items_center()
         .gap(px(space::L))
         .min_h(px(size::SMALL))
-        .px(px(space::S))
+        .pl(px(space::S))
+        .pr(px(space::S - size::BUTTON_GAP / 2.))
         .mx(px(-space::S))
         .rounded(px(radius::MD))
         .cursor_pointer()

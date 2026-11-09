@@ -24,8 +24,11 @@ public struct MailMacApp: App {
                     delegate.store = store
                     store.start(defaultServer: defaultServer)
                 }
-                .onOpenURL { url in Task { await store.finishSignIn(url) } }
+                .onOpenURL { url in Task { await store.open(url) } }
+                // A link opens in the window there is, not in a new one.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
+        .handlesExternalEvents(matching: ["*"])
         .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1280, height: 820)
         .commands { MacCommands(store: store) }

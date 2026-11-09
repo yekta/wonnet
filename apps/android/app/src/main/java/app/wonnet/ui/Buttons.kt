@@ -1,5 +1,7 @@
 package app.wonnet.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,13 +23,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.wonnet.theme.ControlSize
 import app.wonnet.theme.Dims
@@ -43,6 +48,7 @@ import app.wonnet.theme.TextStyle
 import app.wonnet.theme.ThemeColor
 import app.wonnet.theme.Tokens
 import app.wonnet.theme.shadow
+import kotlinx.coroutines.delay
 
 /** The icon of a button, or the spinner in its place while the button is pending. */
 @Composable
@@ -60,7 +66,8 @@ enum class ButtonVariant { Primary, Success, Outline, Ghost, Destructive }
 /**
  * A button with words. `pending` shows the spinner where the icon goes and ignores taps until it
  * is over. `iconOnly` is the same button shrunk to its icon in a circle. Half of `Dims.buttonGap`
- * on each side keeps it off its neighbours while the hit areas touch.
+ * on each side keeps it off its neighbours while the hit areas touch. `help` is what a screen
+ * reader says in place of the words, when they need what the button is about.
  */
 @Composable
 fun ActionButton(
@@ -73,9 +80,10 @@ fun ActionButton(
     wide: Boolean = false,
     iconOnly: Boolean = false,
     enabled: Boolean = true,
+    help: String? = null,
     onClick: () -> Unit,
 ) {
-    Pressable({ if (!pending) onClick() }, modifier, enabled, help = if (iconOnly) title else null) { hovered ->
+    Pressable({ if (!pending) onClick() }, modifier, enabled, help = help ?: if (iconOnly) title else null) { hovered ->
         ButtonFace(title, symbol, variant, size, pending, wide, iconOnly, hovered = hovered)
     }
 }
@@ -114,6 +122,7 @@ fun ButtonFace(
     val height = size.scaled
     Row(
         Modifier
+            .face(Dims.buttonGap / 2)
             .padding(horizontal = Dims.buttonGap / 2)
             .background(background, CircleShape)
             .border(Dims.hairline, border, CircleShape)
@@ -127,6 +136,26 @@ fun ButtonFace(
         ButtonIcon(symbol, pending, size.icon - 1, foreground)
         Text(title, size.text, color = foreground, maxLines = 1)
         if (chevron) Icon(Symbol.ChevronDown, size.icon - 1, foreground)
+    }
+}
+
+/** Copies `text`, then says Copied with a check for two seconds; `iconOnly`, only the icon changes. `what` is what a screen reader says is copied. */
+@Composable
+fun CopyButton(text: String, what: String, modifier: Modifier = Modifier, size: ControlSize = ControlSize.Small, iconOnly: Boolean = false) {
+    val context = LocalContext.current
+    var copies by remember { mutableIntStateOf(0) }
+    LaunchedEffect(copies) {
+        if (copies == 0) return@LaunchedEffect
+        delay(2000)
+        copies = 0
+    }
+    val copied = copies > 0
+    ActionButton(
+        if (copied) "Copied" else "Copy", modifier, symbol = if (copied) Symbol.Check else Symbol.Copy, size = size, iconOnly = iconOnly,
+        help = if (copied) "Copied" else "Copy $what",
+    ) {
+        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(what, text))
+        copies += 1
     }
 }
 
@@ -175,7 +204,7 @@ fun IconCircle(
     val fill = if (hovered) hoverFill.color else Color.Transparent
     val ring = if (!circled) Color.Transparent else if (LocalOnCard.current) Dims.cardRule.color else Tokens.border.color
     Box(
-        Modifier.padding(horizontal = Dims.buttonGap / 2).size(size.scaled).background(fill, CircleShape).border(Dims.hairline, ring, CircleShape),
+        Modifier.face(Dims.buttonGap / 2).padding(horizontal = Dims.buttonGap / 2).size(size.scaled).background(fill, CircleShape).border(Dims.hairline, ring, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         ButtonIcon(symbol, pending, size.icon, tint)

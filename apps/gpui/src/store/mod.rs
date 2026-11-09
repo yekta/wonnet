@@ -4,6 +4,7 @@
 
 mod actions;
 pub mod commands;
+mod connect;
 mod local;
 mod prefs;
 
@@ -19,6 +20,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub use commands::ThreadCommand;
+pub use connect::{ConnectChoices, ConnectSheet, ConnectState, Connected};
 pub use local::{Appearance, LocalSettings, NotificationAction};
 pub use prefs::{CustomRule, CustomSplit, SettingsEntry, SettingsSection, Snippet, label_id, uuid};
 
@@ -111,6 +113,9 @@ pub struct Store {
     pub confirmation: Option<Confirmation>,
     /// The sender shown in a sheet, on a window too narrow for the pane beside the thread.
     pub contact: Option<String>,
+    /// An application asking to connect.
+    pub connect: Option<ConnectSheet>,
+    pub connected: Connected,
     arriving_thread: Option<String>,
     pub images_shown: HashSet<String>,
     pub sidebar_open: bool,
@@ -182,6 +187,8 @@ impl Store {
             settings_query: String::new(),
             confirmation: None,
             contact: None,
+            connect: None,
+            connected: Connected::default(),
             arriving_thread: None,
             images_shown: HashSet::new(),
             sidebar_open: false,
@@ -357,6 +364,7 @@ impl Store {
             || self.gallery_open
             || self.confirmation.is_some()
             || self.contact.is_some()
+            || self.connect.is_some()
     }
 
     // MARK: Starting

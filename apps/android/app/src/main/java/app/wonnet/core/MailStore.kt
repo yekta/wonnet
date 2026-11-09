@@ -115,6 +115,8 @@ class MailStore(private val context: Context) {
     /** The group of the page a search picked, to scroll to. */
     var settingsTarget by mutableStateOf<String?>(null)
     var settingsQuery by mutableStateOf("")
+    /** The application asking to connect, while its consent sheet is open. */
+    var connecting by mutableStateOf<ConnectLink?>(null)
     /** A question to answer before something that can't be taken back. */
     var confirmation by mutableStateOf<Confirmation?>(null)
     /** A thread a notification asked to show, for the screen to push. */

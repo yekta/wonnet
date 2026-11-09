@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
@@ -37,6 +38,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -190,11 +192,11 @@ fun InputField(
     }
 }
 
-/** The system's switch alone, in the primary colour when on. */
+/** The system's switch alone, in the primary colour when on. Its track is 32dp tall in a taller hit area. */
 @Composable
 fun Toggle(on: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
     Switch(
-        on, onChange, enabled = enabled,
+        on, onChange, Modifier.face(height = 32.dp), enabled = enabled,
         colors = SwitchDefaults.colors(
             checkedTrackColor = Tokens.primary.color, checkedThumbColor = Tokens.primaryForeground.color,
             uncheckedTrackColor = Tokens.backgroundAccentStronger.color, uncheckedThumbColor = Tokens.card.color,
@@ -222,5 +224,29 @@ fun ToggleRow(title: String, on: Boolean, modifier: Modifier = Modifier, detail:
             }
             Toggle(on, onChange)
         }
+    }
+}
+
+/**
+ * Text to copy: in a field's box that can't be typed in, one line cut in the middle, selectable;
+ * beside it the copy button, whose icon turns to a check once copied. `what` is what a screen reader says is copied. The button's face
+ * reaches the end, as the field's the start.
+ */
+@Composable
+fun CopyField(text: String, what: String, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(Radius.sm)
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        Box(
+            Modifier
+                .weight(1f)
+                .height(Dims.fieldHeight)
+                .background(Tokens.input.color, shape)
+                .border(Dims.hairline, Tokens.borderInput.color, shape)
+                .padding(horizontal = Space.s + 2.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            SelectionContainer { Text(text, TextStyle.Body, maxLines = 1, overflow = TextOverflow.MiddleEllipsis) }
+        }
+        CopyButton(text, what, Modifier.pullOut(Dims.buttonGap / 2), size = ControlSize.Regular, iconOnly = true)
     }
 }

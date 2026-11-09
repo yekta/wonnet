@@ -25,10 +25,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import app.wonnet.theme.Dims
 import app.wonnet.theme.Icon
 import app.wonnet.theme.Radius
@@ -109,16 +111,41 @@ fun PageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() 
     }
 }
 
-/** A line about something: a hint, an error, a note that something was left out; with `action`, the one thing to do about it. */
+/** A line about something: a hint, an error, a warning, a note that something was left out; with `action`, the one thing to do about it. */
 @Composable
-fun Notice(text: String, modifier: Modifier = Modifier, error: Boolean = false, symbol: Symbol? = null, action: String? = null, perform: () -> Unit = {}) {
-    val color = if (error) Tokens.destructive.color else Tokens.mutedStrongerForeground.color
+fun Notice(
+    text: String,
+    modifier: Modifier = Modifier,
+    error: Boolean = false,
+    warning: Boolean = false,
+    symbol: Symbol? = null,
+    action: String? = null,
+    perform: () -> Unit = {},
+) {
+    val color = when {
+        error -> Tokens.destructive.color
+        warning -> Tokens.warning.color
+        else -> Tokens.mutedStrongerForeground.color
+    }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         symbol?.let { Icon(it, 13f, color) }
         Text(text, TextStyle.Caption, Modifier.weight(1f, fill = action != null), color = color)
         action?.let { ActionButton(it, variant = ButtonVariant.Ghost, onClick = perform) }
     }
 }
+
+/** A card of rows whose fills reach its edges and take its corners: a settings group, a sheet's choices. */
+@Composable
+fun RowsCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(Radius.lg)
+    Column(modifier.fillMaxWidth().clip(shape).background(Tokens.card.color).border(Dims.hairline, Tokens.borderCard.color, shape)) {
+        CompositionLocalProvider(LocalOnFormCard provides true) { content() }
+    }
+}
+
+/** The hairline between two rows of a `RowsCard`, in from the start as far as the rows' words. */
+@Composable
+fun RowsCardRule(indent: Dp = Space.l) = Rule(Modifier.padding(start = indent), color = Tokens.borderCard)
 
 /** A list with nothing in it: an icon and a calm line. */
 @Composable

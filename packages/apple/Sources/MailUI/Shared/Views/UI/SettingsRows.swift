@@ -1,18 +1,24 @@
 import SwiftUI
 
 /// A group of a settings page on the Mac: its name and a line about it, over a card of rows with
-/// a hairline between them. `id` is what the settings' search scrolls to.
+/// a hairline between them. `id` is what the settings' search scrolls to. A group of one control
+/// that is a field of its own, as the MCP server's address, has it on the page without a `card`.
 struct SettingsGroup<Content: View>: View {
     let id: String
     let title: String
     var detail: String?
+    var card = true
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.s + 2) {
             SectionHeading(title: title, detail: detail)
                 .padding(.horizontal, Space.xxs)
-            SettingsCard { content }
+            if card {
+                SettingsCard { content }
+            } else {
+                content
+            }
         }
         .id(id)
     }
@@ -32,33 +38,37 @@ struct SettingsCard<Content: View>: View {
 }
 
 /// One row of a `SettingsGroup`: what it is about on the left, its controls on the right. Every
-/// row is at least as tall as the tallest control with the same room above and below. A control
-/// at either end has as much room beside it as above and below it.
+/// row is at least as tall as the tallest control with the same room above and below. In a row of
+/// one line, a control at either end has as much room beside it as above and below it; in a row
+/// of more, it stands `Space.l` from its side, as the words do from theirs.
 struct SettingsRow<Leading: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading
     @ViewBuilder var trailing: Trailing
     @State private var leadingFace: ControlFace?
     @State private var trailingFace: ControlFace?
+    @State private var height = Theme.settingsRowHeight * Platform.scale
 
     var body: some View {
         HStack(spacing: Space.m) {
             HStack(spacing: Space.m) { leading }
                 .onPreferenceChange(ControlFaceKey.self) { leadingFace = $0 }
-                .padding(.leading, Self.inset(leadingFace))
+                .padding(.leading, inset(leadingFace))
             Spacer(minLength: Space.m)
             HStack(spacing: 0) { trailing }
                 .onPreferenceChange(ControlFaceKey.self) { trailingFace = $0 }
-                .padding(.trailing, Self.inset(trailingFace))
+                .padding(.trailing, inset(trailingFace))
         }
         .padding(.vertical, Space.s)
         .frame(minHeight: Theme.settingsRowHeight * Platform.scale)
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { height = $0 }
     }
 
-    /// From the card's side to the end's hit area: a control's face as far in as it is from a
-    /// row's top, words `Space.l`.
-    private static func inset(_ face: ControlFace?) -> CGFloat {
+    /// From the card's side to the end's hit area: in a row of one line a control's face as far
+    /// in as it is from the row's top, otherwise and for words `Space.l`.
+    private func inset(_ face: ControlFace?) -> CGFloat {
         guard let face else { return Space.l }
-        return min((Theme.settingsRowHeight * Platform.scale - face.height) / 2, Space.l) - face.inset
+        let oneLine = height <= Theme.settingsRowHeight * Platform.scale + 1
+        return (oneLine ? min((height - face.height) / 2, Space.l) : Space.l) - face.inset
     }
 }
 
@@ -91,7 +101,8 @@ struct MovableSettingsRow<Leading: View, Trailing: View>: View {
 }
 
 /// What a settings row is about: its name, a line under it, and a symbol or a dot before it.
-/// `heading` sets its name in the heading's weight, for the row that heads a card.
+/// `heading` sets its name in the heading's weight, for the row that heads a card. With a line
+/// under it, the row keeps `Space.m` above and below its words.
 struct SettingsLabel: View {
     let title: String
     var detail: String?
@@ -115,6 +126,7 @@ struct SettingsLabel: View {
                 }
             }
         }
+        .padding(.vertical, detail == nil ? 0 : Space.m - Space.s)
     }
 }
 

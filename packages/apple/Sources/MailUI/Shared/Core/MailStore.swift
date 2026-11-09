@@ -118,6 +118,8 @@ public final class MailStore {
     var settingsQuery = ""
     /// A question to answer before something that can't be taken back.
     var confirmation: Confirmation?
+    /// An application's request to reach the mail, while the sheet that asks about it is up.
+    var connecting: Connecting?
     /// A thread a notification asked to show, for iOS to push.
     var requestedThread: String?
     /// A notification's thread whose mail hasn't synced yet.
@@ -322,6 +324,7 @@ public final class MailStore {
     /// Whether a sheet, the palette or a question is up, when the window's keys don't apply.
     var sheetOpen: Bool {
         compose != nil || snoozing != nil || labeling != nil || palette != nil || settings != nil || galleryOpen || confirmation != nil
+            || connecting != nil
     }
 
     // MARK: Starting

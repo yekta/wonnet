@@ -21,8 +21,9 @@ enum SheetSize {
 /// What every sheet is made of: its title, a way to close it, and its content. On iOS the title
 /// and the close are the navigation bar's, as the system draws them: the bar fades into the
 /// content and Close is the X at its start, as is a Cancel in words. On the Mac a
-/// header bar of ours, closed with Esc. `trailing` goes in the bar at its end: on iOS each of
-/// its buttons is an item of the system's bar, so they are the system's buttons, not ours.
+/// header bar of ours with the X at its end, closed with Esc too. `trailing` goes in the bar at
+/// its end, before the Mac's X: on iOS each of its buttons is an item of the system's bar, so they
+/// are the system's buttons, not ours.
 struct Sheet<Content: View, Trailing: View>: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
@@ -37,10 +38,11 @@ struct Sheet<Content: View, Trailing: View>: View {
         #if os(macOS)
         VStack(spacing: 0) {
             HeaderBar(title: title, inset: Theme.barButtonInset) {
-                IconButton(symbol: .x, help: "Close (Esc)", circled: false) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
+                EmptyView()
             } trailing: {
                 trailing
+                IconButton(symbol: .x, help: "Close (Esc)", circled: false) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
             }
             Rule(color: background == Tokens.background ? Tokens.border : Tokens.borderCard)
             content

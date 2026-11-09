@@ -121,6 +121,8 @@ pub mod size {
     pub const FORM_WIDTH: f32 = 360.0;
     pub const SETTINGS_FIELD_WIDTH: f32 = 240.0;
     pub const CHIP: f32 = SMALL;
+    /// A state's pill, as "Verified".
+    pub const STATUS_CHIP: f32 = 20.0;
     pub const MESSAGE_AVATAR: f32 = 34.0;
     pub const ATTACHMENT_WIDTH: f32 = 168.0;
     pub const ATTACHMENT_PREVIEW: f32 = 96.0;
@@ -139,6 +141,8 @@ pub mod size {
     pub const SELECT_GUTTER: f32 = 36.0;
     pub const SELECT_CIRCLE: f32 = 18.0;
     pub const SELECT_LINE: f32 = 1.5;
+    /// A choice's round or square mark on a form.
+    pub const MARK: f32 = 16.0;
     /// The widest the list and the thread's card grow.
     pub const CARD_WIDTH: f32 = 1000.0;
     pub const CARD_INSET: f32 = 80.0;

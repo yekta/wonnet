@@ -40,40 +40,10 @@ impl Server {
         format!("/oauth/authorize?{query}")
     }
 
-    /// Signs a browser in through the fake Google as `email`, from the page at `next`, and answers
-    /// the cookie it is given.
-    async fn browser_sign_in(&self, email: &str, next: &str) -> reqwest::Response {
-        let next: String = url::form_urlencoded::byte_serialize(next.as_bytes()).collect();
-        let start = self.http.get(format!("{}/auth/google/start?next={next}", self.base)).send().await.unwrap();
-        assert!(start.status().is_redirection(), "{}", start.text().await.unwrap());
-        let google = Url::parse(start.headers()[LOCATION].to_str().unwrap()).unwrap();
-        let query: HashMap<String, String> = google.query_pairs().into_owned().collect();
-        {
-            let mut fake = self.google.lock().unwrap();
-            (fake.email, fake.nonce) = (email.into(), query["nonce"].clone());
-        }
-        let callback = format!("{}/auth/google/callback?code=google-code&state={}", self.base, query["state"]);
-        self.http.get(callback).send().await.unwrap()
-    }
-
-    async fn browser(&self, email: &str, next: &str) -> String {
-        let response = self.browser_sign_in(email, next).await;
-        assert!(response.status().is_redirection(), "{}", response.text().await.unwrap());
-        assert_eq!(response.headers()[LOCATION], next);
-        let cookie = response.headers()[SET_COOKIE].to_str().unwrap();
-        assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"));
-        cookie.split(';').next().unwrap().to_string()
-    }
-
-    async fn page(&self, path: &str, cookie: &str) -> reqwest::Response {
-        self.http.get(format!("{}{path}", self.base)).header(COOKIE, cookie).send().await.unwrap()
-    }
-
-    async fn form(&self, path: &str, cookie: &str, fields: &[(&str, &str)]) -> reqwest::Response {
+    async fn form(&self, path: &str, fields: &[(&str, &str)]) -> reqwest::Response {
         let body: String = url::form_urlencoded::Serializer::new(String::new()).extend_pairs(fields).finish();
         self.http
             .post(format!("{}{path}", self.base))
-            .header(COOKIE, cookie)
             .header("content-type", "application/x-www-form-urlencoded")
             .body(body)
             .send()
@@ -81,16 +51,43 @@ impl Server {
             .unwrap()
     }
 
-    /// Approves `client_id` on the consent page with `choices`, and answers where the browser goes.
-    async fn consent(&self, cookie: &str, client_id: &str, choices: &[(&str, &str)]) -> reqwest::Response {
-        let page = self.page(&self.authorize_path(client_id, &challenge()), cookie).await;
+    async fn browse(&self, path: &str, cookie: &str) -> reqwest::Response {
+        self.http.get(format!("{}{path}", self.base)).header(COOKIE, cookie).send().await.unwrap()
+    }
+
+    /// Opens the page an application sends the browser to, and answers what it holds.
+    async fn ask(&self, client_id: &str) -> Asked {
+        let page = self.get(&self.authorize_path(client_id, &challenge()), None).await;
         assert_eq!(page.status(), 200);
+        let set = page.headers()[SET_COOKIE].to_str().unwrap().to_string();
+        assert!(set.contains("HttpOnly") && set.contains("SameSite=Lax") && set.contains("Path=/oauth/requests/"));
         let html = page.text().await.unwrap();
-        assert!(html.contains("Claude Code") && html.contains("Unverified"), "{html}");
-        let fields = hidden_fields(&html);
-        let mut form: Vec<(&str, &str)> = fields.iter().map(|(name, value)| (name.as_str(), value.as_str())).collect();
-        form.extend_from_slice(choices);
-        self.form("/oauth/authorize", cookie, &form).await
+        assert!(html.contains("Open in Wonnet") && html.contains("<svg"), "{html}");
+        let between = |before: &str, after: char| {
+            let start = html.find(before).unwrap() + before.len();
+            html[start..][..html[start..].find(after).unwrap()].to_string()
+        };
+        Asked {
+            id: between("data-request=\"", '"'),
+            key: between("wonnet://connect?key=", '"'),
+            cookie: set.split(';').next().unwrap().to_string(),
+        }
+    }
+
+    async fn status(&self, asked: &Asked) -> String {
+        let answer: Value =
+            self.browse(&format!("/oauth/requests/{}", asked.id), &asked.cookie).await.json().await.unwrap();
+        answer["state"].as_str().unwrap().to_string()
+    }
+
+    /// The app's answer to a request, with the session of the user who gives it.
+    async fn answer(&self, session: &str, key: &str, approve: bool, access: Value) -> reqwest::Response {
+        let body = json!({ "approve": approve, "access": access });
+        self.post(&format!("/api/connect/{key}"), Some(session), body).await
+    }
+
+    async fn finish(&self, asked: &Asked) -> reqwest::Response {
+        self.browse(&format!("/oauth/requests/{}/finish", asked.id), &asked.cookie).await
     }
 
     async fn tokens(&self, client_id: &str, code: &str) -> reqwest::Response {
@@ -101,20 +98,28 @@ impl Server {
             ("redirect_uri", "http://localhost:51234/callback"),
             ("code_verifier", VERIFIER),
         ];
-        self.form("/oauth/token", "", &fields).await
+        self.form("/oauth/token", &fields).await
     }
 
     async fn refresh(&self, client_id: &str, refresh_token: &str) -> reqwest::Response {
         let fields = [("grant_type", "refresh_token"), ("client_id", client_id), ("refresh_token", refresh_token)];
-        self.form("/oauth/token", "", &fields).await
+        self.form("/oauth/token", &fields).await
     }
 
-    /// Connects an app with `choices` and answers its client id and tokens.
-    async fn connect(&self, cookie: &str, choices: &[(&str, &str)]) -> (String, Value) {
+    /// A code for a new application, approved in the app by `session` with `access`.
+    async fn approved_code(&self, session: &str, access: Value) -> (String, String) {
         let client_id = self.register().await;
-        let approved = self.consent(cookie, &client_id, choices).await;
-        assert_eq!(approved.status(), 303, "{}", approved.text().await.unwrap());
-        let code = code_in(approved.headers()[LOCATION].to_str().unwrap());
+        let asked = self.ask(&client_id).await;
+        let answered = self.answer(session, &asked.key, true, access).await;
+        assert_eq!(answered.status(), 200, "{}", answered.text().await.unwrap());
+        let finished = self.finish(&asked).await;
+        assert_eq!(finished.status(), 303, "{}", finished.text().await.unwrap());
+        (client_id, code_in(finished.headers()[LOCATION].to_str().unwrap()))
+    }
+
+    /// Connects an app with `access` and answers its client id and tokens.
+    async fn connect(&self, session: &str, access: Value) -> (String, Value) {
+        let (client_id, code) = self.approved_code(session, access).await;
         let tokens = self.tokens(&client_id, &code).await;
         assert_eq!(tokens.status(), 200);
         (client_id, tokens.json().await.unwrap())
@@ -154,18 +159,12 @@ impl Server {
     }
 }
 
-fn hidden_fields(html: &str) -> Vec<(String, String)> {
-    html.split("<input type=\"hidden\" ")
-        .skip(1)
-        .map(|rest| {
-            let attribute = |name: &str| {
-                let start = rest.find(&format!("{name}=\"")).unwrap() + name.len() + 2;
-                let value = &rest[start..];
-                value[..value.find('"').unwrap()].replace("&amp;", "&").replace("&quot;", "\"")
-            };
-            (attribute("name"), attribute("value"))
-        })
-        .collect()
+/// What the page an application opened holds: its request, the key of the link that opens the
+/// app on it, and the cookie of the browser that asked.
+struct Asked {
+    id: String,
+    key: String,
+    cookie: String,
 }
 
 fn code_in(location: &str) -> String {
@@ -210,13 +209,18 @@ async fn second_account(server: &Server, user_id: Uuid, email: &str) -> AccountR
     db::account(&server.state.db, id).await.unwrap().unwrap()
 }
 
-const READER: [(&str, &str); 3] = [("decision", "approve"), ("access", "all"), ("role", "reader")];
-const ORGANIZER: [(&str, &str); 3] = [("decision", "approve"), ("access", "all"), ("role", "organizer")];
+fn reader() -> Value {
+    json!({ "role": "reader", "all_accounts": true })
+}
+
+fn organizer() -> Value {
+    json!({ "role": "organizer", "all_accounts": true })
+}
 
 #[sqlx::test]
-async fn an_app_signs_in_through_the_consent_page_and_gets_what_it_was_given(db: PgPool) {
+async fn an_app_approved_in_the_app_gets_what_it_was_given(db: PgPool) {
     let server = Server::start(db).await;
-    let (_, _, account) = server.gmail_user("ann@gmail.com").await;
+    let (session, _, account) = server.gmail_user("ann@gmail.com").await;
     mail(&server, &account, &[message("m1", "cy@example.com", "Plan for Monday", &["inbox"])]).await;
 
     let unsigned = server.http.post(format!("{}/mcp", server.base)).json(&json!({})).send().await.unwrap();
@@ -229,13 +233,27 @@ async fn an_app_signs_in_through_the_consent_page_and_gets_what_it_was_given(db:
     assert_eq!(issuer["code_challenge_methods_supported"], json!(["S256"]));
 
     let client_id = server.register().await;
-    let authorize = server.authorize_path(&client_id, &self::challenge());
-    let signed_out = server.get(&authorize, None).await.text().await.unwrap();
-    assert!(signed_out.contains("Continue with Google"));
-    let cookie = server.browser("ann@gmail.com", &authorize).await;
-    let approved = server.consent(&cookie, &client_id, &READER).await;
-    assert_eq!(approved.status(), 303);
-    let code = code_in(approved.headers()[LOCATION].to_str().unwrap());
+    let asked = server.ask(&client_id).await;
+    assert_eq!(server.status(&asked).await, "waiting");
+    let phone = server.get(&format!("/connect/{}", asked.key), None).await.text().await.unwrap();
+    assert!(phone.contains("Claude Code") && phone.contains(&format!("wonnet://connect?key={}", asked.key)));
+    let request: Value = server.get(&format!("/api/connect/{}", asked.key), Some(&session)).await.json().await.unwrap();
+    assert_eq!(request["client"], "Claude Code");
+    assert_eq!(request["verified"], false);
+    assert_eq!(request["redirect_host"], "localhost:51234");
+    assert_eq!(request["on_device"], true);
+    let signed_out = server.get(&format!("/api/connect/{}", asked.key), None).await;
+    assert_eq!(signed_out.status(), 401);
+
+    let answered = server.answer(&session, &asked.key, true, reader()).await;
+    assert_eq!(answered.status(), 200);
+    assert_eq!(server.status(&asked).await, "approved");
+    let again = server.answer(&session, &asked.key, false, Value::Null).await;
+    assert_eq!(again.status(), 404);
+    let finished = server.finish(&asked).await;
+    assert_eq!(finished.status(), 303);
+    let code = code_in(finished.headers()[LOCATION].to_str().unwrap());
+    assert_eq!(server.finish(&asked).await.status(), 400);
     let tokens: Value = server.tokens(&client_id, &code).await.json().await.unwrap();
     let access = token(&tokens, "access_token");
     assert!(access.starts_with("wat_"));
@@ -260,20 +278,19 @@ async fn an_app_signs_in_through_the_consent_page_and_gets_what_it_was_given(db:
 #[sqlx::test]
 async fn an_app_given_some_accounts_sees_only_their_mail(db: PgPool) {
     let server = Server::start(db).await;
-    let (_, user_id, gmail) = server.gmail_user("ann@gmail.com").await;
+    let (session, user_id, gmail) = server.gmail_user("ann@gmail.com").await;
     let work = second_account(&server, user_id, "ann@work.com").await;
     mail(&server, &gmail, &[message("home", "mom@example.com", "Dinner", &["inbox"])]).await;
     mail(&server, &work, &[message("office", "boss@work.com", "Dinner meeting", &["inbox"])]).await;
-    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
 
-    let work_id = work.id.to_string();
-    let missing = server
-        .consent(&cookie, &server.register().await, &[("decision", "approve"), ("access", "some"), ("role", "reader")])
-        .await;
+    let asked = server.ask(&server.register().await).await;
+    let none = json!({ "role": "reader", "all_accounts": false, "accounts": [] });
+    let missing = server.answer(&session, &asked.key, true, none).await;
     assert_eq!(missing.status(), 400);
     assert!(missing.text().await.unwrap().contains("Pick at least one account."));
-    let some = [("decision", "approve"), ("access", "some"), ("accounts", work_id.as_str()), ("role", "organizer")];
-    let (_, tokens) = server.connect(&cookie, &some).await;
+    assert_eq!(server.status(&asked).await, "waiting");
+    let some = json!({ "role": "organizer", "all_accounts": false, "accounts": [work.id] });
+    let (_, tokens) = server.connect(&session, some).await;
     let access = token(&tokens, "access_token");
 
     let accounts = server.call(&access, "list_accounts", json!({})).await.unwrap();
@@ -297,11 +314,8 @@ async fn an_app_given_some_accounts_sees_only_their_mail(db: PgPool) {
 #[sqlx::test]
 async fn codes_and_refresh_tokens_work_once(db: PgPool) {
     let server = Server::start(db).await;
-    server.gmail_user("ann@gmail.com").await;
-    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
-    let client_id = server.register().await;
-    let approved = server.consent(&cookie, &client_id, &READER).await;
-    let code = code_in(approved.headers()[LOCATION].to_str().unwrap());
+    let (session, ..) = server.gmail_user("ann@gmail.com").await;
+    let (client_id, code) = server.approved_code(&session, reader()).await;
 
     let other_verifier = "x".repeat(43);
     let wrong = [
@@ -311,7 +325,7 @@ async fn codes_and_refresh_tokens_work_once(db: PgPool) {
         ("redirect_uri", "http://localhost:51234/callback"),
         ("code_verifier", other_verifier.as_str()),
     ];
-    let mismatched: Value = server.form("/oauth/token", "", &wrong).await.json().await.unwrap();
+    let mismatched: Value = server.form("/oauth/token", &wrong).await.json().await.unwrap();
     assert_eq!(mismatched["error"], "invalid_grant");
     let tokens: Value = server.tokens(&client_id, &code).await.json().await.unwrap();
     let access = token(&tokens, "access_token");
@@ -331,78 +345,78 @@ async fn codes_and_refresh_tokens_work_once(db: PgPool) {
 #[sqlx::test]
 async fn revoking_an_app_ends_its_access(db: PgPool) {
     let server = Server::start(db).await;
-    server.gmail_user("ann@gmail.com").await;
-    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
-    let (_, tokens) = server.connect(&cookie, &READER).await;
+    let (ann, ..) = server.gmail_user("ann@gmail.com").await;
+    let (_, tokens) = server.connect(&ann, reader()).await;
     let access = token(&tokens, "access_token");
 
-    let page = server.page("/connected-apps", &cookie).await.text().await.unwrap();
-    assert!(page.contains("Claude Code") && page.contains("Reader") && page.contains("Every account"), "{page}");
-    let fields = hidden_fields(&page);
-    let csrf = fields.iter().find(|(name, _)| name == "csrf").unwrap().1.clone();
-    let grant = fields.iter().find(|(name, _)| name == "id").unwrap().1.clone();
-    let forged = server.form("/connected-apps/revoke", &cookie, &[("csrf", "forged"), ("id", &grant)]).await;
-    assert_eq!(forged.status(), 400);
-    assert_eq!(server.rpc(&access, "tools/list", json!({})).await.status(), 200);
-    let revoked = server.form("/connected-apps/revoke", &cookie, &[("csrf", &csrf), ("id", &grant)]).await;
-    assert_eq!(revoked.status(), 303);
-    assert_eq!(server.rpc(&access, "tools/list", json!({})).await.status(), 401);
+    let listed: Value = server.get("/api/connected-apps", Some(&ann)).await.json().await.unwrap();
+    assert_eq!(listed["address"], format!("{}/mcp", server.base));
+    assert_eq!(listed["apps"][0]["client"], "Claude Code");
+    assert_eq!(listed["apps"][0]["access"]["role"], "reader");
+    assert_eq!(listed["apps"][0]["access"]["all_accounts"], true);
+    let grant = listed["apps"][0]["id"].as_str().unwrap().to_string();
 
-    server.gmail_user("bob@gmail.com").await;
-    let bob = server.browser("bob@gmail.com", "/connected-apps").await;
-    let page = server.page("/connected-apps", &bob).await.text().await.unwrap();
-    let bob_csrf = hidden_fields(&page).into_iter().find(|(name, _)| name == "csrf").unwrap().1;
-    let (_, ann_tokens) = server.connect(&cookie, &READER).await;
-    let ann_grant: Uuid = sqlx::query_scalar("SELECT id FROM oauth_grants WHERE revoked_at IS NULL")
-        .fetch_one(&server.state.db)
-        .await
-        .unwrap();
-    let theirs =
-        server.form("/connected-apps/revoke", &bob, &[("csrf", &bob_csrf), ("id", &ann_grant.to_string())]).await;
-    assert_eq!(theirs.status(), 400);
-    assert_eq!(server.rpc(&token(&ann_tokens, "access_token"), "tools/list", json!({})).await.status(), 200);
+    let (bob, ..) = server.gmail_user("bob@gmail.com").await;
+    let theirs: Value = server.get("/api/connected-apps", Some(&bob)).await.json().await.unwrap();
+    assert!(theirs["apps"].as_array().unwrap().is_empty());
+    assert_eq!(server.delete(&format!("/api/connected-apps/{grant}"), Some(&bob)).await.status(), 404);
+    assert_eq!(server.rpc(&access, "tools/list", json!({})).await.status(), 200);
+
+    assert_eq!(server.delete(&format!("/api/connected-apps/{grant}"), Some(&ann)).await.status(), 200);
+    assert_eq!(server.rpc(&access, "tools/list", json!({})).await.status(), 401);
+    let left: Value = server.get("/api/connected-apps", Some(&ann)).await.json().await.unwrap();
+    assert!(left["apps"].as_array().unwrap().is_empty());
 }
 
 #[sqlx::test]
-async fn the_consent_page_refuses_what_it_cant_trust(db: PgPool) {
+async fn only_the_browser_that_asked_gets_the_answer(db: PgPool) {
     let server = Server::start(db).await;
-    server.gmail_user("ann@gmail.com").await;
-    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
+    let (session, ..) = server.gmail_user("ann@gmail.com").await;
     let client_id = server.register().await;
 
     let elsewhere = server.authorize_path(&client_id, &challenge()).replace("localhost%3A51234", "evil.example");
-    let refused = server.page(&elsewhere, &cookie).await;
+    let refused = server.get(&elsewhere, None).await;
     assert_eq!(refused.status(), 400);
-    assert!(refused.headers().get(LOCATION).is_none());
-    let weak = server.page(&server.authorize_path(&client_id, "short"), &cookie).await;
+    assert!(refused.headers().get(LOCATION).is_none() && refused.headers().get(SET_COOKIE).is_none());
+    let weak = server.get(&server.authorize_path(&client_id, "short"), None).await;
     assert_eq!(weak.status(), 303);
     let location = weak.headers()[LOCATION].to_str().unwrap();
     assert!(location.starts_with("http://localhost:51234/callback?error=invalid_request"));
 
-    let page = server.page(&server.authorize_path(&client_id, &challenge()), &cookie).await.text().await.unwrap();
-    let mut fields = hidden_fields(&page);
-    fields.retain(|(name, _)| name != "csrf");
-    let mut form: Vec<(&str, &str)> = fields.iter().map(|(name, value)| (name.as_str(), value.as_str())).collect();
-    form.extend_from_slice(&READER);
-    let forged = server.form("/oauth/authorize", &cookie, &form).await;
-    assert_eq!(forged.status(), 400);
+    let asked = server.ask(&client_id).await;
+    let early = server.finish(&asked).await;
+    assert_eq!(early.status(), 200);
+    assert!(early.text().await.unwrap().contains("Not answered yet"));
+    server.answer(&session, &asked.key, true, reader()).await;
+    let stranger = Asked { cookie: "wonnet_request=forged".into(), ..server.ask(&client_id).await };
+    let stolen = Asked { id: asked.id.clone(), ..stranger };
+    assert_eq!(server.status(&stolen).await, "expired");
+    assert_eq!(server.finish(&stolen).await.status(), 400);
+    assert_eq!(server.browse(&format!("/oauth/requests/{}/finish", asked.id), "").await.status(), 400);
     let codes: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_codes").fetch_one(&server.state.db).await.unwrap();
     assert_eq!(codes, 0);
 
-    let denied = server.consent(&cookie, &client_id, &[("decision", "deny")]).await;
-    assert!(denied.headers()[LOCATION].to_str().unwrap().contains("error=access_denied"));
+    let denied = server.ask(&client_id).await;
+    assert_eq!(server.answer(&session, &denied.key, false, Value::Null).await.status(), 200);
+    assert_eq!(server.status(&denied).await, "denied");
+    let back = server.finish(&denied).await;
+    assert!(back.headers()[LOCATION].to_str().unwrap().contains("error=access_denied&error_description="));
 
-    let stranger = server.browser_sign_in("stranger@gmail.com", "/connected-apps").await;
-    assert_eq!(stranger.status(), 400);
-    assert!(stranger.headers().get(SET_COOKIE).is_none());
-    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users").fetch_one(&server.state.db).await.unwrap();
-    assert_eq!(users, 1);
+    let late = server.ask(&client_id).await;
+    sqlx::query("UPDATE oauth_requests SET expires_at = now() WHERE key_hash = $1")
+        .bind(crate::sha256_hex(late.key.as_bytes()))
+        .execute(&server.state.db)
+        .await
+        .unwrap();
+    assert_eq!(server.answer(&session, &late.key, true, reader()).await.status(), 404);
+    assert_eq!(server.status(&late).await, "expired");
+    assert_eq!(server.get(&format!("/connect/{}", late.key), None).await.status(), 400);
 }
 
 #[sqlx::test]
 async fn an_organizer_cleans_up_by_sender(db: PgPool) {
     let server = Server::start(db).await;
-    let (_, _, account) = server.gmail_user("ann@gmail.com").await;
+    let (session, _, account) = server.gmail_user("ann@gmail.com").await;
     let web_only = Unsubscribe { url: Some("https://deals.example/leave".into()), mailto: None, one_click: false };
     mail(
         &server,
@@ -415,9 +429,8 @@ async fn an_organizer_cleans_up_by_sender(db: PgPool) {
         ],
     )
     .await;
-    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
-    let organizer = [ORGANIZER.as_slice(), &[("privileges", "unsubscribe")]].concat();
-    let (_, tokens) = server.connect(&cookie, &organizer).await;
+    let unsubscriber = json!({ "role": "organizer", "all_accounts": true, "privileges": ["unsubscribe"] });
+    let (_, tokens) = server.connect(&session, unsubscriber).await;
     let access = token(&tokens, "access_token");
 
     let senders = server.call(&access, "list_senders", json!({ "bulk": true })).await.unwrap();
@@ -489,7 +502,7 @@ async fn an_organizer_cleans_up_by_sender(db: PgPool) {
 #[sqlx::test]
 async fn an_organizer_splits_the_inbox_by_label(db: PgPool) {
     let server = Server::start(db).await;
-    let (_, _, account) = server.gmail_user("ann@gmail.com").await;
+    let (session, _, account) = server.gmail_user("ann@gmail.com").await;
     mail(
         &server,
         &account,
@@ -500,8 +513,7 @@ async fn an_organizer_splits_the_inbox_by_label(db: PgPool) {
         ],
     )
     .await;
-    let cookie = server.browser("ann@gmail.com", "/connected-apps").await;
-    let (_, tokens) = server.connect(&cookie, &ORGANIZER).await;
+    let (_, tokens) = server.connect(&session, organizer()).await;
     let access = token(&tokens, "access_token");
 
     let found = server.call(&access, "search", json!({ "query": "subject:repo" })).await.unwrap();
@@ -547,28 +559,23 @@ async fn shared_mailbox(server: &Server, user_id: Uuid) -> AccountRow {
 #[sqlx::test]
 async fn people_who_share_a_mailbox_each_connect_their_own_copy(db: PgPool) {
     let server = Server::start(db).await;
-    let (_, ann_id, _) = server.gmail_user("ann@gmail.com").await;
-    let (_, bob_id, _) = server.gmail_user("bob@gmail.com").await;
+    let (ann, ann_id, _) = server.gmail_user("ann@gmail.com").await;
+    let (bob, bob_id, _) = server.gmail_user("bob@gmail.com").await;
     let ann_team = shared_mailbox(&server, ann_id).await;
     let bob_team = shared_mailbox(&server, bob_id).await;
     let invoice = message("invoice", "billing@vendor.example", "Invoice 42", &["inbox"]);
     mail(&server, &ann_team, std::slice::from_ref(&invoice)).await;
     mail(&server, &bob_team, &[invoice]).await;
 
-    let shared = server.browser_sign_in("team@gmail.com", "/connected-apps").await;
-    assert_eq!(shared.status(), 400);
-    assert!(shared.headers().get(SET_COOKIE).is_none());
-    assert!(shared.text().await.unwrap().contains("used by more than one person"));
-
-    let ann = server.browser("ann@gmail.com", "/connected-apps").await;
-    let bob = server.browser("bob@gmail.com", "/connected-apps").await;
     let theirs = bob_team.id.to_string();
-    let borrowed = [("decision", "approve"), ("access", "some"), ("accounts", theirs.as_str()), ("role", "organizer")];
-    let refused = server.consent(&ann, &server.register().await, &borrowed).await;
-    assert!(refused.text().await.unwrap().contains("Pick at least one account."));
+    let borrowed = json!({ "role": "organizer", "all_accounts": false, "accounts": [theirs] });
+    let asked = server.ask(&server.register().await).await;
+    let refused = server.answer(&ann, &asked.key, true, borrowed).await;
+    assert_eq!(refused.status(), 400);
+    assert!(refused.text().await.unwrap().contains("isn't yours"));
 
-    let (_, ann_tokens) = server.connect(&ann, &ORGANIZER).await;
-    let (_, bob_tokens) = server.connect(&bob, &ORGANIZER).await;
+    let (_, ann_tokens) = server.connect(&ann, organizer()).await;
+    let (_, bob_tokens) = server.connect(&bob, organizer()).await;
     let (ann_access, bob_access) = (token(&ann_tokens, "access_token"), token(&bob_tokens, "access_token"));
 
     let id_of = async |account: &AccountRow| -> Uuid {
@@ -601,6 +608,6 @@ async fn people_who_share_a_mailbox_each_connect_their_own_copy(db: PgPool) {
     let bob_senders = server.call(&bob_access, "list_senders", json!({ "query": "in:inbox" })).await.unwrap();
     assert_eq!(bob_senders["senders"][0]["sender"], "billing@vendor.example");
 
-    let page = server.page("/connected-apps", &ann).await.text().await.unwrap();
-    assert_eq!(page.matches("Revoke").count(), 1);
+    let listed: Value = server.get("/api/connected-apps", Some(&ann)).await.json().await.unwrap();
+    assert_eq!(listed["apps"].as_array().unwrap().len(), 1);
 }

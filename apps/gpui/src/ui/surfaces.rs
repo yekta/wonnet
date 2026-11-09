@@ -65,14 +65,15 @@ pub fn header_bar(
     }
 }
 
-/// Every sheet's shell over the window: its header with the close, its content, at its size.
+/// Every sheet's shell over the window: its header with its buttons and the close at its end, its
+/// content, at its size.
 /// `background` is the page's colour unless it is a card's.
 pub fn sheet<E: IntoElement, F: Fn(&mut Window, &mut App) + 'static>(
     id: &str,
     title: impl Into<SharedString>,
     size: SheetSize,
     background: ThemeColor,
-    trailing: Vec<AnyElement>,
+    mut trailing: Vec<AnyElement>,
     content: E,
     close: F,
     cx: &App,
@@ -84,6 +85,7 @@ pub fn sheet<E: IntoElement, F: Fn(&mut Window, &mut App) + 'static>(
     let close_button = IconButton::new(SharedString::from(format!("{id}-close")), Symbol::X, "Close (Esc)")
         .plain()
         .on_click(move |_, window, cx| close(window, cx));
+    trailing.push(close_button.into_any_element());
     div()
         .id(SharedString::from(id.to_string()))
         .occlude()
@@ -100,13 +102,26 @@ pub fn sheet<E: IntoElement, F: Fn(&mut Window, &mut App) + 'static>(
         .shadow(cx.shadow(ShadowSize::Xl, opacity::SHADOW_STRONGER))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(
-            header_bar(Some(title.into()), vec![close_button.into_any_element()], None, trailing, cx)
-                .px(px(size::BAR_BUTTON_INSET))
-                .flex_none(),
+            header_bar(Some(title.into()), Vec::new(), None, trailing, cx).px(px(size::BAR_BUTTON_INSET)).flex_none(),
         )
         .child(rule(rule_color, cx))
         .child(div().flex_1().min_h_0().flex().flex_col().child(content))
         .into_any_element()
+}
+
+/// A bar across the bottom of a sheet, under its content: its buttons at its end, the main one
+/// last.
+pub fn footer_bar(buttons: Vec<AnyElement>, cx: &App) -> Div {
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_end()
+        .px(px(space::XL - size::BUTTON_GAP / 2.))
+        .py(px(space::M))
+        .border_t_1()
+        .border_color(cx.color(BORDER))
+        .children(buttons)
 }
 
 /// The dimmed window behind a sheet; a click on it closes the sheet.
@@ -162,11 +177,24 @@ pub fn muted_section_heading(title: impl Into<SharedString>, cx: &App) -> Div {
     div().text_in(TextStyle::Subheading, MUTED_FOREGROUND, cx).child(title.into())
 }
 
-/// The tone of a notice.
+/// The tone of a notice or a chip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
     Muted,
     Error,
+    Warning,
+    Success,
+}
+
+impl Tone {
+    pub fn color(self) -> ThemeColor {
+        match self {
+            Self::Muted => MUTED_STRONGER_FOREGROUND,
+            Self::Error => DESTRUCTIVE,
+            Self::Warning => WARNING,
+            Self::Success => SUCCESS,
+        }
+    }
 }
 
 /// A line about something: a hint, an error, a note that something was left out; with a button
@@ -178,7 +206,7 @@ pub fn notice(
     action: Option<ActionButton>,
     cx: &App,
 ) -> Div {
-    let color = if tone == Tone::Error { DESTRUCTIVE } else { MUTED_STRONGER_FOREGROUND };
+    let color = tone.color();
     div()
         .flex()
         .items_center()

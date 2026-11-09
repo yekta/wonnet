@@ -1,4 +1,12 @@
-//! Makes the system open `wonnet://` links (the end of a Google sign-in) with this app.
+//! Makes the system open `wonnet://` links with this app: `wonnet://auth` ends a sign-in in the
+//! browser, `wonnet://connect` brings an application's request to connect.
+
+/// What a `wonnet://` link is for: `auth`, `connect`, `notification`.
+pub fn host(link: &str) -> Option<&str> {
+    let rest = link.strip_prefix("wonnet://")?;
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    Some(&rest[..end]).filter(|host| !host.is_empty())
+}
 
 /// Registers the scheme for this copy of the app, off the window's thread.
 pub fn register() {
@@ -53,4 +61,19 @@ fn register_now() -> std::io::Result<()> {
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 fn register_now() -> std::io::Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host;
+
+    #[test]
+    fn reads_what_a_link_is_for() {
+        assert_eq!(host("wonnet://connect?key=abc"), Some("connect"));
+        assert_eq!(host("wonnet://auth?code=x&state=y"), Some("auth"));
+        assert_eq!(host("wonnet://connect/?key=abc"), Some("connect"));
+        assert_eq!(host("wonnet://"), None);
+        assert_eq!(host("show"), None);
+        assert_eq!(host("https://wonnet.app"), None);
+    }
 }

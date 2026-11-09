@@ -23,17 +23,17 @@ import kotlin.math.sin
  * is its character there. The filled star, which Lucide doesn't have, is drawn by hand.
  */
 enum class Symbol(val character: String) {
-    AlarmClock("\ue03a"), Archive("\ue041"), ArchiveRestore("\ue2cd"), ArrowLeft("\ue048"), ArrowUp("\ue04a"), AtSign("\ue04e"),
-    Ban("\ue051"), Bell("\ue059"), BellOff("\ue05a"), CalendarClock("\ue304"), Check("\ue06c"), CheckCheck("\ue38e"),
+    AlarmClock("\ue03a"), Archive("\ue041"), ArchiveRestore("\ue2cd"), ArrowLeft("\ue048"), ArrowRight("\ue049"), ArrowUp("\ue04a"), AtSign("\ue04e"),
+    Ban("\ue051"), Bell("\ue059"), BellOff("\ue05a"), Box("\ue061"), CalendarClock("\ue304"), Check("\ue06c"), CheckCheck("\ue38e"),
     ChevronDown("\ue06d"), ChevronLeft("\ue06e"), ChevronRight("\ue06f"), ChevronUp("\ue070"), ChevronsDownUp("\ue228"),
     ChevronsUpDown("\ue211"), CircleAlert("\ue077"), CircleArrowDown("\ue078"), CircleCheck("\ue226"), Clock("\ue087"),
-    Command("\ue09a"), Download("\ue0b2"), Ellipsis("\ue0b6"), File("\ue0c0"), FileArchive("\ue30d"), FileAudio("\ue31a"),
+    Command("\ue09a"), Copy("\ue09e"), Download("\ue0b2"), Ellipsis("\ue0b6"), Eye("\ue0ba"), File("\ue0c0"), FileArchive("\ue30d"), FileAudio("\ue31a"),
     FileImage("\ue31c"), FileSpreadsheet("\ue326"), FileText("\ue0cc"), FileVideo("\ue321"), FolderInput("\ue334"),
     Forward("\ue229"), Globe("\ue0e8"), Handshake("\ue5c0"), Image("\ue0f6"), Inbox("\ue0f7"), Keyboard("\ue284"),
     ListFilter("\ue460"), Loader("\ue109"), LogOut("\ue10e"), Mail("\ue10f"), MailMinus("\ue362"), MailOpen("\ue363"),
-    MailX("\ue368"), Menu("\ue115"), Monitor("\ue11d"), Moon("\ue11e"), Paperclip("\ue12d"), Pencil("\ue1f9"), Plus("\ue13d"),
+    MailX("\ue368"), Menu("\ue115"), Monitor("\ue11d"), Moon("\ue11e"), Paperclip("\ue12d"), Pencil("\ue1f9"), Plug("\ue37f"), Plus("\ue13d"),
     Presentation("\ue4ae"), Printer("\ue141"), RefreshCw("\ue145"), Reply("\ue22a"), ReplyAll("\ue22b"), Search("\ue151"),
-    Send("\ue152"), Server("\ue153"), Settings("\ue154"), Share("\ue155"), ShieldAlert("\ue1fe"), SquareCheck("\ue559"),
+    Send("\ue152"), Server("\ue153"), Settings("\ue154"), Share("\ue155"), ShieldAlert("\ue1fe"), ShieldCheck("\ue1ff"), SquareCheck("\ue559"),
     SquarePen("\ue172"), Star("\ue176"),
 
     /** A star filled in, drawn by hand. */
@@ -42,7 +42,7 @@ enum class Symbol(val character: String) {
     ;
 
     companion object {
-        /** The icon a mailbox is drawn with, by the name the core gives it. */
+        /** The icon a mailbox or a choice is drawn with, by the name the core gives it. */
         fun named(name: String): Symbol = when (name) {
             "inbox" -> Inbox
             "mail" -> Mail
@@ -53,6 +53,10 @@ enum class Symbol(val character: String) {
             "archive" -> Archive
             "shield-alert" -> ShieldAlert
             "trash" -> Trash
+            "eye" -> Eye
+            "file-text" -> FileText
+            "mail-x" -> MailX
+            "list-filter" -> ListFilter
             else -> Tag
         }
     }

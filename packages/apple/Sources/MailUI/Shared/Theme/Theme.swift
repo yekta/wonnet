@@ -108,6 +108,8 @@ enum Theme {
     static let settingsFieldWidth: CGFloat = 240
     /// A chip: the smallest thing that can be clicked.
     static let chipHeight: CGFloat = ControlSize.small.height
+    /// A state beside a name: Verified.
+    static let badgeHeight: CGFloat = 20
     /// A message's sender in a thread.
     static let messageAvatar: CGFloat = 34
     /// A message's file, as a card: its picture over its name. On iOS two share a line.
