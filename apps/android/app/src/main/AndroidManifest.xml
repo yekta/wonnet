@@ -44,12 +44,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Where the browser sends a Google sign-in back to. -->
+            <!-- Where the browser sends a sign-in back to, and opens an application's request to connect. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="wonnet" android:host="auth" />
+                <data android:scheme="wonnet" />
+                <data android:host="auth" />
+                <data android:host="connect" />
             </intent-filter>
         </activity>
 

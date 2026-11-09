@@ -9,11 +9,13 @@ enum Symbol: String {
     case archive = "\u{e041}"
     case archiveRestore = "\u{e2cd}"
     case arrowLeft = "\u{e048}"
+    case arrowRight = "\u{e049}"
     case arrowUp = "\u{e04a}"
     case atSign = "\u{e04e}"
     case ban = "\u{e051}"
     case bell = "\u{e059}"
     case bellOff = "\u{e05a}"
+    case box = "\u{e061}"
     case calendarClock = "\u{e304}"
     case check = "\u{e06c}"
     case checkCheck = "\u{e38e}"
@@ -28,8 +30,10 @@ enum Symbol: String {
     case circleCheck = "\u{e226}"
     case clock = "\u{e087}"
     case command = "\u{e09a}"
+    case copy = "\u{e09e}"
     case download = "\u{e0b2}"
     case ellipsis = "\u{e0b6}"
+    case eye = "\u{e0ba}"
     case file = "\u{e0c0}"
     case fileArchive = "\u{e30d}"
     case fileAudio = "\u{e31a}"
@@ -56,6 +60,7 @@ enum Symbol: String {
     case moon = "\u{e11e}"
     case paperclip = "\u{e12d}"
     case pencil = "\u{e1f9}"
+    case plug = "\u{e37f}"
     case plus = "\u{e13d}"
     case presentation = "\u{e4ae}"
     case printer = "\u{e141}"
@@ -67,6 +72,7 @@ enum Symbol: String {
     case server = "\u{e153}"
     case settings = "\u{e154}"
     case shieldAlert = "\u{e1fe}"
+    case shieldCheck = "\u{e1ff}"
     case squareCheck = "\u{e559}"
     case squarePen = "\u{e172}"
     case star = "\u{e176}"
@@ -81,7 +87,7 @@ enum Symbol: String {
     case x = "\u{e1b2}"
     case zap = "\u{e1b4}"
 
-    /// The icon a mailbox is drawn with, by the name the core gives it.
+    /// The icon a mailbox or a choice is drawn with, by the name the core gives it.
     static func named(_ name: String) -> Symbol {
         switch name {
         case "inbox": .inbox
@@ -91,6 +97,9 @@ enum Symbol: String {
         case "send": .send
         case "file": .file
         case "archive": .archive
+        case "eye": .eye
+        case "file-text": .fileText
+        case "mail-x": .mailX
         case "shield-alert": .shieldAlert
         case "trash": .trash
         default: .tag

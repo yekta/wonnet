@@ -13,6 +13,8 @@ struct GalleryView: View {
     @State private var person = "ada"
     @State private var tab = "important"
     @State private var swatch = "account-3"
+    @State private var role = "reader"
+    @State private var bodies = true
 
     private struct Tab: Identifiable, Hashable {
         let id: String
@@ -129,6 +131,18 @@ struct GalleryView: View {
                         ToggleRow(title: "On", detail: "With a line about it.", isOn: $on)
                         ToggleRow(title: "Off", isOn: $off)
                         Disclosure(title: "Advanced") { Notice(text: "What was folded.") }
+                        CopyField(text: "https://wonnet.app/mcp")
+                        SettingsCard {
+                            MarkRow(title: "Reader", detail: "One of them: a round mark.", symbol: .eye, checked: role == "reader") { role = "reader" }
+                            SettingsDivider()
+                            MarkRow(title: "Organizer", symbol: .archive, checked: role == "organizer") { role = "organizer" }
+                            SettingsDivider()
+                            MarkRow(title: "Read whole messages", detail: "Any of them: a square mark.", symbol: .fileText, kind: .any, checked: bodies) {
+                                bodies.toggle()
+                            }
+                            SettingsDivider()
+                            MarkRow(title: "Work", detail: "Under the one it belongs to.", dot: Theme.accountColor("account-6").color, kind: .any, indent: Space.xl, checked: false) {}
+                        }
                     }
                     FormSection(title: "Chips") {
                         FlowLayout {
@@ -138,6 +152,8 @@ struct GalleryView: View {
                             Chip(title: "report.pdf", symbol: .paperclip, detail: "2 MB", action: {})
                             Chip(title: "Downloading", symbol: .paperclip, pending: true)
                             Chip(title: "Unread", symbol: .listFilter, remove: {})
+                            Chip(title: "Verified", symbol: .shieldCheck, variant: .success)
+                            Chip(title: "Unverified", symbol: .circleAlert, variant: .warning)
                         }
                     }
                     FormSection(title: "Attachments") {

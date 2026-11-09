@@ -85,7 +85,7 @@ added to the component, not to the view.
   is hovered. Nothing else drags: no handle, no edit mode.
 - Sheets go through `Sheet`, on `background`: on iOS it gets the system's title and its X, or
   its Cancel, at the start of the navigation bar, in the foreground's colour; on the Mac our
-  `HeaderBar` and Esc. What trails in the bar is ours on the Mac and the system's plain
+  `HeaderBar` with the X at its end, and Esc. What trails in the bar is ours on the Mac and the system's plain
   `Button`s on iOS, the main one `.borderedProminent`: the system draws the bar's buttons, and
   ours inside it would be a pill in a pill. The bar holds the one thing the sheet is for; what
   else can be done is in a toolbar under its content, as the message being written has it.
@@ -111,6 +111,7 @@ added to the component, not to the view.
 | `LineButton` | A line clicked as a whole, its words lit on hover, with buttons of its own on it: a message's line in a thread |
 | `StarButton` | A thread's star, in the star colour when starred or hovered |
 | `SelectCircle` | The circle that selects threads, filled in the primary colour with a check once selected; the Mac's rows draw it in the gutter before them |
+| `CopyField` | Text to take elsewhere in a field's box that isn't typed in, and the round Copy button beside it, which shows a check once it has copied: the MCP server's address |
 | `InputField` | A text field with its label above, or a text box of `lines` |
 | `LineField` | The Mac's one line to type in, under `InputField`, `SearchField` and the compose fields: an AppKit field whose cell keeps its text in from its sides, so the caret after the last letter isn't cut off as in SwiftUI's plain field. Return is its `onReturn` |
 | `FieldArea` | Behind a field's box, makes all of it the field: a click anywhere on it puts the caret in the field, and the pointer is the I-beam over it. Every field has one |
@@ -119,8 +120,9 @@ added to the component, not to the view.
 | `Combobox` | A choice from a list that can grow, found by typing: its face shows the one in force, a `.field` with a label or `.inline` words; opens a popup with a `SearchField` over a `ChoiceList` on the Mac, drawn by the window's or the sheet's `comboboxHost` so nothing is over it, a sheet on iOS |
 | `ChoiceMenu` | One of a few choices, as a button with a chevron that opens them |
 | `ToggleRow` | A switch with its words, flipped by a click anywhere on the row, which hovers |
+| `MarkRow` | One of a few choices on a card, picked by a click anywhere on it: a round mark for one of them, a square one for any of them, filled in the primary colour with a check once picked; a symbol or an account's dot, its name and a line; `indent` for a row under the one it belongs to; what an application may do when it asks to connect |
 | `Disclosure` | A line that opens more |
-| `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid` |
+| `Chip` | A small pill: an address, a file, a label; `remove`, `action`, `pending`, `invalid`, and `success` or `warning` for a state in its colour (an application verified or not) |
 | `AttachmentCard` | A message's file under it, as Gmail shows them: its picture (or its kind's icon) over its name, kind and size; `pending` |
 | `FoldedCount` | A long thread's run of folded messages tucked into one line, their count in a circle where the avatars stand; it shows them |
 | `Spinner` | Lucide's loader turning, in the muted text colour or a `tint`, for what is still coming: a mailbox syncing after its title, the next page of a list, a pending button, an update. Never the system's `ProgressView`, which the Mac won't colour |

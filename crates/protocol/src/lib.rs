@@ -1,6 +1,7 @@
 //! What the server and the client core agree on: the mail they sync, the messages on the sync
 //! socket and the JSON of the server's HTTP API.
 
+pub mod access;
 pub mod api;
 pub mod ops;
 pub mod rules;
@@ -19,6 +20,8 @@ pub use types::*;
 pub const PROTOCOL_VERSION: u32 = 3;
 /// Where the server sends the browser once a Google or Microsoft sign-in is done; the apps own this scheme.
 pub const APP_REDIRECT: &str = "wonnet://auth";
+/// Opens the app on an application's request to reach the user's mail: `wonnet://connect?key=…`.
+pub const APP_CONNECT: &str = "wonnet://connect";
 /// How many messages one `Changes` batch holds at most.
 pub const BATCH_SIZE: usize = 500;
 

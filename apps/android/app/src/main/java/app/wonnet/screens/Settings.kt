@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
@@ -29,10 +28,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.key
@@ -46,7 +43,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -118,12 +114,26 @@ import app.wonnet.theme.Symbol
 import app.wonnet.theme.Text
 import app.wonnet.theme.TextStyle
 import app.wonnet.theme.Tokens
+import app.wonnet.core.ConnectedApps
+import app.wonnet.core.CoreError
+import app.wonnet.core.mcpServer
+import app.wonnet.core.connectedApps
+import app.wonnet.core.revokeConnectedApp
+import app.wonnet.core.confirmRevoking
+import app.wonnet.ui.Chip
+import app.wonnet.ui.CopyField
+import app.wonnet.ui.Notice
+import app.wonnet.ui.RowsCard
+import app.wonnet.ui.RowsCardRule
+import app.wonnet.ui.Spinner
+import androidx.compose.runtime.mutableIntStateOf
 import app.wonnet.ui.ActionButton
 import app.wonnet.ui.ButtonVariant
+import app.wonnet.ui.CardRow
+import app.wonnet.ui.takesNoHeight
 import app.wonnet.ui.ChoiceMenu
 import app.wonnet.ui.IconButton
 import app.wonnet.ui.InputField
-import app.wonnet.ui.LocalOnFormCard
 import app.wonnet.ui.MovableList
 import app.wonnet.ui.Pressable
 import app.wonnet.ui.Rule
@@ -220,7 +230,7 @@ fun SettingsSheet(store: MailStore, close: () -> Unit) {
 /** The sections in groups, each pushing its page, or chosen beside it on a wide sheet. While a search is typed, the groups it finds take their place. */
 @Composable
 private fun SettingsSections(store: MailStore, selected: SettingsSection?, choose: (SettingsSection) -> Unit) {
-    val groups = listOf(listOf(SettingsSection.General, SettingsSection.Accounts), listOf(SettingsSection.Inbox, SettingsSection.Reading, SettingsSection.Writing))
+    val groups = listOf(listOf(SettingsSection.General, SettingsSection.Accounts), listOf(SettingsSection.Inbox, SettingsSection.Reading, SettingsSection.Writing), listOf(SettingsSection.ConnectedApps))
     Column(Modifier.fillMaxSize()) {
         SearchField("Search", store.settingsQuery, { store.settingsQuery = it })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.xl)) {
@@ -277,6 +287,7 @@ private fun PageView(store: MailStore, pages: List<Page>, back: (() -> Unit)?, p
                 is Page.Section -> when (page.section) {
                     SettingsSection.General -> GeneralPage(store, anchor)
                     SettingsSection.Accounts -> AccountsPage(store, anchor, push)
+                    SettingsSection.ConnectedApps -> ConnectedAppsPage(store, anchor)
                     SettingsSection.Inbox -> InboxPage(store, anchor, push)
                     SettingsSection.Reading -> ReadingPage(store, anchor, push)
                     SettingsSection.Writing -> WritingPage(store, anchor, push)
@@ -444,6 +455,80 @@ private fun SignatureGroup(store: MailStore, account: AccountView) {
         RowRule()
         SettingsRow(if (shown == null) "Add Signature" else "Edit Signature", leading = { Tile(if (shown == null) Symbol.Plus else Symbol.Pencil, Tokens.primary.color) }, action = true) {
             draft = shown ?: ""
+        }
+    }
+}
+
+// Connected apps
+
+/**
+ * The MCP server's address to add Wonnet to an application, and the applications let in, read
+ * from the server each time the page opens. A revoked one leaves the list once the server has it.
+ */
+@Composable
+private fun ConnectedAppsPage(store: MailStore, anchor: (String) -> Modifier) {
+    var server by remember { mutableStateOf<String?>(null) }
+    var serverError by remember { mutableStateOf<String?>(null) }
+    var listed by remember { mutableStateOf<ConnectedApps?>(null) }
+    var listError by remember { mutableStateOf<String?>(null) }
+    var loads by remember { mutableIntStateOf(0) }
+    var revoking by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(Unit) {
+        try {
+            server = store.mcpServer()
+        } catch (error: CoreError) {
+            serverError = error.message
+        }
+    }
+    LaunchedEffect(loads) {
+        listError = null
+        try {
+            listed = store.connectedApps()
+        } catch (error: CoreError) {
+            listError = error.message
+        }
+    }
+    val address = listed?.address?.takeIf { it.isNotEmpty() } ?: server
+    Group("MCP Server", "Use this URL with MCP clients such as Claude or ChatGPT. You can pick what each one can access.", anchor("connect"), card = false) {
+        val error = serverError
+        when {
+            address != null -> CopyField(address, "the address")
+            error != null -> Notice(error, Modifier.padding(horizontal = Space.l), error = true, symbol = Symbol.CircleAlert)
+            else -> Notice("Loading", Modifier.padding(horizontal = Space.l))
+        }
+    }
+    val apps = listed?.apps
+    Group("Connected apps", "They reach your mail as you chose when you approved them. Revoke one to end its access at once.", anchor("connected")) {
+        val error = listError
+        when {
+            error != null -> Notice(error, Modifier.padding(start = Space.l, end = Space.l - Dims.buttonGap / 2, top = Space.xs, bottom = Space.xs), error = true, symbol = Symbol.CircleAlert, action = "Try again") { loads += 1 }
+            apps == null -> SettingsRow("Loading", leading = { Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) { Spinner() } }, muted = true)
+            apps.isEmpty() -> SettingsRow("No applications are connected yet.", muted = true)
+        }
+        for ((index, app) in apps.orEmpty().withIndex()) {
+            key(app.id) {
+                if (index > 0 || error != null) RowRule()
+                SettingsRow(
+                    app.name, lines = listOf(app.access, app.used), wrap = true,
+                    badge = if (app.verified) ({ Chip("Verified", symbol = Symbol.ShieldCheck, tint = Tokens.success) }) else null,
+                    trailing = {
+                        ActionButton("Revoke", size = ControlSize.Small, pending = app.id in revoking, help = "Revoke ${app.name}") {
+                            store.confirmRevoking(app) {
+                                revoking = revoking + app.id
+                                store.scope.launch {
+                                    try {
+                                        store.revokeConnectedApp(app.id)
+                                        listed = listed?.let { it.copy(apps = it.apps.filter { each -> each.id != app.id }) }
+                                    } catch (error: CoreError) {
+                                        store.show(error.message)
+                                    }
+                                    revoking = revoking - app.id
+                                }
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -749,24 +834,28 @@ private fun SnippetPage(store: MailStore, start: Snippet, isNew: Boolean, back: 
 
 // Parts
 
-/** A group of rows: its name over it, a card of rows, and the muted line under it saying what it does. The rows' fills reach the card's edges and take its corners. */
+/**
+ * A group of rows: its name over it, a card of rows, and the muted line under it saying what it
+ * does. The rows' fills reach the card's edges and take its corners. `card` false puts the content
+ * on the page instead, as wide as the cards: a control that stands alone, such as a field.
+ */
 @Suppress("ModifierParameter")
 @Composable
-private fun Group(title: String? = null, footer: String? = null, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+private fun Group(title: String? = null, footer: String? = null, modifier: Modifier = Modifier, card: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
         title?.let { Text(it, TextStyle.Subheading, Modifier.padding(horizontal = Space.l)) }
-        val shape = RoundedCornerShape(Radius.lg)
-        Column(Modifier.fillMaxWidth().clip(shape).background(Tokens.card.color).border(Dims.hairline, Tokens.borderCard.color, shape)) {
-            CompositionLocalProvider(LocalOnFormCard provides true) { content() }
-        }
+        if (card) RowsCard(content = content) else Column(Modifier.fillMaxWidth(), content = content)
         footer?.let { Text(it, TextStyle.Caption, Modifier.padding(horizontal = Space.l), color = Tokens.mutedForeground.color) }
     }
 }
 
 @Composable
-private fun RowRule() = Rule(Modifier.padding(start = Space.l), color = Tokens.borderCard)
+private fun RowRule() = RowsCardRule()
 
-/** A row of a group: its picture, what it is with a line under, and its value, control or chevron at the end. */
+/**
+ * A row of a group: its picture, what it is with a line under (and more `lines`), and its value,
+ * control or chevron at the end. `badge` stands after the title; `wrap` lets every line wrap.
+ */
 @Composable
 private fun SettingsRow(
     title: String,
@@ -780,6 +869,8 @@ private fun SettingsRow(
     muted: Boolean = false,
     wrap: Boolean = false,
     hovered: Boolean = false,
+    lines: List<String> = emptyList(),
+    badge: (@Composable () -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
@@ -796,19 +887,22 @@ private fun SettingsRow(
             lit -> Tokens.cardAccent.color
             else -> Color.Transparent
         }
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = (Dims.rowHeight.value + 8).dp).background(fill).padding(horizontal = Space.l, vertical = Space.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.m),
-        ) {
-            leading?.invoke()
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, TextStyle.Body, color = color, maxLines = if (wrap) Int.MAX_VALUE else 1)
-                detail?.let { Text(it, TextStyle.Caption, color = Tokens.mutedForeground.color, maxLines = 1) }
+        val control = trailing?.let { slot -> @Composable { Row(verticalAlignment = Alignment.CenterVertically) { slot() } } }
+        CardRow(Modifier.background(fill), trailing = control) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                leading?.invoke()
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val most = if (wrap) Int.MAX_VALUE else 1
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        Text(title, TextStyle.Body, Modifier.weight(1f, fill = false), color = color, maxLines = most)
+                        badge?.let { Box(Modifier.takesNoHeight()) { it() } }
+                    }
+                    detail?.let { Text(it, TextStyle.Caption, color = Tokens.mutedForeground.color, maxLines = most) }
+                    for (line in lines) Text(line, TextStyle.Caption, color = Tokens.mutedForeground.color, maxLines = most)
+                }
+                value?.let { Text(it, TextStyle.Body, Modifier.widthIn(max = 220.dp), color = Tokens.mutedForeground.color, maxLines = 1) }
+                if (chevron) Icon(Symbol.ChevronRight, 14f, Tokens.mutedStrongerForeground.color)
             }
-            value?.let { Text(it, TextStyle.Body, Modifier.widthIn(max = 220.dp), color = Tokens.mutedForeground.color, maxLines = 1) }
-            trailing?.invoke(this)
-            if (chevron) Icon(Symbol.ChevronRight, 14f, Tokens.mutedStrongerForeground.color)
         }
     }
     if (onClick == null) return Face(hovered)

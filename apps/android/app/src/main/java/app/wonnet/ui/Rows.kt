@@ -27,13 +27,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.HorizontalAlignmentLine
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.VerticalAlignmentLine
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.max
+import kotlin.math.min
 import app.wonnet.core.Address
 import app.wonnet.theme.Dims
 import app.wonnet.theme.Icon
 import app.wonnet.theme.Opacity
 import app.wonnet.theme.Radius
+import app.wonnet.theme.SCALE
 import app.wonnet.theme.ShadowSize
 import app.wonnet.theme.Space
 import app.wonnet.theme.Symbol
@@ -203,4 +217,106 @@ fun PopupCard(modifier: Modifier = Modifier, inset: Dp = Space.xs, content: @Com
     ) {
         CompositionLocalProvider(LocalOnPopover provides true) { content() }
     }
+}
+
+/**
+ * One of a few choices on a `RowsCard`, its mark at the end: a circle for one of them, a square
+ * when several can be picked (`multiple`), filled in the primary colour with a check once picked.
+ * It starts with a `symbol` or an account's `dot`; `detail` wraps under the title; `indent` sets
+ * it under the choice it belongs to.
+ */
+@Composable
+fun PickRow(
+    title: String,
+    picked: Boolean,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+    symbol: Symbol? = null,
+    dot: Color? = null,
+    multiple: Boolean = false,
+    indent: Dp = 0.dp,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val state = Modifier.semantics {
+        if (multiple) toggleableState = ToggleableState(picked) else selected = picked
+    }
+    Pressable(onClick, modifier.then(state), enabled, role = if (multiple) Role.Checkbox else Role.RadioButton) { hovered ->
+        CardRow(Modifier.background(if (hovered) Tokens.cardAccent.color else Color.Transparent), indent, trailing = { PickMark(picked, multiple) }) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                when {
+                    dot != null -> Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(10.dp).background(dot, CircleShape)) }
+                    symbol != null -> Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) { Icon(symbol, 17f / 1.15f, Tokens.foreground.color) }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, TextStyle.Body)
+                    detail?.let { Text(it, TextStyle.Caption, color = Tokens.mutedForeground.color) }
+                }
+            }
+        }
+    }
+}
+
+/** A choice's mark: a circle, or a square when several can be picked; filled with a check once picked. */
+@Composable
+private fun PickMark(picked: Boolean, multiple: Boolean) {
+    val side = (Dims.selectCircle * SCALE).dp
+    val shape = if (multiple) RoundedCornerShape(Radius.xs) else CircleShape
+    Box(
+        Modifier
+            .size(side)
+            .background(if (picked) Tokens.primary.color else Color.Transparent, shape)
+            .border(Dims.selectCircleLine, if (picked) Color.Transparent else Tokens.mutedStrongestForeground.color, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (picked) Icon(Symbol.Check, Dims.selectCircle * 0.67f, Tokens.primaryForeground.color)
+    }
+}
+
+/** Where a control's face ends inside its hit area, for a row to line the face up with its edge. */
+val FaceEnd = VerticalAlignmentLine(::max)
+
+/** How far a control's face is from the top of its hit area, the same below. */
+val FaceTop = HorizontalAlignmentLine(::min)
+
+/** Tells a row where the face is in the control's hit area: `outset` past it at the end, and `height` tall in its middle. */
+fun Modifier.face(outset: Dp = 0.dp, height: Dp? = null): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val top = height?.let { ((placeable.height - it.roundToPx()) / 2).coerceAtLeast(0) } ?: 0
+    layout(placeable.width, placeable.height, mapOf(FaceEnd to placeable.width - outset.roundToPx(), FaceTop to top)) { placeable.place(0, 0) }
+}
+
+/**
+ * A row of a card (`RowsCard`): its content `Space.l` from the start (and `indent` more) and at
+ * least `Space.m` from the top and bottom, as tall as a control at least. `trailing`'s face is
+ * centred: in a row of several lines `Space.l` from the end, as the content is from the start;
+ * in a row of one as far from the end as from the top and bottom.
+ */
+@Composable
+fun CardRow(modifier: Modifier = Modifier, indent: Dp = 0.dp, trailing: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
+    Layout(listOf(content, trailing ?: {}), modifier.fillMaxWidth()) { (contents, controls), constraints ->
+        val width = constraints.maxWidth
+        val side = Space.l.roundToPx()
+        val start = side + indent.roundToPx()
+        val gap = Space.m.roundToPx()
+        val control = controls.firstOrNull()?.measure(Constraints(maxWidth = width / 2))
+        val faceEnd = control?.let { it[FaceEnd].takeIf { line -> line != AlignmentLine.Unspecified } ?: it.width } ?: 0
+        val faceTop = control?.let { it[FaceTop].takeIf { line -> line != AlignmentLine.Unspecified } ?: 0 } ?: 0
+        val faceHeight = (control?.height ?: 0) - faceTop * 2
+        val room = if (control == null) side else side + faceEnd + gap
+        val text = contents.firstOrNull()?.measure(Constraints(maxWidth = (width - start - room).coerceAtLeast(0)))
+        val oneLine = (Dims.rowHeight.value + 8).dp.roundToPx()
+        val height = maxOf(oneLine, (text?.height ?: 0) + Space.m.roundToPx() * 2, control?.height ?: 0, constraints.minHeight)
+        val inset = if (height > oneLine) side else minOf(side, (height - faceHeight) / 2)
+        layout(width, height) {
+            text?.place(start, (height - text.height) / 2)
+            control?.place(width - inset - faceEnd, (height - control.height) / 2)
+        }
+    }
+}
+
+/** Lays a view out as if it took no height, centred where it stands: a badge beside a line of text, which keeps the line's height. */
+fun Modifier.takesNoHeight(): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+    layout(placeable.width, 0) { placeable.place(0, -placeable.height / 2) }
 }

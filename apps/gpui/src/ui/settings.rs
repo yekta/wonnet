@@ -4,13 +4,26 @@
 use std::rc::Rc;
 
 use gpui::prelude::*;
-use gpui::{AnyElement, App, ClickEvent, Div, MouseButton, SharedString, Window, div, px};
+use gpui::{
+    AlignItems, AnyElement, App, Bounds, ClickEvent, Display, Div, Element, ElementId, GlobalElementId,
+    InspectorElementId, LayoutId, MouseButton, Pixels, SharedString, Style, Window, div, point, px,
+};
 
 use super::{Dragged, Dropped, MenuEntry, OnClick, RowMenu, icon, line, movable, open_menu, paragraph};
 use crate::theme::*;
 
 /// A group of a settings page: its name and a line about it, over a card of rows.
 pub fn settings_group(title: &str, detail: Option<&str>, rows: Vec<AnyElement>, cx: &App) -> Div {
+    group(title, detail, settings_card(rows, cx).into_any_element(), cx)
+}
+
+/// A group whose content is a field of its own, as the MCP server's address: on the page, as
+/// wide as the cards, with no card around it.
+pub fn settings_group_on_page(title: &str, detail: Option<&str>, content: AnyElement, cx: &App) -> Div {
+    group(title, detail, content, cx)
+}
+
+fn group(title: &str, detail: Option<&str>, content: AnyElement, cx: &App) -> Div {
     div()
         .flex()
         .flex_col()
@@ -19,7 +32,7 @@ pub fn settings_group(title: &str, detail: Option<&str>, rows: Vec<AnyElement>, 
             super::section_heading(title.to_string(), detail.map(|detail| SharedString::from(detail.to_string())), cx)
                 .px(px(space::XXS)),
         )
-        .child(settings_card(rows, cx))
+        .child(content)
 }
 
 /// The card of a group's rows.
@@ -35,8 +48,9 @@ pub fn settings_card(rows: Vec<AnyElement>, cx: &App) -> Div {
         .children(rows)
 }
 
-/// One row of a group: what it is about on the left, its controls on the right. A control at
-/// either end is as far from the card's side as from the row's top and bottom.
+/// One row of a group: what it is about on the left, its controls on the right. In a row of one
+/// line a control at the end is as far from the card's side as from the row's top and bottom; in
+/// a taller one it is as far in as the words are from the other side, so controls line up.
 pub fn settings_row(leading: impl IntoElement, trailing: Vec<AnyElement>) -> Div {
     let has_controls = !trailing.is_empty();
     div()
@@ -46,9 +60,85 @@ pub fn settings_row(leading: impl IntoElement, trailing: Vec<AnyElement>) -> Div
         .min_h(px(size::SETTINGS_ROW))
         .py(px(space::S))
         .pl(px(space::L))
-        .pr(px(if has_controls { (size::SETTINGS_ROW - size::REGULAR) / 2. - size::BUTTON_GAP / 2. } else { space::L }))
+        .pr(px(if has_controls { 0. } else { space::L }))
         .child(div().flex_1().min_w_0().child(leading))
-        .child(div().flex().flex_none().items_center().children(trailing))
+        .when(has_controls, |row| {
+            row.child(EdgeControls(div().flex().flex_none().items_center().children(trailing).into_any_element()))
+        })
+}
+
+/// A row's controls, set in from its end once the row's height is known: by as much as there is
+/// above and below them in a row of one line, by `space::L` in a taller one. The room is kept at its widest, and the controls
+/// moved out into what they don't need of it. The last control pads half the button gap inside.
+struct EdgeControls(AnyElement);
+
+impl IntoElement for EdgeControls {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for EdgeControls {
+    type RequestLayoutState = LayoutId;
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, LayoutId) {
+        let controls = self.0.request_layout(window, cx);
+        let mut style = Style { display: Display::Flex, flex_shrink: 0., ..Style::default() };
+        style.align_self = Some(AlignItems::Stretch);
+        style.align_items = Some(AlignItems::Center);
+        // As tall as the row, past its padding.
+        style.margin.top = px(-space::S).into();
+        style.margin.bottom = px(-space::S).into();
+        style.padding.right = px(space::L - size::BUTTON_GAP / 2.).into();
+        (window.request_layout(style, [controls], cx), controls)
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        controls: &mut LayoutId,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let height = window.layout_bounds(*controls).size.height;
+        let one_line = bounds.size.height <= px(size::SETTINGS_ROW);
+        let room = if one_line { ((bounds.size.height - height) / 2.).min(px(space::L)) } else { px(space::L) };
+        window.with_element_offset(point(px(space::L) - room, px(0.)), |window| {
+            self.0.prepaint(window, cx);
+        });
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut LayoutId,
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.0.paint(window, cx);
+    }
 }
 
 /// A row of a card's list the user puts in order: it is dragged onto another to take its place,
@@ -153,16 +243,50 @@ pub fn settings_label(
         }
         _ => None,
     };
-    div().flex().items_center().gap(px(space::S + 2.)).children(lead).child(
-        div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .gap(px(2.))
-            .child(line(title, if heading { TextStyle::Subheading } else { TextStyle::Body }, cx))
-            .when_some(detail, |column, detail| column.child(paragraph(detail, TextStyle::Caption, cx))),
-    )
+    let lines = detail.is_some();
+    div()
+        .flex()
+        .items_center()
+        .gap(px(space::S + 2.))
+        .when(lines, |label| label.py(px(LINES_INSET)))
+        .children(lead)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(line(title, if heading { TextStyle::Subheading } else { TextStyle::Body }, cx))
+                .when_some(detail, |column, detail| column.child(paragraph(detail, TextStyle::Caption, cx))),
+        )
+}
+
+/// What words of several lines add to a row's padding, so they are `space::M` from its top and
+/// bottom.
+const LINES_INSET: f32 = space::M - space::S;
+
+/// What a row is about when it says more: its name, a chip after it, and lines under it.
+pub fn settings_item(
+    title: impl Into<SharedString>,
+    chip: Option<AnyElement>,
+    lines: Vec<SharedString>,
+    cx: &App,
+) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .when(!lines.is_empty(), |item| item.py(px(LINES_INSET)))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(space::S))
+                .child(line(title, TextStyle::Body, cx).flex_shrink(1.))
+                .children(chip),
+        )
+        .children(lines.into_iter().map(|text| paragraph(text, TextStyle::Caption, cx)))
 }
 
 /// The hairline between a group's rows.
@@ -173,4 +297,117 @@ pub fn settings_divider(cx: &App) -> Div {
 /// A row that only says something: nothing set yet.
 pub fn settings_note(text: impl Into<SharedString>, cx: &App) -> Div {
     settings_row(div().text_in(TextStyle::Label, MUTED_FOREGROUND, cx).child(text.into()), Vec::new())
+}
+
+/// How a choice shows that it is picked: a round mark for one of a few, a square one for each of
+/// several that is on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mark {
+    Radio,
+    Check,
+}
+
+/// A choice on a form's card: its mark, a symbol or a dot, its name and a line about it. A click
+/// anywhere on it picks it. `indent` sets it under the choice it belongs to.
+#[derive(IntoElement)]
+pub struct MarkRow {
+    id: SharedString,
+    title: SharedString,
+    detail: Option<SharedString>,
+    lead: super::Lead,
+    mark: Mark,
+    checked: bool,
+    indent: f32,
+    on_click: OnClick,
+}
+
+impl MarkRow {
+    pub fn new(
+        id: impl Into<SharedString>,
+        title: impl Into<SharedString>,
+        mark: Mark,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            title: title.into(),
+            detail: None,
+            lead: super::Lead::None,
+            mark,
+            checked: false,
+            indent: 0.,
+            on_click: Rc::new(on_click),
+        }
+    }
+
+    pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    pub fn lead(mut self, lead: super::Lead) -> Self {
+        self.lead = lead;
+        self
+    }
+
+    pub fn checked(mut self, checked: bool) -> Self {
+        self.checked = checked;
+        self
+    }
+
+    pub fn indent(mut self, indent: f32) -> Self {
+        self.indent = indent;
+        self
+    }
+}
+
+impl RenderOnce for MarkRow {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let group = self.id.clone();
+        let on_click = self.on_click.clone();
+        let label = settings_label(self.title.clone(), self.detail.clone(), self.lead.clone(), false, cx);
+        div()
+            .id(self.id.clone())
+            .group(group.clone())
+            .flex()
+            .items_center()
+            .gap(px(space::M))
+            .min_h(px(size::ROW))
+            .py(px(space::S))
+            .pl(px(space::M + self.indent))
+            .pr(px(space::M))
+            .rounded(px(radius::SM))
+            .cursor_pointer()
+            .hover(|row| row.bg(cx.color(FORM_CARD_ACCENT)))
+            .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+            .on_click(move |event, window, cx| on_click(event, window, cx))
+            .child(mark(self.mark, self.checked, group, cx))
+            .child(label.flex_1().min_w_0())
+    }
+}
+
+/// The mark itself: filled in the primary colour when picked, else a ring that darkens on hover.
+fn mark(kind: Mark, checked: bool, hover_group: SharedString, cx: &App) -> Div {
+    let side = size::MARK;
+    let face = div().size(px(side)).flex_none().flex().items_center().justify_center();
+    let face = match kind {
+        Mark::Radio => face.rounded_full(),
+        Mark::Check => face.rounded(px(radius::XS)),
+    };
+    if !checked {
+        return face
+            .border(px(size::SELECT_LINE))
+            .border_color(cx.color(MUTED_STRONGEST_FOREGROUND))
+            .group_hover(hover_group, |face| face.border_color(cx.color(MUTED_FOREGROUND)));
+    }
+    let face = face.bg(cx.color(PRIMARY));
+    match kind {
+        Mark::Radio => face.child(div().size(px(side * 0.4)).rounded_full().bg(cx.color(PRIMARY_FOREGROUND))),
+        Mark::Check => face.child(icon(super::Symbol::Check, side * 0.75).text_color(cx.color(PRIMARY_FOREGROUND))),
+    }
+}
+
+/// Choices on a form's card, inset so that each hovers in a rounded fill of its own.
+pub fn mark_list(rows: Vec<AnyElement>) -> Div {
+    div().flex().flex_col().gap(px(size::ROW_GAP)).p(px(space::XXS)).children(rows)
 }

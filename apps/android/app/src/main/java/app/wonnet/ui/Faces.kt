@@ -124,7 +124,10 @@ fun MicrosoftMark(size: Float = 20f) {
     }
 }
 
-/** A small pill: an address in a field, a file, a thread's label. `invalid` is an address that can't be sent to. */
+/**
+ * A small pill: an address in a field, a file, a thread's label. `invalid` is an address that
+ * can't be sent to. `tint` is a state in a wash of its colour: Verified in `success`.
+ */
 @Composable
 fun Chip(
     title: String,
@@ -132,6 +135,7 @@ fun Chip(
     symbol: Symbol? = null,
     detail: String? = null,
     invalid: Boolean = false,
+    tint: ThemeColor? = null,
     pending: Boolean = false,
     remove: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
@@ -140,20 +144,34 @@ fun Chip(
     @Composable
     fun Face(hovered: Boolean) {
         val fill = when {
+            tint != null -> tint.opacity(Opacity.colorTint)
             onCard -> if (hovered) Dims.cardAccentStronger else Dims.cardAccent
             else -> if (hovered) Tokens.backgroundSecondaryAccent else Tokens.backgroundSecondary
         }
-        val foreground = if (invalid) Tokens.destructive.color else Tokens.foreground.color
+        val foreground = when {
+            invalid -> Tokens.destructive.color
+            tint != null -> tint.color
+            else -> Tokens.foreground.color
+        }
+        // A tinted chip is a status, not a thing: small, with a little more room after its words than before its icon.
+        val status = tint != null
         Row(
             Modifier
-                .height(Dims.chipHeight)
+                .height(if (status) 20.dp else Dims.chipHeight)
                 .background(fill.color, CircleShape)
                 .border(Dims.hairline, if (invalid) Tokens.destructive.opacity(Opacity.colorBorder).color else Color.Transparent, CircleShape)
-                .padding(start = Space.s + 2.dp, end = if (remove != null) 0.dp else Space.s + 2.dp),
+                .padding(
+                    start = if (status) Space.xs else Space.s + 2.dp,
+                    end = when {
+                        remove != null -> 0.dp
+                        status -> Space.s
+                        else -> Space.s + 2.dp
+                    },
+                ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.xs),
+            horizontalArrangement = Arrangement.spacedBy(if (status) Space.xxs else Space.xs),
         ) {
-            ButtonIcon(symbol, pending, 12f, if (invalid) Tokens.destructive.color else Tokens.mutedForeground.color)
+            ButtonIcon(symbol, pending, if (status) 11f / SCALE else 12f, if (invalid || status) foreground else Tokens.mutedForeground.color)
             Text(title, TextStyle.Caption, Modifier.widthIn(max = 260.dp), color = foreground, maxLines = 1)
             detail?.let { Text(it, TextStyle.Footnote, maxLines = 1) }
             if (remove != null) {

@@ -16,7 +16,7 @@ use gpui_component::input::{InputEvent, InputState, TextareaState};
 use super::Recording;
 use super::onboarding::OnboardingView;
 use crate::keys::{self, KeyCommand};
-use crate::models::AccountView;
+use crate::models::{AccountView, ConnectedApp};
 use crate::store::{
     Appearance, CustomRule, CustomSplit, LocalSettings, NotificationAction, SettingsEntry, SettingsSection, Snippet,
     Store,
@@ -769,6 +769,119 @@ impl SettingsView {
                 edit.into_iter().collect(),
             ))
             .child(below)
+    }
+
+    // MARK: Connected apps
+
+    fn connected(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let connected = &self.store.read(cx).connected;
+        let loading_row = || {
+            ui::settings_row(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(space::S))
+                    .child(ui::spinner(12., cx.color(MUTED_FOREGROUND)))
+                    .child(div().text_in(TextStyle::Label, MUTED_FOREGROUND, cx).child("Loading")),
+                Vec::new(),
+            )
+            .into_any_element()
+        };
+        let address = match (&connected.address, &connected.address_error) {
+            (Some(address), _) => ui::CopyField::new("mcp-address", address.clone()).into_any_element(),
+            (None, Some(error)) => {
+                ui::notice(error.clone(), ui::Tone::Error, Some(Symbol::CircleAlert), None, cx).into_any_element()
+            }
+            (None, None) => div()
+                .h(px(size::FIELD))
+                .flex()
+                .items_center()
+                .child(ui::spinner(12., cx.color(MUTED_FOREGROUND)))
+                .into_any_element(),
+        };
+
+        let mut app_rows = Vec::new();
+        if let Some(error) = &connected.error {
+            let retry = self.store.clone();
+            let again = ActionButton::new("connected-retry", "Try again")
+                .symbol(Symbol::RefreshCw)
+                .surface(ui::Surface::Card)
+                .on_click(move |_, _, cx| retry.update(cx, |store, cx| store.load_connected(cx)));
+            app_rows.push(
+                ui::settings_row(
+                    ui::notice(error.clone(), ui::Tone::Error, Some(Symbol::CircleAlert), Some(again), cx),
+                    Vec::new(),
+                )
+                .into_any_element(),
+            );
+        }
+        match &connected.apps {
+            None if connected.loading => app_rows.push(loading_row()),
+            None => {}
+            Some(apps) if apps.is_empty() && connected.error.is_none() => {
+                app_rows.push(ui::settings_note("No applications are connected yet.", cx).into_any_element())
+            }
+            Some(apps) => {
+                for app in apps {
+                    if !app_rows.is_empty() {
+                        app_rows.push(ui::settings_divider(cx).into_any_element());
+                    }
+                    app_rows.push(self.connected_app_row(app, connected.revoking.contains(&app.id), cx));
+                }
+            }
+        }
+
+        vec![
+            self.mark(
+                "connect",
+                ui::settings_group_on_page(
+                    "MCP Server",
+                    Some("Use this URL with MCP clients such as Claude or ChatGPT. You can pick what each one can access."),
+                    address,
+                    cx,
+                ),
+            )
+            .into_any_element(),
+            self.mark(
+                "connected",
+                ui::settings_group(
+                    "Connected apps",
+                    Some(
+                        "They reach your mail as you chose when you approved them. Revoke one to end its access at once.",
+                    ),
+                    app_rows,
+                    cx,
+                ),
+            )
+            .into_any_element(),
+        ]
+    }
+
+    /// An application let in: its name, what it may do and when it was used; and Revoke.
+    fn connected_app_row(&self, app: &ConnectedApp, revoking: bool, cx: &App) -> AnyElement {
+        let revoke = self.store.clone();
+        let revoked = app.clone();
+        let verified = app.verified.then(|| {
+            ui::Chip::new(SharedString::from(format!("verified-{}", app.id)), "Verified")
+                .symbol(Symbol::ShieldCheck)
+                .tone(ui::Tone::Success)
+        });
+        ui::settings_row(
+            ui::settings_item(
+                app.name.clone(),
+                verified.map(IntoElement::into_any_element),
+                vec![app.access.clone().into(), app.used.clone().into()],
+                cx,
+            ),
+            vec![
+                ActionButton::new(SharedString::from(format!("revoke-{}", app.id)), "Revoke")
+                    .surface(ui::Surface::Card)
+                    .pending(revoking)
+                    .on_click(move |_, _, cx| revoke.update(cx, |store, cx| store.confirm_revoking(&revoked, cx)))
+                    .into_any_element(),
+            ],
+        )
+        .into_any_element()
     }
 
     // MARK: Inbox
@@ -1804,6 +1917,7 @@ impl Render for SettingsView {
         let groups = match section {
             SettingsSection::General => self.general(cx),
             SettingsSection::Accounts => self.accounts(window, cx),
+            SettingsSection::Connected => self.connected(cx),
             SettingsSection::Inbox => self.inbox(cx),
             SettingsSection::Reading => self.reading(cx),
             SettingsSection::Writing => self.writing(cx),

@@ -94,8 +94,6 @@ pub struct SignIn {
     pub nonce: String,
     pub link_user_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
-    /// The page a sign-in started in the browser goes back to, instead of the app.
-    pub web_next: Option<String>,
 }
 
 pub struct NewSignIn<'a> {
@@ -105,15 +103,14 @@ pub struct NewSignIn<'a> {
     pub verifier: &'a str,
     pub nonce: &'a str,
     pub link_user_id: Option<Uuid>,
-    pub web_next: Option<&'a str>,
 }
 
-const SIGN_IN_COLUMNS: &str = "id, challenge, app_state, verifier, nonce, link_user_id, user_id, web_next";
+const SIGN_IN_COLUMNS: &str = "id, challenge, app_state, verifier, nonce, link_user_id, user_id";
 
 pub async fn create_sign_in(db: &PgPool, sign_in: &NewSignIn<'_>) -> sqlx::Result<()> {
     sqlx::query(
-        "INSERT INTO sign_ins (id, challenge, app_state, verifier, nonce, link_user_id, web_next, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "INSERT INTO sign_ins (id, challenge, app_state, verifier, nonce, link_user_id, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(sign_in.id)
     .bind(sign_in.challenge)
@@ -121,7 +118,6 @@ pub async fn create_sign_in(db: &PgPool, sign_in: &NewSignIn<'_>) -> sqlx::Resul
     .bind(sign_in.verifier)
     .bind(sign_in.nonce)
     .bind(sign_in.link_user_id)
-    .bind(sign_in.web_next)
     .bind(Utc::now() + SIGN_IN_LIFETIME)
     .execute(db)
     .await?;
@@ -176,8 +172,7 @@ pub async fn cleanup(db: &PgPool) -> sqlx::Result<()> {
     .await?;
     sqlx::query("DELETE FROM reminders WHERE remind_at < now() - interval '7 days'").execute(db).await?;
     sqlx::query("DELETE FROM pushes WHERE created_at < now() - interval '3 days'").execute(db).await?;
-    crate::oauth::cleanup(db).await?;
-    crate::web::cleanup(db).await
+    crate::oauth::cleanup(db).await
 }
 
 // ---------- accounts ----------

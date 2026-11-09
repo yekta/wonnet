@@ -12,6 +12,7 @@ enum class SettingsSection(val title: String, val symbol: Symbol) {
     Inbox("Inbox", Symbol.Inbox),
     Reading("Reading", Symbol.MailOpen),
     Writing("Writing", Symbol.Pencil),
+    ConnectedApps("Connected apps", Symbol.Plug),
 }
 
 /** One group of settings, as the settings' search finds it. Its `id` is the group's on its page. */
@@ -26,6 +27,8 @@ data class SettingsEntry(val id: String, val title: String, val section: Setting
             SettingsEntry("accounts", "Accounts", SettingsSection.Accounts, "add remove gmail jmap fastmail colour color notifications"),
             SettingsEntry("signatures", "Signatures", SettingsSection.Accounts, "sign off footer"),
             SettingsEntry("sign-out", "Sign out", SettingsSection.Accounts, "log out leave"),
+            SettingsEntry("connect", "MCP Server", SettingsSection.ConnectedApps, "mcp claude chatgpt cursor ai agent assistant address"),
+            SettingsEntry("connected", "Connected apps", SettingsSection.ConnectedApps, "revoke access mcp ai agents"),
             SettingsEntry("split-inbox", "Split Inbox", SettingsSection.Inbox, "important other newsletters notifications splits"),
             SettingsEntry("rules", "Rules", SettingsSection.Inbox, "filters rules automatic label skip inbox mark read"),
             SettingsEntry("tabs", "Tabs", SettingsSection.Inbox, "mailboxes along the bottom order"),
@@ -275,4 +278,9 @@ fun MailStore.confirmRemoving(account: AccountView) {
     confirmation = Confirmation(
         "Remove ${account.address}?", "Its mail leaves this device and your other devices. You can add it again.", "Remove",
     ) { removeAccount(account.id) }
+}
+
+/** Asks before ending an application's access; `revoke` ends it. */
+fun MailStore.confirmRevoking(app: ConnectedApp, revoke: () -> Unit) {
+    confirmation = Confirmation("Revoke ${app.name}?", "It can no longer reach your mail. You can connect it again.", "Revoke", revoke)
 }

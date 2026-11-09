@@ -20,7 +20,7 @@ public struct MailIOSApp: App {
             IOSRoot()
                 .environment(Self.store)
                 .onAppear { Self.store.appearance.apply() }
-                .onOpenURL { url in Task { await Self.store.finishSignIn(url) } }
+                .onOpenURL { url in Task { await Self.store.open(url) } }
         }
     }
 }

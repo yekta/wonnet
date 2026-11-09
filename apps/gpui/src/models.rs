@@ -252,6 +252,55 @@ pub struct SearchReply {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Empty {}
 
+/// The address applications connect to.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct McpServer {
+    pub address: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ConnectedApps {
+    pub address: String,
+    pub apps: Vec<ConnectedApp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ConnectedApp {
+    pub id: String,
+    pub name: String,
+    pub verified: bool,
+    /// "Organizer · Every account · Reads whole messages".
+    pub access: String,
+    /// "Approved Nov 5 · Used 5 minutes ago".
+    pub used: String,
+}
+
+/// An application asking to connect, and the choices of what it may do.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ConnectRequest {
+    pub key: String,
+    pub client: String,
+    pub verified: bool,
+    pub publisher: String,
+    pub back_to: String,
+    pub on_device: bool,
+    pub accounts: Vec<AccessChoice>,
+    pub roles: Vec<AccessChoice>,
+    pub privileges: Vec<AccessChoice>,
+}
+
+/// An account, a role or a privilege to choose; `symbol` is a Lucide name, `color` an account's.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AccessChoice {
+    pub id: String,
+    pub title: String,
+    pub detail: String,
+    #[serde(default)]
+    pub symbol: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
 /// What a draft being written holds beyond the draft, kept with the UI state so a restart
 /// brings it back.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -150,6 +150,7 @@ private struct SettingsPage: View {
                     switch section {
                     case .general: GeneralSettings()
                     case .accounts: EmptyView()
+                    case .connected: ConnectedAppsSettings()
                     case .inbox: InboxSettings()
                     case .reading: ReadingSettings()
                     case .writing: WritingSettings()
@@ -426,6 +427,90 @@ private struct AddAccountSheet: View {
             AddAccountFlow()
         }
         .onChange(of: store.accounts.count) { dismiss() }
+    }
+}
+
+// MARK: Connected apps
+
+/// The MCP server to add Wonnet to an application with, and the applications let in, each revoked
+/// with a click.
+private struct ConnectedAppsSettings: View {
+    @Environment(MailStore.self) private var store
+    @State private var model = ConnectedAppsModel()
+
+    var body: some View {
+        SettingsGroup(
+            id: "connect", title: "MCP Server", detail: "Use this URL with MCP clients such as Claude or ChatGPT. You can pick what each one can access.",
+            card: false
+        ) {
+            if let address = model.address {
+                CopyField(text: address)
+            } else {
+                Spinner().frame(height: Theme.fieldHeight)
+            }
+        }
+        SettingsGroup(
+            id: "connected", title: "Connected apps",
+            detail: "They reach your mail as you chose when you approved them. Revoke one to end its access at once."
+        ) {
+            if let apps = model.apps {
+                if apps.isEmpty {
+                    SettingsNote(text: "No applications are connected yet.")
+                }
+                ForEach(apps) { app in
+                    SettingsRow {
+                        AppLabel(app: app)
+                    } trailing: {
+                        ActionButton(title: "Revoke", variant: .outline, pending: model.revoking.contains(app.id)) {
+                            model.confirmRevoking(app, store)
+                        }
+                    }
+                    if app != apps.last { SettingsDivider() }
+                }
+                if let error = model.error {
+                    SettingsDivider()
+                    failure(error)
+                }
+            } else if let error = model.error {
+                failure(error)
+            } else {
+                SettingsRow {
+                    HStack(spacing: Space.s) {
+                        Spinner()
+                        Text("Loading").textStyle(.label, color: Tokens.mutedForeground.color)
+                    }
+                }
+            }
+        }
+        .task { await model.load(store) }
+    }
+
+    private func failure(_ message: String) -> some View {
+        SettingsRow {
+            Notice(text: message, tone: .error, symbol: .circleAlert, action: "Try again") {
+                Task { await model.load(store) }
+            }
+        }
+    }
+}
+
+/// A connected app's name, a Verified chip when it is who it says, what it may do and when it
+/// was approved and last used.
+private struct AppLabel: View {
+    let app: ConnectedApp
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: Space.s) {
+                Text(app.name).textStyle(.body).lineLimit(1)
+                if app.verified {
+                    Chip(title: "Verified", symbol: .shieldCheck, variant: .success)
+                }
+            }
+            Text(app.access).textStyle(.caption).fixedSize(horizontal: false, vertical: true)
+            Text(app.used).textStyle(.caption, color: Tokens.mutedStrongerForeground.color)
+        }
+        .padding(.vertical, Space.m - Space.s)
     }
 }
 

@@ -1,7 +1,7 @@
 //! The OAuth 2.1 server MCP clients connect with, as the MCP authorization spec has it: metadata
 //! (RFC 8414, RFC 9728), clients that register (RFC 7591) or are described by a client ID metadata
-//! document, PKCE, and the authorization code and refresh token grants. The consent page between
-//! `/oauth/authorize` and the code is `web::authorize`.
+//! document, PKCE, and the authorization code and refresh token grants. Between
+//! `/oauth/authorize` and the code, the user answers in the app (`connect.rs`).
 
 use std::time::Duration as StdDuration;
 
@@ -569,15 +569,20 @@ fn redirect_with(redirect_uri: &str, parameters: &[(&str, &str)], issuer: &str) 
     url.to_string()
 }
 
-/// Records the consent as a short-lived code and returns where the browser goes with it. The
-/// request is checked again, so a form can't approve what the authorize step refused.
-pub async fn approve(
-    state: &AppState,
-    user_id: Uuid,
-    request: &mut AuthorizeRequest,
-    access: &Access,
-) -> Result<String, Refusal> {
-    let client = validate(state, request).await?;
+/// An approved request, as the browser that made it comes to collect it.
+pub struct Approved<'a> {
+    pub user_id: Uuid,
+    pub access: &'a Access,
+    pub client_id: &'a str,
+    pub client_name: &'a str,
+    pub client_kind: &'a str,
+    pub redirect_uri: &'a str,
+    pub state: &'a str,
+    pub code_challenge: &'a str,
+}
+
+/// Records the approval as a short-lived code and returns where the browser goes with it.
+pub async fn issue_code(state: &AppState, approved: &Approved<'_>) -> sqlx::Result<String> {
     let code = random_token();
     sqlx::query(
         "INSERT INTO oauth_codes (code_hash, user_id, client_id, client_name, client_kind, redirect_uri, code_challenge,
@@ -585,21 +590,30 @@ pub async fn approve(
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(sha256_hex(code.as_bytes()))
-    .bind(user_id)
-    .bind(&client.client_id)
-    .bind(&client.name)
-    .bind(client.kind.as_str())
-    .bind(&request.redirect_uri)
-    .bind(&request.code_challenge)
-    .bind(JsonColumn(access))
+    .bind(approved.user_id)
+    .bind(approved.client_id)
+    .bind(approved.client_name)
+    .bind(approved.client_kind)
+    .bind(approved.redirect_uri)
+    .bind(approved.code_challenge)
+    .bind(JsonColumn(approved.access))
     .bind(Utc::now() + CODE_LIFETIME)
     .execute(&state.db)
     .await?;
     let mut parameters = vec![("code", code.as_str())];
-    if !request.state.is_empty() {
-        parameters.push(("state", &request.state));
+    if !approved.state.is_empty() {
+        parameters.push(("state", approved.state));
     }
-    Ok(redirect_with(&request.redirect_uri, &parameters, &issuer(&state.config)))
+    Ok(redirect_with(approved.redirect_uri, &parameters, &issuer(&state.config)))
+}
+
+/// Where the browser goes back to when the user said no.
+pub fn denied_redirect(state: &AppState, redirect_uri: &str, client_state: &str) -> String {
+    let mut parameters = vec![("error", "access_denied"), ("error_description", "the user denied the request")];
+    if !client_state.is_empty() {
+        parameters.push(("state", client_state));
+    }
+    redirect_with(redirect_uri, &parameters, &issuer(&state.config))
 }
 
 /// RFC 7636's unreserved alphabet at 43 to 128 characters: a verifier or an S256 challenge.
@@ -892,6 +906,7 @@ pub async fn revoke(db: &PgPool, user_id: Uuid, grant_id: Uuid) -> sqlx::Result<
 
 pub async fn cleanup(db: &PgPool) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'").execute(db).await?;
+    sqlx::query("DELETE FROM oauth_requests WHERE expires_at < now() - interval '1 day'").execute(db).await?;
     sqlx::query("DELETE FROM oauth_tokens WHERE expires_at < now()").execute(db).await?;
     sqlx::query(
         "DELETE FROM oauth_clients WHERE last_used_at < now() - interval '30 days'

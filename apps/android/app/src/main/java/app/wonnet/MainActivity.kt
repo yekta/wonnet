@@ -19,6 +19,7 @@ import app.wonnet.core.AddressBook
 import app.wonnet.core.Appearance
 import app.wonnet.core.KeyHandler
 import app.wonnet.core.Notifier
+import app.wonnet.core.openConnect
 import app.wonnet.screens.Root
 import app.wonnet.screens.LocalSearchFocus
 import app.wonnet.theme.LocalDark
@@ -26,7 +27,8 @@ import app.wonnet.theme.Tokens
 
 /**
  * The app's one screen. `--ez demo true` starts it on made-up mail that never connects; the
- * browser comes back here from a Google or Microsoft sign-in, and a notification's tap opens its thread.
+ * browser comes back here from a Google or Microsoft sign-in or with an application asking to
+ * connect, and a notification's tap opens its thread.
  */
 class MainActivity : ComponentActivity() {
     private val store get() = App.store
@@ -36,8 +38,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store.start(demo = intent.getBooleanExtra("demo", false))
-        // Recents and a restored activity bring back the intent it started with, and its old thread.
-        if (savedInstanceState != null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) intent.removeExtra(Notifier.THREAD)
+        // Recents and a restored activity bring back the intent it started with: its old thread and its link, long answered.
+        if (savedInstanceState != null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+            intent.removeExtra(Notifier.THREAD)
+            intent.data = null
+        }
         received(intent)
         setContent {
             val dark = when (store.appearance) {
@@ -59,9 +64,14 @@ class MainActivity : ComponentActivity() {
         received(intent)
     }
 
-    /** A sign-in coming back, or a notification's thread. */
+    /** A sign-in coming back, an application asking to connect, or a notification's thread. */
     private fun received(intent: Intent) {
-        intent.data?.takeIf { it.scheme == "wonnet" }?.let { store.finishSignIn(it.toString()) }
+        intent.data?.takeIf { it.scheme == "wonnet" }?.let { link ->
+            when (link.host) {
+                "auth" -> store.finishSignIn(link.toString())
+                "connect" -> store.openConnect(link.toString())
+            }
+        }
         intent.getStringExtra(Notifier.THREAD)?.let { thread ->
             intent.removeExtra(Notifier.THREAD)
             store.showThread(thread)

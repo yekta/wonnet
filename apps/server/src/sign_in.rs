@@ -2,8 +2,7 @@
 //! `/auth/{google,microsoft}/start`, the provider asks for consent, and the browser is sent back
 //! to `wonnet://auth` with a one-time code that only the app holding the secret behind the
 //! challenge can use. A link ticket in the start URL adds the account to the user who asked for
-//! the ticket. A start URL with `next` instead signs the browser in to one of the server's own
-//! pages (`web.rs`) and goes back to it.
+//! the ticket.
 
 use std::collections::HashMap;
 
@@ -18,7 +17,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::{NewAccount, NewSignIn, SignInUser};
-use crate::{AppState, db, google, microsoft, random_token, sha256_hex, web};
+use crate::{AppState, db, google, microsoft, random_token, sha256_hex};
 
 fn is_sha256_hex(text: &str) -> bool {
     text.len() == 64 && text.chars().all(|character| character.is_ascii_hexdigit())
@@ -75,16 +74,12 @@ pub async fn microsoft_start(State(state): State<AppState>, Query(query): Query<
 
 async fn start(state: &AppState, query: &HashMap<String, String>, provider: Provider) -> Response {
     let text = |key: &str| query.get(key).map(String::as_str).unwrap_or_default();
-    let (challenge, app_state, ticket, next) = (text("challenge"), text("state"), text("ticket"), text("next"));
-    let web_next = (!next.is_empty()).then_some(next);
-    if web_next.is_some_and(|next| !web::safe_next(next)) {
-        return failed("This sign-in link is malformed. Start again.");
-    }
+    let (challenge, app_state, ticket) = (text("challenge"), text("state"), text("ticket"));
     let from_app = is_sha256_hex(challenge) && !app_state.is_empty() && app_state.len() <= 200;
-    if web_next.is_none() && !from_app {
+    if !from_app {
         return failed("This sign-in link is malformed. Start again.");
     }
-    let link_user_id = match ticket.is_empty() || web_next.is_some() {
+    let link_user_id = match ticket.is_empty() {
         true => None,
         false => match db::take_link_ticket(&state.db, &sha256_hex(ticket.as_bytes())).await {
             Ok(Some(user_id)) => Some(user_id),
@@ -97,8 +92,7 @@ async fn start(state: &AppState, query: &HashMap<String, String>, provider: Prov
     };
 
     let (id, verifier, nonce) = (random_token(), random_token(), random_token());
-    let sign_in =
-        NewSignIn { id: &id, challenge, app_state, verifier: &verifier, nonce: &nonce, link_user_id, web_next };
+    let sign_in = NewSignIn { id: &id, challenge, app_state, verifier: &verifier, nonce: &nonce, link_user_id };
     if let Err(error) = db::create_sign_in(&state.db, &sign_in).await {
         tracing::error!("couldn't save a sign-in: {error}");
         return failed("Something went wrong. Try again in a moment.");
@@ -132,10 +126,8 @@ async fn callback(state: &AppState, query: &HashMap<String, String>, provider: P
         }
     };
     let denied = !text("error").is_empty() || text("code").is_empty();
-    match (&sign_in.web_next, denied) {
-        (Some(next), true) => return Redirect::to(next).into_response(),
-        (None, true) => return back(&[("error", "access_denied"), ("state", &sign_in.app_state)]),
-        _ => {}
+    if denied {
+        return back(&[("error", "access_denied"), ("state", &sign_in.app_state)]);
     }
 
     let (http, config, code) = (&state.http, &state.config, text("code"));
@@ -156,17 +148,9 @@ async fn callback(state: &AppState, query: &HashMap<String, String>, provider: P
         }
     };
 
-    let user_id = match (sign_in.link_user_id, &sign_in.web_next) {
-        (Some(user_id), _) => user_id,
-        (None, Some(_)) => match web::web_user(state, provider, &email, "").await {
-            Ok(Ok(user_id)) => user_id,
-            Ok(Err(refusal)) => return failed(refusal),
-            Err(error) => {
-                tracing::error!("couldn't find who is signing in: {error}");
-                return failed("Something went wrong. Try again in a moment.");
-            }
-        },
-        (None, None) => match user_signing_in(&state.db, provider, &email, "").await {
+    let user_id = match sign_in.link_user_id {
+        Some(user_id) => user_id,
+        None => match user_signing_in(&state.db, provider, &email, "").await {
             Ok(Ok(user_id)) => user_id,
             Ok(Err(refusal)) => return failed(refusal),
             Err(error) => {
@@ -187,8 +171,5 @@ async fn callback(state: &AppState, query: &HashMap<String, String>, provider: P
         tracing::error!("couldn't complete a sign-in: {error}");
         return failed("Something went wrong. Try again in a moment.");
     }
-    match &sign_in.web_next {
-        Some(next) => web::start_session(state, user_id, next).await,
-        None => back(&[("code", &code), ("state", &sign_in.app_state)]),
-    }
+    back(&[("code", &code), ("state", &sign_in.app_state)])
 }

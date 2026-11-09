@@ -75,7 +75,7 @@ struct SettingsSheet: View {
 /// The sections in groups, each pushing its page, or chosen beside it on a wide sheet. While a
 /// search is typed, the groups it finds take their place.
 private struct SettingsSections: View {
-    private static let groups: [[SettingsSection]] = [[.general, .accounts], [.inbox, .reading, .writing]]
+    private static let groups: [[SettingsSection]] = [[.general, .accounts], [.inbox, .reading, .writing], [.connected]]
 
     @Environment(MailStore.self) private var store
     /// The section shown beside the list, on a wide sheet. Without one, each pushes.
@@ -149,6 +149,7 @@ private struct SettingsPage: View {
                 switch section {
                 case .general: GeneralPage()
                 case .accounts: AccountsPage()
+                case .connected: ConnectedAppsPage()
                 case .inbox: InboxPage()
                 case .reading: ReadingPage()
                 case .writing: WritingPage()
@@ -727,6 +728,87 @@ private struct BlockedPage: View {
         }
         .navigationTitle("Blocked Senders")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: Connected apps
+
+/// The MCP server to add Wonnet to an application with, to copy, and the applications let in, each
+/// swiped to revoke.
+private struct ConnectedAppsPage: View {
+    @Environment(MailStore.self) private var store
+    @State private var model = ConnectedAppsModel()
+    @State private var revoking: ConnectedApp?
+
+    var body: some View {
+        SettingsListSection("MCP Server", footer: "Use this URL with MCP clients such as Claude or ChatGPT. You can pick what each one can access.") {
+            Group {
+                if let address = model.address {
+                    CopyField(text: address)
+                } else {
+                    Spinner()
+                }
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+        }
+        .id("connect")
+        SettingsListSection(
+            "Connected apps",
+            footer: "They reach your mail as you chose when you approved them. Swipe one to revoke it: its access ends at once."
+        ) {
+            if let apps = model.apps {
+                if apps.isEmpty {
+                    Text("No applications are connected yet.").foregroundStyle(Tokens.mutedForeground.color)
+                }
+                ForEach(apps) { app in
+                    appRow(app)
+                        .swipeActions {
+                            Button("Revoke", role: .destructive) { revoking = app }
+                        }
+                }
+            } else if model.error == nil {
+                HStack(spacing: Space.s) {
+                    Spinner()
+                    Text("Loading").foregroundStyle(Tokens.mutedForeground.color)
+                }
+            }
+            if let error = model.error {
+                Notice(text: error, tone: .error, symbol: .circleAlert, action: "Try again") {
+                    Task { await model.load(store) }
+                }
+            }
+        }
+        .id("connected")
+        .task { await model.load(store) }
+        .confirmationDialog(
+            "Revoke \(revoking?.name ?? "")?", isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
+            titleVisibility: .visible, presenting: revoking
+        ) { app in
+            Button("Revoke", role: .destructive) { model.revoke(app, store) }
+        } message: { _ in
+            Text("It can no longer reach your mail. You can connect it again.")
+        }
+    }
+
+    private func appRow(_ app: ConnectedApp) -> some View {
+        HStack(spacing: Space.m) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Space.s) {
+                    Text(app.name).foregroundStyle(Tokens.foreground.color).lineLimit(1)
+                    if app.verified {
+                        Chip(title: "Verified", symbol: .shieldCheck, variant: .success)
+                    }
+                }
+                Text(app.access).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
+                Text(app.used).textStyle(.caption, color: Tokens.mutedStrongerForeground.color)
+            }
+            if model.revoking.contains(app.id) {
+                Spacer(minLength: Space.s)
+                Spinner()
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

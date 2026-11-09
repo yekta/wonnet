@@ -5,6 +5,7 @@
 mod body;
 mod chooser;
 mod compose;
+mod connect;
 mod failure;
 mod gallery;
 mod list;
@@ -178,8 +179,10 @@ impl MailWindow {
             return self.answer(Click { answer, activation: None }, window, cx);
         }
         cx.activate(true);
-        if line.starts_with("wonnet://") {
-            self.store.update(cx, |store, cx| store.finish_sign_in(line, cx));
+        match crate::platform::scheme::host(&line) {
+            Some("auth") => self.store.update(cx, |store, cx| store.finish_sign_in(line, cx)),
+            Some("connect") => self.store.update(cx, |store, cx| store.open_connect(line, cx)),
+            _ => {}
         }
     }
 
@@ -391,6 +394,13 @@ impl MailWindow {
                 }),
                 _ => return false,
             }
+            return true;
+        }
+        if store.connect.is_some() {
+            if stroke != "enter" {
+                return false;
+            }
+            self.store.update(cx, |store, cx| store.connect_default(cx));
             return true;
         }
         if store.settings.is_some() {
@@ -625,6 +635,7 @@ impl MailWindow {
                 .into_any_element(),
             );
         }
+        overlays.extend(connect::connect_sheet(&self.store, cx));
         if let Some(confirmation) = store.confirmation.clone() {
             overlays.push(confirmation_alert(self.store.clone(), confirmation, cx).into_any_element());
         }
@@ -668,6 +679,7 @@ impl MailWindow {
             || self.gallery.is_some()
             || store.confirmation.is_some()
             || store.contact.is_some()
+            || store.connect.is_some()
             || store.sidebar_over()
             || ui::menu_open(cx);
         let bottom = if store.toast.is_some() || self.updater.read(cx).banner_shown() { px(110.) } else { px(0.) };

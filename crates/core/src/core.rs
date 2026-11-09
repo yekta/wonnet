@@ -12,8 +12,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, anyhow, bail};
 use chrono::Local;
 use futures_util::StreamExt;
+use mail_protocol::access::{Access, Role};
 use mail_protocol::api::{
-    DevLoginRequest, DeviceRequest, ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse,
+    ConnectAnswer, ConnectRequest, ConnectedApp, ConnectedApps, DevLoginRequest, DeviceRequest, ExchangeRequest,
+    JmapAccountRequest, LinkTicket, TokenResponse,
 };
 use mail_protocol::wire::{ClientMessage, ServerMessage};
 use mail_protocol::{
@@ -26,13 +28,13 @@ use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
 use crate::api::{
-    ActReply, Action, Boot, Command, Config, Contacts, DraftReply, Event, Filter, MessageView, PreferenceValue,
-    Preferences, ThreadView, UiState,
+    ActReply, Action, Boot, Command, Config, ConnectedAppsView, Contacts, DraftReply, Event, Filter, MessageView,
+    PreferenceValue, Preferences, ThreadView, UiState,
 };
 use crate::link::{Link, LinkEvent};
 use crate::render::drafts::{self, ReplyKind};
 use crate::render::html::{self, Printed};
-use crate::render::{compose, dates, rows, times};
+use crate::render::{compose, connected, dates, rows, times};
 use crate::store::{Arrived, Batch, Reader, Store, Touched, parse_mailbox, shown_in, state_of};
 use crate::undo;
 
@@ -549,6 +551,13 @@ impl Core {
                 Ok(json!({}))
             }
             Command::Settle => return self.settle(id),
+            Command::McpServer => self.mcp_server(),
+            Command::ConnectedApps => return self.connected_apps(id),
+            Command::RevokeConnectedApp { app } => return self.revoke_connected_app(id, &app),
+            Command::ConnectRequest { url } => return self.connect_request(id, &url),
+            Command::AnswerConnectRequest { key, approve, access } => {
+                return self.answer_connect_request(id, &key, approve, access);
+            }
             Command::SetPushDevice { platform, token, topic, sandbox, key } => {
                 return self.set_push_device(id, DeviceRequest { platform, token, topic, sandbox, key });
             }
@@ -752,6 +761,130 @@ impl Core {
         self.arriving.clear();
         self.changed(Touched { mailboxes: true, preferences: true, ..Default::default() });
         Ok(())
+    }
+
+    /// The address applications connect to: as the server last gave it, else this server's.
+    fn mcp_address(&self) -> Option<String> {
+        let server = self.server().map(|server| format!("{}/mcp", server.trim_end_matches('/')));
+        self.store.meta("mcp_address").or(server)
+    }
+
+    fn mcp_server(&self) -> Result<Value> {
+        let address = match self.demo {
+            true => "https://wonnet.app/mcp".to_string(),
+            false => self.mcp_address().ok_or_else(|| anyhow!("Sign in to Wonnet first."))?,
+        };
+        Ok(json!({ "address": address }))
+    }
+
+    /// The server and the session to ask about connected apps with, or why there are none.
+    fn signed_in_server(&self) -> Result<(String, String)> {
+        if self.demo {
+            bail!("The demo can't connect applications.");
+        }
+        match (self.server(), self.token()) {
+            (Some(server), Some(token)) => Ok((server, token)),
+            _ => bail!("Sign in to Wonnet first."),
+        }
+    }
+
+    fn connected_apps(&mut self, id: u64) -> Option<Result<Value>> {
+        if self.demo {
+            let now = mail_protocol::now_ms();
+            let claude = ConnectedApp {
+                id: "demo-claude".into(),
+                client: "Claude".into(),
+                verified: true,
+                publisher: Some("claude.ai".into()),
+                access: Access { role: Role::Organizer, all_accounts: true, accounts: vec![], privileges: vec![] },
+                approved_at: now - 3 * 86_400_000,
+                used_at: Some(now - 5 * 60_000),
+            };
+            let accounts = self.store.accounts().unwrap_or_default();
+            let apps = connected::apps(vec![claude], &accounts, &Local::now());
+            let address = "https://wonnet.app/mcp".to_string();
+            return Some(serde_json::to_value(ConnectedAppsView { address, apps }).map_err(Into::into));
+        }
+        let (server, token) = match self.signed_in_server() {
+            Ok(signed_in) => signed_in,
+            Err(error) => return Some(Err(error)),
+        };
+        let http = self.http.clone();
+        self.spawn(
+            async move { crate::http::get::<ConnectedApps>(&http, &server, "/api/connected-apps", &token).await },
+            move |core, result| {
+                let view = result.and_then(|found| {
+                    core.store.set_meta("mcp_address", Some(&found.address))?;
+                    let accounts = core.store.accounts()?;
+                    let apps = connected::apps(found.apps, &accounts, &Local::now());
+                    Ok(ConnectedAppsView { address: found.address, apps })
+                });
+                core.reply(id, view.and_then(|view| Ok(serde_json::to_value(view)?)));
+            },
+        );
+        None
+    }
+
+    fn revoke_connected_app(&mut self, id: u64, app: &str) -> Option<Result<Value>> {
+        if self.demo {
+            return Some(Ok(json!({})));
+        }
+        let (server, token) = match self.signed_in_server() {
+            Ok(signed_in) => signed_in,
+            Err(error) => return Some(Err(error)),
+        };
+        let (http, path) = (self.http.clone(), format!("/api/connected-apps/{}", crate::http::encode(app)));
+        self.spawn(async move { crate::http::delete(&http, &server, &path, &token).await }, move |core, result| {
+            core.reply(id, result.map(|_| json!({})))
+        });
+        None
+    }
+
+    fn connect_request(&mut self, id: u64, url: &str) -> Option<Result<Value>> {
+        let key = reqwest::Url::parse(url)
+            .ok()
+            .filter(|url| url.scheme() == "wonnet" && url.host_str() == Some("connect"))
+            .and_then(|url| url.query_pairs().find(|(name, _)| name == "key").map(|(_, key)| key.into_owned()))
+            .filter(|key| !key.is_empty());
+        let Some(key) = key else {
+            return Some(Err(anyhow!("That link doesn't open a request. Connect again from the application.")));
+        };
+        let (server, token) = match self.signed_in_server() {
+            Ok(signed_in) => signed_in,
+            Err(error) => return Some(Err(error)),
+        };
+        let (http, path) = (self.http.clone(), format!("/api/connect/{}", crate::http::encode(&key)));
+        self.spawn(
+            async move { crate::http::get::<ConnectRequest>(&http, &server, &path, &token).await },
+            move |core, result| {
+                let view = result.and_then(|request| {
+                    let accounts = core.store.accounts()?;
+                    Ok(serde_json::to_value(connected::request(key, request, &accounts))?)
+                });
+                core.reply(id, view);
+            },
+        );
+        None
+    }
+
+    fn answer_connect_request(
+        &mut self,
+        id: u64,
+        key: &str,
+        approve: bool,
+        access: Option<Access>,
+    ) -> Option<Result<Value>> {
+        let (server, token) = match self.signed_in_server() {
+            Ok(signed_in) => signed_in,
+            Err(error) => return Some(Err(error)),
+        };
+        let (http, path) = (self.http.clone(), format!("/api/connect/{}", crate::http::encode(key)));
+        let answer = ConnectAnswer { approve, access };
+        self.spawn(
+            async move { crate::http::post::<Value>(&http, &server, &path, Some(&token), &answer).await },
+            move |core, result| core.reply(id, result.map(|_| json!({}))),
+        );
+        None
     }
 
     fn sign_in(&mut self, id: u64, provider: &str) -> Option<Result<Value>> {
