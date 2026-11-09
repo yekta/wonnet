@@ -120,6 +120,8 @@ public final class MailStore {
     var confirmation: Confirmation?
     /// An application's request to reach the mail, while the sheet that asks about it is up.
     var connecting: Connecting?
+    /// Goes up when an application got or lost access, for the connected apps shown to load again.
+    var connectedAppsRevision = 0
     /// A thread a notification asked to show, for iOS to push.
     var requestedThread: String?
     /// A notification's thread whose mail hasn't synced yet.
@@ -583,6 +585,8 @@ public final class MailStore {
             searchRows = found
         case .newMail(let messages):
             Notifier.shared.notify(messages)
+        case .connectedAppsChanged:
+            connectedAppsRevision += 1
         case .error(let message):
             show(message)
         case .other:

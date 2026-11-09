@@ -1954,6 +1954,8 @@ impl Core {
         match message {
             ServerMessage::Welcome { .. } => {
                 self.set_connection("online", None);
+                // An app may have connected while the socket was down.
+                self.emit(Event::ConnectedAppsChanged);
                 for (op_id, op) in self.store.outbox().unwrap_or_default() {
                     self.dispatch(op_id, op);
                 }
@@ -2020,6 +2022,7 @@ impl Core {
                 }
             }
             ServerMessage::Pong => {}
+            ServerMessage::ConnectedAppsChanged => self.emit(Event::ConnectedAppsChanged),
             ServerMessage::Refused { reason } => {
                 if reason == "signed_out" {
                     let _ = self.sign_out();

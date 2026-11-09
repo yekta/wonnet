@@ -3,6 +3,7 @@ package app.wonnet.core
 import android.content.Context
 import androidx.core.content.edit
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -117,6 +118,8 @@ class MailStore(private val context: Context) {
     var settingsQuery by mutableStateOf("")
     /** The application asking to connect, while its consent sheet is open. */
     var connecting by mutableStateOf<ConnectLink?>(null)
+    /** Goes up when an application got or lost access, for the connected apps shown to load again. */
+    var connectedAppsRevision by mutableIntStateOf(0)
     /** A question to answer before something that can't be taken back. */
     var confirmation by mutableStateOf<Confirmation?>(null)
     /** A thread a notification asked to show, for the screen to push. */
@@ -501,6 +504,7 @@ class MailStore(private val context: Context) {
                 searchRows = event.rows
             }
             is CoreEvent.NewMail -> Notifier.notify(event.messages, this)
+            CoreEvent.ConnectedAppsChanged -> connectedAppsRevision += 1
             is CoreEvent.Error -> show(event.message)
         }
     }

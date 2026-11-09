@@ -637,6 +637,12 @@ impl Store {
                     self.notify(messages, cx);
                 }
             }
+            // An app connected or was revoked, here or elsewhere: the list shown loads again.
+            Event::ConnectedAppsChanged => {
+                if self.settings == Some(SettingsSection::Connected) {
+                    self.load_connected(cx);
+                }
+            }
             Event::Error { message } => self.show(message, cx),
             Event::Reply { .. } => {}
         }

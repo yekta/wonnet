@@ -369,6 +369,30 @@ async fn revoking_an_app_ends_its_access(db: PgPool) {
 }
 
 #[sqlx::test]
+async fn the_apps_hear_when_an_app_connects_or_is_revoked(db: PgPool) {
+    let server = Server::start(db).await;
+    let (ann, ann_id, _) = server.gmail_user("ann@gmail.com").await;
+    let pokes = server.state.hub.subscribe(ann_id);
+    let told_after = async |seen: u64| {
+        let mut pokes = pokes.clone();
+        let waited = tokio::time::timeout(std::time::Duration::from_secs(5), pokes.wait_for(|now| now.apps > seen));
+        assert!(waited.await.is_ok(), "the apps weren't told");
+    };
+
+    // The app is listed once it has its tokens, after the approval.
+    let (client_id, code) = server.approved_code(&ann, reader()).await;
+    let seen = pokes.borrow().apps;
+    assert_eq!(server.tokens(&client_id, &code).await.status(), 200);
+    told_after(seen).await;
+
+    let listed: Value = server.get("/api/connected-apps", Some(&ann)).await.json().await.unwrap();
+    let grant = listed["apps"][0]["id"].as_str().unwrap().to_string();
+    let seen = pokes.borrow().apps;
+    assert_eq!(server.delete(&format!("/api/connected-apps/{grant}"), Some(&ann)).await.status(), 200);
+    told_after(seen).await;
+}
+
+#[sqlx::test]
 async fn only_the_browser_that_asked_gets_the_answer(db: PgPool) {
     let server = Server::start(db).await;
     let (session, ..) = server.gmail_user("ann@gmail.com").await;

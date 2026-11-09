@@ -434,6 +434,7 @@ sealed interface CoreEvent {
     data class SendFailed(val opId: String, val error: String, val draft: Draft, val draftId: String?) : CoreEvent
     data class SearchResults(val request: Long, val rows: List<ThreadRow>) : CoreEvent
     data class NewMail(val messages: List<NewMailItem>) : CoreEvent
+    data object ConnectedAppsChanged : CoreEvent
     data class Error(val message: String) : CoreEvent
 
     companion object {
@@ -446,6 +447,7 @@ sealed interface CoreEvent {
             )
             "search_results" -> SearchResults(json.long("request"), ThreadRow.list(json, "rows"))
             "new_mail" -> NewMail(json.objects("messages").map(NewMailItem::read))
+            "connected_apps_changed" -> ConnectedAppsChanged
             "error" -> Error(json.string("message"))
             else -> null
         }

@@ -82,6 +82,9 @@ pub enum ServerMessage {
         request: u64,
     },
     Pong,
+    /// An application got or lost access to the user's mail: the list in Settings is out of date.
+    /// Clients from before it ignore it.
+    ConnectedAppsChanged,
     /// The socket is closing: a bad token or a protocol the server doesn't speak.
     Refused {
         reason: String,

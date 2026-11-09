@@ -480,7 +480,7 @@ private fun ConnectedAppsPage(store: MailStore, anchor: (String) -> Modifier) {
             serverError = error.message
         }
     }
-    LaunchedEffect(loads) {
+    LaunchedEffect(loads, store.connectedAppsRevision) {
         listError = null
         try {
             listed = store.connectedApps()
