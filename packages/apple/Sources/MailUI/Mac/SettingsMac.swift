@@ -482,7 +482,7 @@ private struct ConnectedAppsSettings: View {
                 }
             }
         }
-        .task { await model.load(store) }
+        .task(id: store.connectedAppsRevision) { await model.load(store) }
     }
 
     private func failure(_ message: String) -> some View {

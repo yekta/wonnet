@@ -63,6 +63,7 @@ async fn run(state: AppState, socket: WebSocket) {
     });
 
     let mut changed = state.hub.subscribe(user_id);
+    let mut seen = *changed.borrow_and_update();
     let mut session = Session {
         state: state.clone(),
         user_id,
@@ -81,7 +82,15 @@ async fn run(state: AppState, socket: WebSocket) {
     while running {
         tokio::select! {
             result = changed.changed() => {
-                running = result.is_ok() && session.send_changes().await && session.report_sends().await;
+                let pokes = *changed.borrow_and_update();
+                running = result.is_ok();
+                if running && pokes.changes != seen.changes {
+                    running = session.send_changes().await && session.report_sends().await;
+                }
+                if running && pokes.apps != seen.apps {
+                    running = session.send(ServerMessage::ConnectedAppsChanged).await;
+                }
+                seen = pokes;
             }
             frame = stream.next() => {
                 running = match frame {

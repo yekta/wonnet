@@ -65,7 +65,8 @@ final class ConnectedAppsModel {
         defer { loading = false }
         do {
             let found = try await store.bridge.call("connected_apps", as: ConnectedAppsList.self)
-            apps = found.apps
+            // A reload, when an app connected: the new row slides in.
+            if apps == nil { apps = found.apps } else { withAnimation { apps = found.apps } }
             address = found.address
         } catch {
             self.error = error.localizedDescription

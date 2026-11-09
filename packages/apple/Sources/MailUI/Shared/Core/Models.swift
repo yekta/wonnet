@@ -467,6 +467,7 @@ enum CoreEvent: Decodable {
     case sendFailed(opId: String, error: String, draft: Draft, draftId: String?)
     case searchResults(request: UInt64, rows: [ThreadRow])
     case newMail(messages: [NewMailItem])
+    case connectedAppsChanged
     case error(message: String)
     case other
 
@@ -495,6 +496,8 @@ enum CoreEvent: Decodable {
             self = .searchResults(request: try values.decode(UInt64.self, forKey: .request), rows: try values.decode([ThreadRow].self, forKey: .rows))
         case "new_mail":
             self = .newMail(messages: try values.decode([NewMailItem].self, forKey: .messages))
+        case "connected_apps_changed":
+            self = .connectedAppsChanged
         case "error":
             self = .error(message: try values.decode(String.self, forKey: .message))
         default:

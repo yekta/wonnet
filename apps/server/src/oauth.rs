@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 use crate::access::{Access, Caller};
 use crate::config::Config;
-use crate::{AppState, random_token, sha256_hex, unsubscribe};
+use crate::{AppState, hub, random_token, sha256_hex, unsubscribe};
 
 pub const CODE_LIFETIME: Duration = Duration::minutes(1);
 pub const ACCESS_LIFETIME: Duration = Duration::hours(1);
@@ -728,6 +728,7 @@ async fn exchange_code(state: &AppState, request: &TokenRequest) -> Result<Value
         .execute(&mut *tx)
         .await?;
     let tokens = mint(&mut tx, grant_id).await?;
+    hub::notify_apps(&mut tx, code.user_id).await?;
     tx.commit().await?;
     Ok(tokens)
 }
@@ -805,11 +806,17 @@ async fn mint(tx: &mut sqlx::PgConnection, grant_id: Uuid) -> sqlx::Result<Value
     }))
 }
 
+/// Ends a grant and its tokens, and tells its user's apps once the transaction commits.
 async fn revoke_grant(tx: &mut sqlx::PgConnection, grant_id: Uuid) -> sqlx::Result<()> {
-    sqlx::query("UPDATE oauth_grants SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL")
-        .bind(grant_id)
-        .execute(&mut *tx)
-        .await?;
+    let user_id: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE oauth_grants SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING user_id",
+    )
+    .bind(grant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if let Some(user_id) = user_id {
+        hub::notify_apps(&mut *tx, user_id).await?;
+    }
     sqlx::query("DELETE FROM oauth_tokens WHERE grant_id = $1").bind(grant_id).execute(&mut *tx).await?;
     Ok(())
 }

@@ -780,7 +780,7 @@ private struct ConnectedAppsPage: View {
             }
         }
         .id("connected")
-        .task { await model.load(store) }
+        .task(id: store.connectedAppsRevision) { await model.load(store) }
         .confirmationDialog(
             "Revoke \(revoking?.name ?? "")?", isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
             titleVisibility: .visible, presenting: revoking

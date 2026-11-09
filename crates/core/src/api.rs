@@ -494,6 +494,9 @@ pub enum Event {
     NewMail {
         messages: Vec<NewMail>,
     },
+    /// An application got or lost access to the user's mail, here or on another device: ask for
+    /// `ConnectedApps` again while they are shown.
+    ConnectedAppsChanged,
     Error {
         message: String,
     },
