@@ -13,7 +13,8 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use chrono::{DateTime, Duration, Utc};
 use mail_protocol::APP_CONNECT;
-use mail_protocol::api::{ConnectAnswer, ConnectRequest, ConnectedApp, ConnectedApps};
+use mail_protocol::access::{Conditions, MAILBOXES, Privilege};
+use mail_protocol::api::{AccessChange, ConnectAnswer, ConnectRequest, ConnectedApp, ConnectedApps};
 use maud::Markup;
 use serde_json::json;
 use sqlx::types::Json as JsonColumn;
@@ -301,30 +302,74 @@ pub async fn answer(
 }
 
 /// The access as it is kept: the accounts picked, all of them the user's, or none when it reaches
-/// every account.
+/// every account; its conditions tidied, their labels the user's own in those accounts.
 async fn checked(state: &AppState, user_id: Uuid, mut access: Access) -> AppResult<Access> {
+    access.privileges.retain(|privilege| *privilege != Privilege::ReadBodies);
     access.privileges.sort_by_key(|privilege| privilege.as_str());
     access.privileges.dedup();
+    access.reads.sort();
+    access.reads.dedup();
+    access.only = access.only.normalized().map_err(AppError::bad_request)?;
+    access.never = access.never.normalized().map_err(AppError::bad_request)?;
     if access.all_accounts {
         access.accounts.clear();
-        return Ok(access);
+    } else {
+        access.accounts.sort();
+        access.accounts.dedup();
+        if access.accounts.is_empty() {
+            return Err(AppError::bad_request("Pick at least one account."));
+        }
+        let ids: Vec<Uuid> = access.accounts.iter().filter_map(|id| id.parse().ok()).collect();
+        let owned: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM accounts WHERE user_id = $1 AND id = ANY($2) AND NOT deleted")
+                .bind(user_id)
+                .bind(&ids)
+                .fetch_one(&state.db)
+                .await?;
+        if owned as usize != access.accounts.len() {
+            return Err(AppError::bad_request("One of those accounts isn't yours anymore."));
+        }
     }
-    access.accounts.sort();
-    access.accounts.dedup();
-    if access.accounts.is_empty() {
-        return Err(AppError::bad_request("Pick at least one account."));
-    }
-    let ids: Vec<Uuid> = access.accounts.iter().filter_map(|id| id.parse().ok()).collect();
-    let owned: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM accounts WHERE user_id = $1 AND id = ANY($2) AND NOT deleted")
-            .bind(user_id)
-            .bind(&ids)
-            .fetch_one(&state.db)
-            .await?;
-    if owned as usize != access.accounts.len() {
-        return Err(AppError::bad_request("One of those accounts isn't yours anymore."));
+    let labels = |conditions: &Conditions| -> Vec<String> {
+        conditions.labels.iter().filter(|label| !MAILBOXES.contains(&label.as_str())).cloned().collect()
+    };
+    let wanted: Vec<String> = labels(&access.only).into_iter().chain(labels(&access.never)).collect();
+    if !wanted.is_empty() {
+        let ids: Vec<Uuid> = wanted.iter().filter_map(|id| id.parse().ok()).collect();
+        let known: Vec<(Uuid, Uuid)> = sqlx::query_as(
+            "SELECT labels.id, labels.account_id FROM labels JOIN accounts ON accounts.id = labels.account_id
+             WHERE accounts.user_id = $1 AND NOT accounts.deleted AND NOT labels.deleted AND labels.id = ANY($2)",
+        )
+        .bind(user_id)
+        .bind(&ids)
+        .fetch_all(&state.db)
+        .await?;
+        let fits = |label: &String| {
+            known.iter().any(|(id, account)| id.to_string() == *label && access.reaches(&account.to_string()))
+        };
+        if !wanted.iter().all(fits) {
+            return Err(AppError::bad_request("One of those labels isn't in the accounts it reaches anymore."));
+        }
     }
     Ok(access)
+}
+
+/// `PUT /api/connected-apps/{id}`: what the app may do from now on, at once.
+pub async fn change(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(change): Json<AccessChange>,
+) -> AppResult<Json<serde_json::Value>> {
+    let user_id = api::user(&state, &headers).await?;
+    let access = checked(&state, user_id, change.access).await?;
+    match oauth::set_access(&state.db, user_id, id, &access).await? {
+        true => {
+            tracing::info!("user {user_id} changed what connected app {id} may do");
+            Ok(Json(json!({})))
+        }
+        false => Err(AppError::new(StatusCode::NOT_FOUND, "That application isn't connected.")),
+    }
 }
 
 /// `GET /api/connected-apps`.

@@ -55,6 +55,7 @@ import app.wonnet.theme.Text
 import app.wonnet.theme.TextStyle
 import app.wonnet.theme.Tokens
 import app.wonnet.theme.shadow
+import app.wonnet.theme.symbolSide
 
 /** A thing in a list with its controls at the end: an account, a snippet, a split. `symbol` or `dot` starts it. */
 @Composable
@@ -135,8 +136,9 @@ fun NavRow(
 
 /**
  * One choice of a short list: a suggestion, a time, a snippet, a sender. It starts with a
- * `symbol`, an account's `dot` or a person's `avatar`; `checked` is the one in force, with a
- * check at its end. `highlighted` is the one the arrow keys are on.
+ * `symbol`, an account's `dot` or a person's `avatar`. In a list of choices `checked` is given:
+ * the check's column is always at the row's end and the check shows in it on the one in force,
+ * so nothing moves when it comes or goes. `highlighted` is the one the arrow keys are on.
  */
 @Composable
 fun ChoiceRow(
@@ -146,7 +148,7 @@ fun ChoiceRow(
     symbol: Symbol? = null,
     dot: Color? = null,
     avatar: Address? = null,
-    checked: Boolean = false,
+    checked: Boolean? = null,
     highlighted: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit,
@@ -174,9 +176,15 @@ fun ChoiceRow(
             }
             Text(title, TextStyle.Body, Modifier.weight(1f), maxLines = 1)
             detail?.let { Text(it, TextStyle.Caption, Modifier.padding(start = Space.xs), maxLines = 1) }
-            if (checked) Icon(Symbol.Check, 14f, Tokens.foreground.color)
+            if (checked != null) CheckColumn(checked)
         }
     }
+}
+
+/** The column of a choice's check, as wide as the check whether it shows or not. */
+@Composable
+fun CheckColumn(checked: Boolean) {
+    Box(Modifier.size(symbolSide(14f))) { if (checked) Icon(Symbol.Check, 14f, Tokens.foreground.color) }
 }
 
 /** Choices under a field, one highlighted and scrolled to as the keys move; `empty` when there are none. */

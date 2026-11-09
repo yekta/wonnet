@@ -52,6 +52,11 @@ pub async fn get<T: DeserializeOwned>(http: &reqwest::Client, server: &str, path
     Ok(answered(http.get(url(server, path)).bearer_auth(token)).await?.json().await?)
 }
 
+pub async fn put(http: &reqwest::Client, server: &str, path: &str, token: &str, body: &impl Serialize) -> Result<()> {
+    answered(http.put(url(server, path)).bearer_auth(token).json(body)).await?;
+    Ok(())
+}
+
 pub async fn delete(http: &reqwest::Client, server: &str, path: &str, token: &str) -> Result<()> {
     answered(http.delete(url(server, path)).bearer_auth(token)).await?;
     Ok(())

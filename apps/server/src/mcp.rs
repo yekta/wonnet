@@ -32,17 +32,24 @@ accounts (Gmail, Outlook, JMAP), which Wonnet's server keeps in sync with their 
 
 Call list_accounts first: it lists the accounts this connection reaches and what it may do. Its role is reader or \
 organizer: a reader searches and reads, an organizer also archives, labels, trashes, snoozes, blocks senders and adds \
-rules. Without the read_bodies privilege get_thread gives the snippets and not the bodies; without unsubscribe there \
-is no unsubscribe tool. Do not retry for what the access leaves out.
+rules. access.reads says which parts of a message it reads beyond who sent it, to whom and when: subject, body (with \
+the snippet) and attachments. A part it doesn't read is left out of every answer and can't be searched. With \
+some_mail_only, the user kept some of their mail from it: that mail isn't there for it, and rules, splits and blocks, \
+which act on all mail, aren't either. Without unsubscribe there is no unsubscribe tool. Do not retry for what the \
+access leaves out.
 
-search takes Gmail's operators and answers messages newest first, a page at a time: pass next_cursor for the next \
-page. Every message has its thread_id; get_thread, modify and mute_thread act on whole threads, as the apps do. The \
-filters bulk, important, unanswered and unsubscribable narrow any search.
+search answers messages newest first, a page at a time: pass next_cursor for the next page. Narrow it with Gmail's \
+operators in query, or precisely with the filters, which list_senders and modify take too: from, to and cc take \
+exact addresses, @domains or name text; subject and attachment take exact text; body takes words and phrases; labels \
+takes label names and mailboxes (inbox, sent, archive...); each has a not_ twin that leaves mail out; and unread, \
+starred, snoozed, has_attachment, after, before, bulk, important, unanswered and unsubscribable. Every filter given \
+holds at once, together with the query. Every message has its thread_id; get_thread, modify and mute_thread act on \
+whole threads, as the apps do.
 
 To sort or clean up a lot of mail, start with list_senders: it groups mail by sender or domain with counts, whether \
-it is bulk and how to unsubscribe from it. Then change a sender's mail at once with modify and a query such as \
-from:news@shop.com. modify with a query only counts and shows what it would change until it is called again with \
-confirm: true; show the user what a large change will do before confirming it. Trashed mail can be brought back; \
+it is bulk and how to unsubscribe from it. Then change a sender's mail at once with modify and a search such as \
+from: [\"news@shop.com\"]. modify with a search only counts and shows what it would change until it is called again \
+with confirm: true; show the user what a large change will do before confirming it. Trashed mail can be brought back; \
 nothing is deleted for good.
 
 Labels belong to one account. To sort new mail as it arrives, create_rule labels it, takes it out of the inbox or \
@@ -97,8 +104,8 @@ fn organizer(access: &Access) -> bool {
     access.organizes()
 }
 
-fn organizer_of_every_account(access: &Access) -> bool {
-    access.organizes() && access.all_accounts
+fn organizer_of_all_mail(access: &Access) -> bool {
+    access.organizes() && access.whole()
 }
 
 fn unsubscriber(access: &Access) -> bool {
@@ -125,7 +132,8 @@ const SPECS: &[Spec] = &[
     Spec {
         name: "search",
         title: "Search mail",
-        description: "Messages matching a search with Gmail's operators and the filters, newest first, a page at a time.",
+        description: "Messages matching a search, newest first, a page at a time: Gmail's operators in query, and \
+            filters on the sender, recipients, subject, body, labels, attachments, dates and state.",
         schema: arguments::<tools::SearchArgs>,
         annotations: reading,
         offered: anyone,
@@ -169,8 +177,8 @@ const SPECS: &[Spec] = &[
         name: "modify",
         title: "Change threads",
         description: "Archives, moves to the inbox, trashes, marks as spam, marks read or unread, stars, labels or \
-            snoozes whole threads, given messages of them or a search. With a search it only counts and shows what \
-            it would change until called with confirm: true.",
+            snoozes whole threads, given messages of them or a search (query, filters or both). With a search it \
+            only counts and shows what it would change until called with confirm: true.",
         schema: arguments::<tools::ModifyArgs>,
         annotations: destructive,
         offered: organizer,
@@ -190,7 +198,7 @@ const SPECS: &[Spec] = &[
             here stays where it is.",
         schema: arguments::<tools::BlockArgs>,
         annotations: destructive,
-        offered: organizer_of_every_account,
+        offered: organizer_of_all_mail,
     },
     Spec {
         name: "mute_thread",
@@ -240,7 +248,7 @@ const SPECS: &[Spec] = &[
         description: "Splits every inbox into Important, the custom splits and Other (bulk mail), or shows it whole.",
         schema: arguments::<tools::SplitInboxArgs>,
         annotations: changing,
-        offered: organizer_of_every_account,
+        offered: organizer_of_all_mail,
     },
     Spec {
         name: "unsubscribe",

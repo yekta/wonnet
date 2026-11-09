@@ -4,7 +4,8 @@ import SwiftUI
 /// of them can be (`.one`), a square one when any can (`.any`), filled in the primary colour with
 /// a check once picked. Then a symbol or an account's dot, its name and a line about it. The row
 /// hovers in the card's accent; rows go one under the other with a hairline between them. An
-/// `indent` sets a row under the one it belongs to, its fill still across the card.
+/// `indent` sets a row under the one it belongs to, its fill still across the card. A `locked` row
+/// is always so: a lock stands in its mark's place, and it can't be clicked or hovered.
 struct MarkRow: View {
     enum Kind {
         case one, any
@@ -16,15 +17,21 @@ struct MarkRow: View {
     var dot: Color?
     var kind: Kind = .one
     var indent: CGFloat = 0
+    var locked = false
     let checked: Bool
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Face(title: title, detail: detail, symbol: symbol, dot: dot, kind: kind, indent: indent, checked: checked)
+        if locked {
+            Face(title: title, detail: detail, symbol: symbol, dot: dot, kind: kind, indent: indent, checked: checked, locked: true)
+                .accessibilityAddTraits(.isSelected)
+        } else {
+            Button(action: action) {
+                Face(title: title, detail: detail, symbol: symbol, dot: dot, kind: kind, indent: indent, checked: checked, locked: false)
+            }
+            .buttonStyle(.press)
+            .accessibilityAddTraits(checked ? .isSelected : [])
         }
-        .buttonStyle(.press)
-        .accessibilityAddTraits(checked ? .isSelected : [])
     }
 
     private struct Face: View {
@@ -35,11 +42,17 @@ struct MarkRow: View {
         let kind: Kind
         let indent: CGFloat
         let checked: Bool
+        let locked: Bool
         @Environment(\.hovered) private var hovered
 
         var body: some View {
             HStack(alignment: .top, spacing: Space.s + 2) {
-                Mark(kind: kind, checked: checked, hovered: hovered)
+                if locked {
+                    Image(.lock, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                        .frame(width: Theme.selectCircle * Platform.scale, height: line)
+                } else {
+                    Mark(kind: kind, checked: checked, hovered: hovered)
+                }
                 if let dot {
                     Circle().fill(dot).frame(width: 8, height: 8).frame(width: 16, height: line)
                 } else if let symbol {

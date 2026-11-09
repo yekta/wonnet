@@ -72,7 +72,7 @@ private struct MailSheets: ViewModifier {
                         SettingsSheet()
                         #endif
                     case .gallery: GalleryView()
-                    case .connect(let connecting): ConnectSheet(url: connecting.url)
+                    case .connect(let connecting): ConnectSheet(connecting: connecting)
                     }
                 }
                 .environment(store)

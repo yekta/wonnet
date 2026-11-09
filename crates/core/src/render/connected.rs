@@ -1,26 +1,12 @@
 //! Connected apps as Settings lists them, and an application's request as the app asks about it.
 
 use chrono::{DateTime, TimeZone, Utc};
-use mail_protocol::access::{Access, Privilege, Role};
+use mail_protocol::access::Access;
 use mail_protocol::api::{ConnectRequest, ConnectedApp};
 
 use crate::api::{AccessChoice, ConnectRequestView, ConnectedAppView};
-use crate::render::dates;
-use crate::store::LocalAccount;
-
-fn role_title(role: Role) -> &'static str {
-    match role {
-        Role::Reader => "Reader",
-        Role::Organizer => "Organizer",
-    }
-}
-
-fn privilege_title(privilege: Privilege) -> &'static str {
-    match privilege {
-        Privilege::ReadBodies => "Reads whole messages",
-        Privilege::Unsubscribe => "Unsubscribes from lists",
-    }
-}
+use crate::render::{access, dates};
+use crate::store::{LocalAccount, LocalLabel};
 
 fn provider_name(provider: &str) -> &'static str {
     match provider {
@@ -54,24 +40,10 @@ where
     }
 }
 
-/// "Organizer · Every account · Reads whole messages": what the app may do, the accounts named as
-/// the sidebar names them.
-pub fn access(access: &Access, accounts: &[LocalAccount]) -> String {
-    let mut parts = vec![role_title(access.role).to_string()];
-    match access.all_accounts {
-        true => parts.push("Every account".into()),
-        false => {
-            let reached: Vec<&str> = accounts.iter().filter(|account| access.reaches(&account.id)).map(title).collect();
-            parts.push(if reached.is_empty() { "No accounts left".into() } else { reached.join(", ") });
-        }
-    }
-    parts.extend(access.privileges.iter().map(|privilege| privilege_title(*privilege).to_string()));
-    parts.join(" · ")
-}
-
 pub fn apps<Tz: TimeZone>(
     apps: Vec<ConnectedApp>,
     accounts: &[LocalAccount],
+    labels: &[LocalLabel],
     now: &DateTime<Tz>,
 ) -> Vec<ConnectedAppView>
 where
@@ -83,8 +55,9 @@ where
                 Some(used) => format!("Used {}", ago(used, now)),
                 None => "Not used yet".into(),
             };
+            let sentence = access::plain(&access::sentence(&app.client, &app.access, accounts, labels));
             ConnectedAppView {
-                access: access(&app.access, accounts),
+                access: settled(&sentence, &app.client),
                 used: format!("Approved {} · {used}", ago(app.approved_at, now)),
                 id: app.id,
                 name: app.client,
@@ -94,12 +67,21 @@ where
         .collect()
 }
 
+/// The sentence of an app already approved, under its name: "Reads the subject of mail in…".
+fn settled(sentence: &str, client: &str) -> String {
+    let rest = sentence.strip_prefix(&format!("{client} will ")).unwrap_or(sentence);
+    [("read ", "Reads "), ("see ", "Sees "), ("reach ", "Reaches ")]
+        .iter()
+        .find_map(|(will, does)| rest.strip_prefix(will).map(|rest| format!("{does}{rest}")))
+        .unwrap_or_else(|| rest.to_string())
+}
+
 fn choice(id: &str, title: &str, detail: &str, symbol: &str) -> AccessChoice {
     AccessChoice { id: id.into(), title: title.into(), detail: detail.into(), symbol: Some(symbol.into()), color: None }
 }
 
-pub fn request(key: String, request: ConnectRequest, accounts: &[LocalAccount]) -> ConnectRequestView {
-    let accounts = accounts
+fn account_choices(accounts: &[LocalAccount]) -> Vec<AccessChoice> {
+    accounts
         .iter()
         .map(|account| AccessChoice {
             id: account.id.clone(),
@@ -111,47 +93,89 @@ pub fn request(key: String, request: ConnectRequest, accounts: &[LocalAccount]) 
             symbol: None,
             color: Some(account.color.clone()),
         })
-        .collect();
+        .collect()
+}
+
+/// Who the sheet is about: an application asking, or one connected already.
+struct Asker<'a> {
+    key: String,
+    app: Option<String>,
+    client: String,
+    verified: bool,
+    publisher: Option<&'a str>,
+    back_to: String,
+    on_device: bool,
+}
+
+/// The sheet's choices, the same for a request and for a connected app being changed.
+fn sheet(asker: Asker, accounts: &[LocalAccount], access: Access) -> ConnectRequestView {
     ConnectRequestView {
-        key,
-        publisher: match &request.publisher {
+        key: asker.key,
+        app: asker.app,
+        client: asker.client,
+        verified: asker.verified,
+        publisher: match asker.publisher {
             Some(host) => format!("Published by {host}"),
             None => "Registered itself, publisher unknown".into(),
         },
-        back_to: format!("Sends you back to {}", request.redirect_host),
-        on_device: request.on_device,
-        verified: request.verified,
-        accounts,
+        back_to: asker.back_to,
+        on_device: asker.on_device,
+        accounts: account_choices(accounts),
+        always: choice(
+            "who",
+            "Who and when",
+            "Sender, recipients, date and labels. Always: it can’t sort mail without them.",
+            "users",
+        ),
+        reads: vec![
+            choice("subject", "Subject", "The line it was sent with.", "type"),
+            choice("body", "Body", "The whole text of each message.", "file-text"),
+            choice("attachments", "Attachments", "Their names, kinds and sizes.", "paperclip"),
+        ],
         roles: vec![
-            choice(
-                "reader",
-                "Reader",
-                "Can search your mail and see who sent it, its subject and its first lines.",
-                "eye",
-            ),
+            choice("reader", "Only look", "Search and read. Nothing changes.", "eye"),
             choice(
                 "organizer",
-                "Organizer",
-                "Can also archive, label, mark read, snooze, trash, block senders and add rules.",
+                "Organize",
+                "Also archive, label, mark read, snooze, trash and sort with rules.",
                 "archive",
             ),
         ],
-        privileges: vec![
-            choice(
-                "read_bodies",
-                "Read whole messages",
-                "Without it, only the first lines of each message.",
-                "file-text",
-            ),
-            choice(
-                "unsubscribe",
-                "Unsubscribe from lists",
-                "Asks a list's sender to stop, by its link or by email.",
-                "mail-x",
-            ),
-        ],
-        client: request.client,
+        privileges: vec![choice(
+            "unsubscribe",
+            "Unsubscribe from lists",
+            "Writes to a list’s sender to stop. Reaches outside your mailbox.",
+            "mail-x",
+        )],
+        access,
     }
+}
+
+pub fn request(key: String, request: ConnectRequest, accounts: &[LocalAccount]) -> ConnectRequestView {
+    let asker = Asker {
+        key,
+        app: None,
+        client: request.client,
+        verified: request.verified,
+        publisher: request.publisher.as_deref(),
+        back_to: format!("Sends you back to {}", request.redirect_host),
+        on_device: request.on_device,
+    };
+    sheet(asker, accounts, Access::default())
+}
+
+/// A connected app, to change what it may do.
+pub fn editing(app: &ConnectedApp, accounts: &[LocalAccount]) -> ConnectRequestView {
+    let asker = Asker {
+        key: String::new(),
+        app: Some(app.id.clone()),
+        client: app.client.clone(),
+        verified: app.verified,
+        publisher: app.publisher.as_deref(),
+        back_to: String::new(),
+        on_device: false,
+    };
+    sheet(asker, accounts, app.access.clone())
 }
 
 #[cfg(test)]
@@ -184,18 +208,32 @@ mod tests {
     }
 
     #[test]
-    fn names_what_an_app_may_do() {
+    fn says_what_an_app_may_do_under_its_name() {
+        use mail_protocol::access::{Conditions, Part, Role};
         let accounts = [account("a", "ann@gmail.com", ""), account("b", "ann@work.com", "Work")];
-        let every = Access { role: Role::Reader, all_accounts: true, accounts: vec![], privileges: vec![] };
-        assert_eq!(access(&every, &accounts), "Reader · Every account");
+        let app = |access: Access| ConnectedApp {
+            id: "x".into(),
+            client: "Claude Code".into(),
+            verified: true,
+            publisher: None,
+            access,
+            approved_at: 0,
+            used_at: None,
+        };
         let some = Access {
             role: Role::Organizer,
             all_accounts: false,
             accounts: vec!["b".into(), "gone".into()],
-            privileges: vec![Privilege::ReadBodies],
+            reads: vec![Part::Subject],
+            never: Conditions { from: vec!["@chase.com".into()], ..Default::default() },
+            ..Access::default()
         };
-        assert_eq!(access(&some, &accounts), "Organizer · Work · Reads whole messages");
-        let none = Access { accounts: vec!["gone".into()], ..some };
-        assert_eq!(access(&none, &accounts), "Organizer · No accounts left · Reads whole messages");
+        let looking = Access { reads: vec![], ..Access::default() };
+        let views = apps(vec![app(some), app(looking)], &accounts, &[], &Local::now());
+        assert_eq!(
+            views[0].access,
+            "Reads the subject of mail in Work, except mail from @chase.com, and can archive, label, snooze and trash it."
+        );
+        assert_eq!(views[1].access, "Sees who sent and received mail in every account, and only looks.");
     }
 }

@@ -230,6 +230,7 @@ fun Menu(expanded: Boolean, onDismiss: () -> Unit, items: List<MenuItem>) {
     ) {
         CompositionLocalProvider(LocalOnPopover provides true) {
             Column(Modifier.widthIn(min = 200.dp).padding(horizontal = Space.xxs)) {
+                val checks = items.any { it.checked }
                 for (item in items) {
                     if (item.divider) Rule(Modifier.padding(vertical = Space.xxs), color = Tokens.borderPopover)
                     Pressable({
@@ -248,7 +249,7 @@ fun Menu(expanded: Boolean, onDismiss: () -> Unit, items: List<MenuItem>) {
                         ) {
                             item.symbol?.let { Icon(it, 15f, color) }
                             Text(item.title, TextStyle.Body, Modifier.weight(1f), color = color, maxLines = 1)
-                            if (item.checked) Icon(Symbol.Check, 14f, Tokens.foreground.color)
+                            if (checks) CheckColumn(item.checked)
                         }
                     }
                 }

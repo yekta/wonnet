@@ -429,17 +429,51 @@ pub enum Command {
         app: String,
     },
     /// A `ConnectRequestView`: the request a `wonnet://connect?key=…` URL opens, from the server.
+    /// The demo answers `wonnet://connect?key=demo` with a made-up one.
     ConnectRequest {
         url: String,
     },
-    /// The user's answer to a request. `access` is needed to approve it: `{"role": "reader" |
-    /// "organizer", "all_accounts": true, "accounts": [account ids], "privileges": ["read_bodies",
-    /// "unsubscribe"]}`. `{}`.
+    /// The user's answer to a request. `access` is needed to approve it, as `mail_protocol::access::
+    /// Access` writes it: `{"role": "reader" | "organizer", "all_accounts": true, "accounts":
+    /// [account ids], "reads": ["subject", "body", "attachments"], "privileges": ["unsubscribe"],
+    /// "only": {...}, "never": {...}}`. `{}`.
     AnswerConnectRequest {
         key: String,
         approve: bool,
         #[serde(default)]
         access: Option<Access>,
+    },
+    /// A `ConnectRequestView` of a connected app, to change what it may do: its `app` is set,
+    /// its `key` empty, and `access` is what it may do now. From the last `ConnectedApps`.
+    EditConnectedApp {
+        app: String,
+    },
+    /// What a connected app may do from now on. `{}`.
+    SetConnectedAppAccess {
+        app: String,
+        access: Access,
+    },
+    /// An `AccessSummary` of `access` after `edit`, for the sheet that chooses it: ask again on
+    /// every change. `client` is the app's name, for the sentence. Answers can come out of
+    /// order; an app keeps the answer to its latest ask.
+    AccessSummary {
+        client: String,
+        access: Access,
+        #[serde(default)]
+        edit: Option<FilterEdit>,
+    },
+    /// A `FilterOptions`: the menu of what to add to a line of the filter of `access`, of every
+    /// kind or of `kind`, matching `query`; `editing` is the chip it changes, checked in the
+    /// menu. Answers can come out of order, as `AccessSummary`'s.
+    FilterOptions {
+        access: Access,
+        line: FilterLine,
+        #[serde(default)]
+        kind: Option<FilterKind>,
+        #[serde(default)]
+        query: String,
+        #[serde(default)]
+        editing: Option<FilterValue>,
     },
 }
 
@@ -707,29 +741,151 @@ pub struct ConnectedAppView {
     pub id: String,
     pub name: String,
     pub verified: bool,
-    /// What it may do: "Organizer · Every account · Reads whole messages".
+    /// What it may do, in one sentence: "Reads the subject of mail in Work, and only looks."
     pub access: String,
     /// "Approved Nov 5 · Used 5 minutes ago".
     pub used: String,
 }
 
-/// The answer to `ConnectRequest`: who is asking, and the choices of what it may do, ready to
-/// draw. Asked first, Every account and Reader with no privileges.
+/// The answer to `ConnectRequest` and `EditConnectedApp`: who is asking, the choices of what it
+/// may do, ready to draw, and the access the sheet starts with. A request starts with every
+/// account, all of their mail, the subject, and only looking.
 #[derive(Debug, Clone, Serialize)]
 pub struct ConnectRequestView {
-    /// For `AnswerConnectRequest`.
+    /// For `AnswerConnectRequest`; empty when an app is changed.
     pub key: String,
+    /// For `SetConnectedAppAccess`, when it changes a connected app.
+    pub app: Option<String>,
     pub client: String,
     pub verified: bool,
     /// "Published by claude.ai", or that it registered itself.
     pub publisher: String,
-    /// "Sends you back to claude.ai".
+    /// "Sends you back to claude.ai"; empty when an app is changed.
     pub back_to: String,
     /// It goes back to an application on this device, not to a website: a warning.
     pub on_device: bool,
     pub accounts: Vec<AccessChoice>,
+    /// What it always reads, shown locked: who and when.
+    pub always: AccessChoice,
+    /// The parts it may read: `subject`, `body`, `attachments`.
+    pub reads: Vec<AccessChoice>,
+    /// `reader` (only looks) and `organizer`.
     pub roles: Vec<AccessChoice>,
+    /// `unsubscribe`.
     pub privileges: Vec<AccessChoice>,
+    pub access: Access,
+}
+
+/// A line of the filter: `only` narrows what an app reaches, `never` keeps mail from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterLine {
+    Only,
+    Never,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterKind {
+    From,
+    To,
+    Label,
+    Subject,
+    Body,
+    Attachment,
+    Date,
+}
+
+/// One condition: a sender (an address, `@domain` or text), a recipient, a label's id or a
+/// mailbox, subject or body words, a file name, or an age, `newer:30d` or `older:1y`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FilterValue {
+    pub kind: FilterKind,
+    pub value: String,
+}
+
+/// A change to a line of the filter: takes `remove` away and puts `add` in, either or both.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterEdit {
+    pub line: FilterLine,
+    #[serde(default)]
+    pub remove: Option<FilterValue>,
+    #[serde(default)]
+    pub add: Option<FilterValue>,
+}
+
+/// A run of the sentence, in bold when `strong`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SentencePart {
+    pub text: String,
+    pub strong: bool,
+}
+
+/// The answer to `AccessSummary`: the access to keep (after the edit, tidied), the sentence that
+/// says it, how much it reaches (`fraction` fills the bar) and each line's chips. `problem` is
+/// why it can't be approved yet; `warning` a chip that changes nothing.
+#[derive(Debug, Clone, Serialize)]
+pub struct AccessSummary {
+    pub access: Access,
+    pub sentence: Vec<SentencePart>,
+    /// "Reaches 14,212 of 15,630 messages in Work".
+    pub reach: String,
+    pub fraction: f64,
+    pub only: Vec<FilterChip>,
+    pub never: Vec<FilterChip>,
+    /// What an empty line says: "All mail in Work", "Nothing kept out".
+    pub only_empty: String,
+    pub never_empty: String,
+    pub warning: Option<String>,
+    pub problem: Option<String>,
+}
+
+/// A condition as a chip: `label` is its kind's word ("from", "labelled"), `text` its value
+/// ("@chase.com", "Medical"), `joiner` the "or" or "and" before it. `matches` is how many
+/// messages it matches; none, and it is drawn as a warning.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FilterChip {
+    pub kind: FilterKind,
+    pub value: String,
+    pub label: String,
+    pub text: String,
+    pub joiner: Option<String>,
+    pub matches: usize,
+    /// "1,204 messages".
+    pub help: String,
+}
+
+/// The answer to `FilterOptions`: the field's placeholder, the kind picked (as the tag in the
+/// field), the options in sections, and a note when there is nothing to pick.
+#[derive(Debug, Clone, Serialize)]
+pub struct FilterOptions {
+    pub placeholder: String,
+    pub scope: Option<String>,
+    pub sections: Vec<FilterSection>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FilterSection {
+    pub title: Option<String>,
+    pub options: Vec<FilterOption>,
+}
+
+/// One option of the menu. Without a `value` it picks its `kind`, narrowing the menu to it;
+/// with one it adds that condition, or replaces the chip being changed. It starts with a
+/// person's `avatar` or a Lucide `symbol`; `count` is how many messages it matches; `checked`
+/// is the chip being changed.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FilterOption {
+    pub id: String,
+    pub kind: FilterKind,
+    pub value: Option<String>,
+    pub title: String,
+    pub detail: Option<String>,
+    pub symbol: Option<String>,
+    pub avatar: Option<Address>,
+    pub count: Option<String>,
+    pub checked: bool,
 }
 
 /// One choice of what an application may do. `id` is an account's id, a role or a privilege;

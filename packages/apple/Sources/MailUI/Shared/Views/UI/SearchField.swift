@@ -13,6 +13,14 @@ struct SearchField: View {
     @Binding var text: String
     var style: Style = .sheet
     var symbol: Symbol = .search
+    /// A tag before the words, as the kind a filter's menu is narrowed to, with an x that takes it.
+    var tag: String?
+    var clearTag: () -> Void = {}
+    /// Backspace with nothing typed; true when it did something.
+    var deleteEmpty: () -> Bool = { false }
+    /// The field is at the bottom of what it narrows, as a popup over its face is: its hairline
+    /// goes on top.
+    var under = false
     var autofocus = true
     /// Changed by the owner to put the cursor in the field again.
     var focusTrigger = 0
@@ -25,9 +33,22 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: Space.s) {
             Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color).allowsHitTesting(false)
+            if let tag {
+                Chip(title: tag, removeHelp: "Show every kind", remove: clearTag)
+                    .fixedSize()
+            }
             line
                 .focused($focused)
-                .onListKeys(move: move, escape: leave)
+                .onFieldKeys { key in
+                    switch key {
+                    case .up: move(-1)
+                    case .down: move(1)
+                    case .escape: leave()
+                    case .delete: return text.isEmpty && deleteEmpty() ? .handled : .ignored
+                    case .tab: return .ignored
+                    }
+                    return .handled
+                }
             if !text.isEmpty {
                 IconButton(symbol: .x, help: "Clear", size: .small, circled: false, quiet: true, action: clearText)
             }
@@ -37,7 +58,7 @@ struct SearchField: View {
         .frame(height: height)
         .background { FieldArea { focused = true } }
         .background { if style == .bar { Capsule().strokeBorder(Tokens.borderInput.color, lineWidth: Theme.hairline) } }
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: under ? .top : .bottom) {
             if let rule { Rule(color: rule) }
         }
         .onAppear { if autofocus { focused = true } }

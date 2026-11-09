@@ -24,13 +24,13 @@ import kotlin.math.sin
  */
 enum class Symbol(val character: String) {
     AlarmClock("\ue03a"), Archive("\ue041"), ArchiveRestore("\ue2cd"), ArrowLeft("\ue048"), ArrowRight("\ue049"), ArrowUp("\ue04a"), AtSign("\ue04e"),
-    Ban("\ue051"), Bell("\ue059"), BellOff("\ue05a"), Box("\ue061"), CalendarClock("\ue304"), Check("\ue06c"), CheckCheck("\ue38e"),
+    Ban("\ue051"), Bell("\ue059"), BellOff("\ue05a"), Box("\ue061"), Calendar("\ue063"), CalendarClock("\ue304"), Check("\ue06c"), CheckCheck("\ue38e"),
     ChevronDown("\ue06d"), ChevronLeft("\ue06e"), ChevronRight("\ue06f"), ChevronUp("\ue070"), ChevronsDownUp("\ue228"),
     ChevronsUpDown("\ue211"), CircleAlert("\ue077"), CircleArrowDown("\ue078"), CircleCheck("\ue226"), Clock("\ue087"),
     Command("\ue09a"), Copy("\ue09e"), Download("\ue0b2"), Ellipsis("\ue0b6"), Eye("\ue0ba"), File("\ue0c0"), FileArchive("\ue30d"), FileAudio("\ue31a"),
-    FileImage("\ue31c"), FileSpreadsheet("\ue326"), FileText("\ue0cc"), FileVideo("\ue321"), FolderInput("\ue334"),
+    FileImage("\ue31c"), FileSpreadsheet("\ue326"), FileText("\ue0cc"), FileVideo("\ue321"), Filter("\ue0dc"), FolderInput("\ue334"),
     Forward("\ue229"), Globe("\ue0e8"), Handshake("\ue5c0"), Image("\ue0f6"), Inbox("\ue0f7"), Keyboard("\ue284"),
-    ListFilter("\ue460"), Loader("\ue109"), LogOut("\ue10e"), Mail("\ue10f"), MailMinus("\ue362"), MailOpen("\ue363"),
+    ListFilter("\ue460"), Loader("\ue109"), Lock("\ue10b"), LogOut("\ue10e"), Mail("\ue10f"), MailMinus("\ue362"), MailOpen("\ue363"),
     MailX("\ue368"), Menu("\ue115"), Monitor("\ue11d"), Moon("\ue11e"), Paperclip("\ue12d"), Pencil("\ue1f9"), Plug("\ue37f"), Plus("\ue13d"),
     Presentation("\ue4ae"), Printer("\ue141"), RefreshCw("\ue145"), Reply("\ue22a"), ReplyAll("\ue22b"), Search("\ue151"),
     Send("\ue152"), Server("\ue153"), Settings("\ue154"), Share("\ue155"), ShieldAlert("\ue1fe"), ShieldCheck("\ue1ff"), SquareCheck("\ue559"),
@@ -38,7 +38,11 @@ enum class Symbol(val character: String) {
 
     /** A star filled in, drawn by hand. */
     StarFilled(""),
-    Sun("\ue178"), Tag("\ue17f"), Trash("\ue18e"), Undo("\ue2a1"), User("\ue19f"), WifiOff("\ue1af"), X("\ue1b2"), Zap("\ue1b4"),
+    Sun("\ue178"), Tag("\ue17f"),
+
+    /** Lines of text: Lucide's `text`, drawn as its `align-left`. */
+    Text("\ue185"),
+    Trash("\ue18e"), Type("\ue198"), Undo("\ue2a1"), User("\ue19f"), Users("\ue1a4"), WifiOff("\ue1af"), X("\ue1b2"), Zap("\ue1b4"),
     ;
 
     companion object {
@@ -57,6 +61,16 @@ enum class Symbol(val character: String) {
             "file-text" -> FileText
             "mail-x" -> MailX
             "list-filter" -> ListFilter
+            "archive" -> Archive
+            "user" -> User
+            "users" -> Users
+            "type" -> Type
+            "text" -> Text
+            "paperclip" -> Paperclip
+            "calendar" -> Calendar
+            "search" -> Search
+            "lock" -> Lock
+            "filter" -> Filter
             else -> Tag
         }
     }

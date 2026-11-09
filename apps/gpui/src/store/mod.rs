@@ -20,7 +20,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub use commands::ThreadCommand;
-pub use connect::{ConnectChoices, ConnectSheet, ConnectState, Connected};
+pub use connect::{ConnectChoices, ConnectSheet, ConnectState, Connected, FilterMenu};
 pub use local::{Appearance, LocalSettings, NotificationAction};
 pub use prefs::{CustomRule, CustomSplit, SettingsEntry, SettingsSection, Snippet, label_id, uuid};
 

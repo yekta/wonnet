@@ -14,8 +14,8 @@ use chrono::Local;
 use futures_util::StreamExt;
 use mail_protocol::access::{Access, Role};
 use mail_protocol::api::{
-    ConnectAnswer, ConnectRequest, ConnectedApp, ConnectedApps, DevLoginRequest, DeviceRequest, ExchangeRequest,
-    JmapAccountRequest, LinkTicket, TokenResponse,
+    AccessChange, ConnectAnswer, ConnectRequest, ConnectedApp, ConnectedApps, DevLoginRequest, DeviceRequest,
+    ExchangeRequest, JmapAccountRequest, LinkTicket, TokenResponse,
 };
 use mail_protocol::wire::{ClientMessage, ServerMessage};
 use mail_protocol::{
@@ -32,10 +32,11 @@ use crate::api::{
     PreferenceValue, Preferences, ThreadView, UiState,
 };
 use crate::link::{Link, LinkEvent};
+use crate::render::access::{self, Mail};
 use crate::render::drafts::{self, ReplyKind};
 use crate::render::html::{self, Printed};
 use crate::render::{compose, connected, dates, rows, times};
-use crate::store::{Arrived, Batch, Reader, Store, Touched, parse_mailbox, shown_in, state_of};
+use crate::store::{Arrived, Batch, ReachRow, Reader, Store, Touched, parse_mailbox, shown_in, state_of};
 use crate::undo;
 
 pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
@@ -173,6 +174,8 @@ pub fn start(config: Config, sink: Sink) -> Result<Handle> {
         refresh: 0,
         caught_up: false,
         settling: Vec::new(),
+        connected: Vec::new(),
+        reach_cache: Arc::new(Mutex::new(None)),
     };
     core.announcing = core.ready_accounts();
     tokio::spawn(async move {
@@ -201,9 +204,15 @@ pub fn start(config: Config, sink: Sink) -> Result<Handle> {
     Ok(Handle { commands: commands_tx })
 }
 
+/// The messages of some accounts as the filter of an access counts them, at a cursor of the store.
+type ReachCache = Arc<Mutex<Option<(Vec<String>, i64, Arc<Vec<ReachRow>>)>>>;
+
 struct Core {
     store: Store,
     reader: Arc<Mutex<Reader>>,
+    /// The connected apps the server listed last, to change one (the demo's own, in the demo).
+    connected: Vec<ConnectedApp>,
+    reach_cache: ReachCache,
     data_dir: PathBuf,
     /// Shows the demo's mail and never connects.
     demo: bool,
@@ -558,6 +567,26 @@ impl Core {
             Command::AnswerConnectRequest { key, approve, access } => {
                 return self.answer_connect_request(id, &key, approve, access);
             }
+            Command::EditConnectedApp { app } => self.edit_connected_app(&app),
+            Command::SetConnectedAppAccess { app, access } => return self.set_connected_app_access(id, app, access),
+            Command::AccessSummary { client, access, edit } => {
+                let now = mail_protocol::now_ms();
+                return self.counting(id, access, move |reader, mail, access| {
+                    let access = access::edited(access, edit.as_ref(), &mail.labels);
+                    let mail = Mail { now, ..mail };
+                    let mut body = |words: &str| reader.body_matches(words).unwrap_or_default();
+                    Ok(serde_json::to_value(access::summary(&client, &mail, access, &mut body))?)
+                });
+            }
+            Command::FilterOptions { access, line, kind, query, editing } => {
+                let now = mail_protocol::now_ms();
+                return self.counting(id, access, move |reader, mail, access| {
+                    let mail = Mail { now, ..mail };
+                    let mut body = |words: &str| reader.body_matches(words).unwrap_or_default();
+                    let options = access::options(&mail, &access, line, kind, &query, editing, &mut body);
+                    Ok(serde_json::to_value(options)?)
+                });
+            }
             Command::SetPushDevice { platform, token, topic, sandbox, key } => {
                 return self.set_push_device(id, DeviceRequest { platform, token, topic, sandbox, key });
             }
@@ -790,20 +819,21 @@ impl Core {
 
     fn connected_apps(&mut self, id: u64) -> Option<Result<Value>> {
         if self.demo {
-            let now = mail_protocol::now_ms();
-            let claude = ConnectedApp {
-                id: "demo-claude".into(),
-                client: "Claude".into(),
-                verified: true,
-                publisher: Some("claude.ai".into()),
-                access: Access { role: Role::Organizer, all_accounts: true, accounts: vec![], privileges: vec![] },
-                approved_at: now - 3 * 86_400_000,
-                used_at: Some(now - 5 * 60_000),
-            };
-            let accounts = self.store.accounts().unwrap_or_default();
-            let apps = connected::apps(vec![claude], &accounts, &Local::now());
+            if self.connected.is_empty() {
+                let now = mail_protocol::now_ms();
+                self.connected = vec![ConnectedApp {
+                    id: "demo-claude".into(),
+                    client: "Claude".into(),
+                    verified: true,
+                    publisher: Some("claude.ai".into()),
+                    access: Access { role: Role::Organizer, ..Access::default() },
+                    approved_at: now - 3 * 86_400_000,
+                    used_at: Some(now - 5 * 60_000),
+                }];
+            }
             let address = "https://wonnet.app/mcp".to_string();
-            return Some(serde_json::to_value(ConnectedAppsView { address, apps }).map_err(Into::into));
+            let view = self.connected_view(address, self.connected.clone());
+            return Some(view.and_then(|view| Ok(serde_json::to_value(view)?)));
         }
         let (server, token) = match self.signed_in_server() {
             Ok(signed_in) => signed_in,
@@ -815,12 +845,85 @@ impl Core {
             move |core, result| {
                 let view = result.and_then(|found| {
                     core.store.set_meta("mcp_address", Some(&found.address))?;
-                    let accounts = core.store.accounts()?;
-                    let apps = connected::apps(found.apps, &accounts, &Local::now());
-                    Ok(ConnectedAppsView { address: found.address, apps })
+                    core.connected = found.apps.clone();
+                    core.connected_view(found.address, found.apps)
                 });
                 core.reply(id, view.and_then(|view| Ok(serde_json::to_value(view)?)));
             },
+        );
+        None
+    }
+
+    fn connected_view(&self, address: String, apps: Vec<ConnectedApp>) -> Result<ConnectedAppsView> {
+        let accounts = self.store.accounts()?;
+        let labels = self.store.labels()?;
+        let apps = connected::apps(apps, &accounts, &labels, &Local::now());
+        Ok(ConnectedAppsView { address, apps })
+    }
+
+    fn edit_connected_app(&mut self, app: &str) -> Result<Value> {
+        let found = self.connected.iter().find(|connected| connected.id == app);
+        let Some(found) = found else { bail!("That application isn't connected anymore.") };
+        Ok(serde_json::to_value(connected::editing(found, &self.store.accounts()?))?)
+    }
+
+    fn set_connected_app_access(&mut self, id: u64, app: String, access: Access) -> Option<Result<Value>> {
+        if self.demo {
+            let found = self.connected.iter_mut().find(|connected| connected.id == app);
+            let Some(found) = found else { return Some(Err(anyhow!("That application isn't connected anymore."))) };
+            found.access = access;
+            self.emit(Event::ConnectedAppsChanged);
+            return Some(Ok(json!({})));
+        }
+        let (server, token) = match self.signed_in_server() {
+            Ok(signed_in) => signed_in,
+            Err(error) => return Some(Err(error)),
+        };
+        let (http, path) = (self.http.clone(), format!("/api/connected-apps/{}", crate::http::encode(&app)));
+        let change = AccessChange { access };
+        self.spawn(
+            async move { crate::http::put(&http, &server, &path, &token, &change).await },
+            move |core, result| core.reply(id, result.map(|_| json!({}))),
+        );
+        None
+    }
+
+    /// Runs `count` on the reader, away from the loop, with the mail of the accounts `access`
+    /// reaches: kept between asks while the store doesn't change.
+    fn counting(
+        &mut self,
+        id: u64,
+        access: Access,
+        count: impl FnOnce(&Reader, Mail, Access) -> Result<Value> + Send + 'static,
+    ) -> Option<Result<Value>> {
+        let (reader, cache, cursor) = (self.reader.clone(), self.reach_cache.clone(), self.store.cursor());
+        self.spawn(
+            async move {
+                let work = move || -> Result<Value> {
+                    let reader = reader.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let accounts = reader.accounts()?;
+                    let mut reached: Vec<String> = accounts
+                        .iter()
+                        .filter(|account| access.reaches(&account.id))
+                        .map(|account| account.id.clone())
+                        .collect();
+                    reached.sort();
+                    let mut cached = cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let rows = match cached.as_ref() {
+                        Some((ids, at, rows)) if *ids == reached && *at == cursor => rows.clone(),
+                        _ => {
+                            let rows = Arc::new(reader.reach_rows(&reached)?);
+                            *cached = Some((reached, cursor, rows.clone()));
+                            rows
+                        }
+                    };
+                    drop(cached);
+                    let mail = Mail { rows, labels: reader.labels()?, accounts, now: 0 };
+                    count(&reader, mail, access)
+                };
+                tokio::task::spawn_blocking(work).await.map_err(anyhow::Error::from).and_then(|result| result)
+            },
+            move |core, result| core.reply(id, result),
         );
         None
     }
@@ -841,6 +944,17 @@ impl Core {
     }
 
     fn connect_request(&mut self, id: u64, url: &str) -> Option<Result<Value>> {
+        if self.demo && url == "wonnet://connect?key=demo" {
+            let request = ConnectRequest {
+                client: "Claude Code".into(),
+                verified: true,
+                publisher: Some("anthropic.com".into()),
+                redirect_host: "localhost:51234".into(),
+                on_device: true,
+            };
+            let view = self.store.accounts().map(|accounts| connected::request("demo".into(), request, &accounts));
+            return Some(view.and_then(|view| Ok(serde_json::to_value(view)?)));
+        }
         let key = reqwest::Url::parse(url)
             .ok()
             .filter(|url| url.scheme() == "wonnet" && url.host_str() == Some("connect"))
@@ -874,6 +988,9 @@ impl Core {
         approve: bool,
         access: Option<Access>,
     ) -> Option<Result<Value>> {
+        if self.demo && key == "demo" {
+            return Some(Ok(json!({})));
+        }
         let (server, token) = match self.signed_in_server() {
             Ok(signed_in) => signed_in,
             Err(error) => return Some(Err(error)),
@@ -2195,6 +2312,53 @@ mod tests {
             let page = self.call(json!({ "type": "search", "query": subject })).await.unwrap();
             page["rows"][0]["id"].as_str().unwrap().to_string()
         }
+    }
+
+    #[tokio::test]
+    async fn the_connect_sheet_counts_the_filter_on_this_device() {
+        let mut demo = Demo::start();
+        let request =
+            demo.call(json!({ "type": "connect_request", "url": "wonnet://connect?key=demo" })).await.unwrap();
+        assert_eq!(request["client"], "Claude Code");
+        assert_eq!(request["access"]["reads"], json!(["subject"]));
+        let access = request["access"].clone();
+        let whole =
+            demo.call(json!({ "type": "access_summary", "client": "Claude Code", "access": access })).await.unwrap();
+        assert_eq!(whole["fraction"], 1.0);
+        assert!(whole["reach"].as_str().unwrap().starts_with("Reaches "), "{whole}");
+
+        let kinds = demo.call(json!({ "type": "filter_options", "access": access, "line": "never" })).await.unwrap();
+        assert_eq!(kinds["sections"][0]["options"].as_array().unwrap().len(), 7);
+        let senders = demo
+            .call(json!({ "type": "filter_options", "access": access, "line": "never", "kind": "from" }))
+            .await
+            .unwrap();
+        let first = &senders["sections"][0]["options"][0];
+        assert!(first["value"].as_str().unwrap().starts_with('@'), "{senders}");
+        let edit = json!({ "line": "never", "add": { "kind": "from", "value": first["value"] } });
+        let narrowed = demo
+            .call(json!({ "type": "access_summary", "client": "Claude Code", "access": access, "edit": edit }))
+            .await
+            .unwrap();
+        assert_eq!(narrowed["never"][0]["text"], first["value"]);
+        assert!(narrowed["fraction"].as_f64().unwrap() < 1.0, "{narrowed}");
+        assert_eq!(narrowed["access"]["never"]["from"], json!([first["value"]]));
+        let sentence: String =
+            narrowed["sentence"].as_array().unwrap().iter().map(|part| part["text"].as_str().unwrap()).collect();
+        assert!(sentence.contains(", except mail from "), "{sentence}");
+
+        let approved = demo
+            .call(json!({ "type": "answer_connect_request", "key": "demo", "approve": true, "access": narrowed["access"] }))
+            .await;
+        assert!(approved.is_ok());
+        let apps = demo.call(json!({ "type": "connected_apps" })).await.unwrap();
+        let app = apps["apps"][0]["id"].as_str().unwrap().to_string();
+        let editing = demo.call(json!({ "type": "edit_connected_app", "app": app })).await.unwrap();
+        assert_eq!(editing["app"], app);
+        let changed = json!({ "type": "set_connected_app_access", "app": app, "access": narrowed["access"] });
+        demo.call(changed).await.unwrap();
+        let apps = demo.call(json!({ "type": "connected_apps" })).await.unwrap();
+        assert!(apps["apps"][0]["access"].as_str().unwrap().contains("except mail from"), "{apps}");
     }
 
     #[tokio::test]

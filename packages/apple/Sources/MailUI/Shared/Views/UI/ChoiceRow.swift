@@ -1,10 +1,13 @@
 import SwiftUI
 
 /// One choice of a short list: a suggestion, a time, a snippet, a sender. It starts with a
-/// `symbol`, an account's `dot` or a person's `avatar`; `checked` is the one in force, with a
-/// check at its end. `highlighted` is the one the arrow keys are on.
+/// `symbol`, an account's `dot` or a person's `avatar`; `subtitle` is a smaller line under its
+/// title, `detail` a word at its end. `checked` is the one in force, with a check at its end: the
+/// check's place is kept in every row, so nothing moves when it shows. `highlighted` is the one
+/// the arrow keys are on.
 struct ChoiceRow: View {
     let title: String
+    var subtitle: String?
     var detail: String?
     var symbol: Symbol?
     var dot: Color?
@@ -15,13 +18,17 @@ struct ChoiceRow: View {
 
     var body: some View {
         Button(action: action) {
-            Face(title: title, detail: detail, symbol: symbol, dot: dot, avatar: avatar, checked: checked, highlighted: highlighted)
+            Face(
+                title: title, subtitle: subtitle, detail: detail, symbol: symbol, dot: dot, avatar: avatar, checked: checked,
+                highlighted: highlighted
+            )
         }
         .buttonStyle(.press)
     }
 
     private struct Face: View {
         let title: String
+        let subtitle: String?
         let detail: String?
         let symbol: Symbol?
         let dot: Color?
@@ -31,25 +38,39 @@ struct ChoiceRow: View {
         @Environment(\.hovered) private var hovered
         @Environment(\.onPopover) private var onPopover
 
+        /// The width of what a row starts with: an avatar's, and the place a symbol or a dot stands in.
+        static let lead: CGFloat = 24
+
+        private var hasLead: Bool { avatar != nil || dot != nil || symbol != nil }
+
         var body: some View {
             HStack(spacing: Space.s + 2) {
-                if let avatar {
-                    Avatar(initials: avatar.initials, email: avatar.email, size: 24)
-                } else if let dot {
-                    Circle().fill(dot).frame(width: 8, height: 8).frame(width: 14)
-                } else if let symbol {
-                    Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                // Whatever a row starts with, its words start where the others' do.
+                Group {
+                    if let avatar {
+                        Avatar(initials: avatar.initials, email: avatar.email, size: Self.lead)
+                    } else if let dot {
+                        Circle().fill(dot).frame(width: 8, height: 8)
+                    } else if let symbol {
+                        Image(symbol, size: 14).foregroundStyle(Tokens.mutedStrongerForeground.color)
+                    }
                 }
-                Text(title).textStyle(.body).lineLimit(1)
+                .frame(width: hasLead ? Self.lead : nil)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).textStyle(.body).lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle).textStyle(.footnote, color: Tokens.mutedForeground.color).lineLimit(1).truncationMode(.middle)
+                    }
+                }
                 Spacer(minLength: Space.m)
                 if let detail {
-                    Text(detail).textStyle(.caption).lineLimit(1).truncationMode(.middle)
+                    Text(detail).textStyle(.caption).lineLimit(1).truncationMode(.middle).monospacedDigit()
                 }
-                if checked {
-                    Image(.check, size: 14).foregroundStyle(Tokens.foreground.color)
-                }
+                Image(.check, size: 14).foregroundStyle(Tokens.foreground.color).opacity(checked ? 1 : 0)
+                    .accessibilityHidden(!checked)
             }
             .padding(.horizontal, Space.s + 2)
+            .padding(.vertical, subtitle == nil ? 0 : Space.xxs)
             .frame(minHeight: Theme.rowHeight * Platform.scale)
             .background(RoundedRectangle(cornerRadius: Radius.sm).fill(fill))
             .contentShape(Rectangle())
@@ -111,6 +132,7 @@ struct PopupCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(inset)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
             .background(
                 RoundedRectangle(cornerRadius: Radius.md).fill(Tokens.popover.color)
                     .shadow(.md, Opacity.shadowStronger)

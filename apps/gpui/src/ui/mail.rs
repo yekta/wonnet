@@ -260,6 +260,199 @@ impl RenderOnce for Chip {
     }
 }
 
+/// A condition of a filter as a chip: its kind's word muted, its value, and an x that takes it
+/// away. Clicked, it opens what changes it; `open` while that is open. `empty` is a condition no
+/// mail matches, in the warning colour with an alert before it. The chip hovers as a whole.
+#[derive(IntoElement)]
+pub struct ConditionChip {
+    id: SharedString,
+    label: SharedString,
+    text: SharedString,
+    help: Option<SharedString>,
+    empty: bool,
+    open: bool,
+    action: OnClick,
+    remove: OnClick,
+}
+
+impl ConditionChip {
+    pub fn new(
+        id: impl Into<SharedString>,
+        label: impl Into<SharedString>,
+        text: impl Into<SharedString>,
+        action: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+        remove: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            text: text.into(),
+            help: None,
+            empty: false,
+            open: false,
+            action: Rc::new(action),
+            remove: Rc::new(remove),
+        }
+    }
+
+    pub fn help(mut self, help: impl Into<SharedString>) -> Self {
+        self.help = Some(help.into());
+        self
+    }
+
+    pub fn empty(mut self, empty: bool) -> Self {
+        self.empty = empty;
+        self
+    }
+
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = open;
+        self
+    }
+}
+
+impl RenderOnce for ConditionChip {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let (rest, hover) = match (self.empty, self.open) {
+            (true, false) => (cx.tint(WARNING, opacity::COLOR_TINT), cx.tint(WARNING, opacity::COLOR_TINT_STRONGER)),
+            (true, true) => {
+                (cx.tint(WARNING, opacity::COLOR_TINT_STRONGER), cx.tint(WARNING, opacity::COLOR_TINT_STRONGER))
+            }
+            (false, false) => (cx.color(BACKGROUND_SECONDARY), cx.color(BACKGROUND_SECONDARY_ACCENT)),
+            (false, true) => {
+                (cx.color(BACKGROUND_SECONDARY_ACCENT_STRONGER), cx.color(BACKGROUND_SECONDARY_ACCENT_STRONGER))
+            }
+        };
+        let (label_color, text_color, x_color) = match self.empty {
+            true => (WARNING, WARNING, WARNING),
+            false => (MUTED_FOREGROUND, FOREGROUND, MUTED_STRONGER_FOREGROUND),
+        };
+        let help = self.help.clone().unwrap_or_else(|| self.text.clone());
+        let remove_help = SharedString::from(format!("Remove {} {}", self.label, self.text).trim().to_string());
+        let remove_group = SharedString::from(format!("{}-remove", self.id));
+        let (action, remove) = (self.action.clone(), self.remove.clone());
+        let face = div()
+            .id(SharedString::from(format!("{}-face", self.id)))
+            .flex()
+            .min_w_0()
+            .items_center()
+            .gap(px(space::XXS))
+            .h(px(size::CHIP))
+            .pl(px(space::S + 2.))
+            .cursor_pointer()
+            .when(!self.open, |face| face.tooltip(move |_, cx| Tooltip::view(help.clone(), cx)))
+            .on_click(move |event, window, cx| {
+                cx.stop_propagation();
+                action(event, window, cx);
+            })
+            .when(self.empty, |face| face.child(icon(Symbol::CircleAlert, 12.).text_color(cx.color(WARNING))))
+            .when(!self.label.is_empty(), |face| {
+                face.child(
+                    div().flex_none().whitespace_nowrap().text_color(cx.color(label_color)).child(self.label.clone()),
+                )
+            })
+            .child(div().truncate().min_w_0().text_color(cx.color(text_color)).child(self.text.clone()));
+        let x = div()
+            .id(remove_group.clone())
+            .group(remove_group.clone())
+            .flex_none()
+            .size(px(size::CHIP))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .text_color(cx.color(x_color))
+            .child(
+                div()
+                    .size(px(size::CHIP - space::XXS * 2.))
+                    .rounded_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .group_hover(remove_group, |circle| {
+                        circle.bg(cx.color(BACKGROUND_SECONDARY_ACCENT_STRONGER)).text_color(cx.color(FOREGROUND))
+                    })
+                    .child(icon(Symbol::X, 11.)),
+            )
+            .tooltip(move |_, cx| Tooltip::view(remove_help.clone(), cx))
+            .on_click(move |event, window, cx| {
+                cx.stop_propagation();
+                remove(event, window, cx);
+            });
+        div()
+            .id(self.id.clone())
+            .flex()
+            .flex_none()
+            .items_center()
+            .max_w(px(320.))
+            .rounded_full()
+            .bg(rest)
+            .hover(move |chip| chip.bg(hover))
+            .text(TextStyle::Caption, cx)
+            .on_mouse_down(gpui::MouseButton::Left, |_, window, _| window.prevent_default())
+            .child(face)
+            .child(x)
+    }
+}
+
+/// The chip that adds a condition to a filter: a dashed outline, a plus and its words. `open`
+/// while what it opened is open: then its outline is drawn whole.
+#[derive(IntoElement)]
+pub struct AddChip {
+    id: SharedString,
+    title: SharedString,
+    open: bool,
+    action: OnClick,
+}
+
+impl AddChip {
+    pub fn new(
+        id: impl Into<SharedString>,
+        title: impl Into<SharedString>,
+        action: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self { id: id.into(), title: title.into(), open: false, action: Rc::new(action) }
+    }
+
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = open;
+        self
+    }
+}
+
+impl RenderOnce for AddChip {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let action = self.action.clone();
+        let (color, fill, outline) = match self.open {
+            true => (FOREGROUND, Some(BACKGROUND_SECONDARY), MUTED_STRONGER_FOREGROUND),
+            false => (MUTED_FOREGROUND, None, MUTED_STRONGEST_FOREGROUND),
+        };
+        div()
+            .id(self.id.clone())
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(space::XXS))
+            .h(px(size::CHIP))
+            .px(px(space::S + 2.))
+            .rounded_full()
+            .border_1()
+            .border_color(cx.color(outline))
+            .when(!self.open, |chip| chip.border_dashed())
+            .when_some(fill, |chip, fill| chip.bg(cx.color(fill)))
+            .text_in(TextStyle::Caption, color, cx)
+            .cursor_pointer()
+            .hover(|chip| chip.bg(cx.color(BACKGROUND_SECONDARY)).text_color(cx.color(FOREGROUND)))
+            .on_mouse_down(gpui::MouseButton::Left, |_, window, _| window.prevent_default())
+            .on_click(move |event, window, cx| {
+                cx.stop_propagation();
+                action(event, window, cx);
+            })
+            .child(icon(Symbol::Plus, 12.))
+            .child(div().whitespace_nowrap().child(self.title.clone()))
+    }
+}
+
 /// The icon of a file's kind, by its type.
 pub fn file_kind(mime: &str) -> Symbol {
     let mime = mime.to_lowercase();

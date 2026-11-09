@@ -2,8 +2,9 @@
 
 use std::collections::BTreeMap;
 
-pub use mail_core::api::{Action, Filter, UiState};
+pub use mail_core::api::{Action, Filter, FilterEdit, FilterKind, FilterLine, FilterValue, UiState};
 pub use mail_core::render::drafts::ReplyKind;
+pub use mail_protocol::access::{Access, Part, Privilege, Role};
 pub use mail_protocol::{Address, Attachment, Draft, DraftAttachment, Identity};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -269,27 +270,35 @@ pub struct ConnectedApp {
     pub id: String,
     pub name: String,
     pub verified: bool,
-    /// "Organizer · Every account · Reads whole messages".
+    /// What it may do, in one sentence: "Reads the subject of mail in Work, and only looks."
     pub access: String,
     /// "Approved Nov 5 · Used 5 minutes ago".
     pub used: String,
 }
 
-/// An application asking to connect, and the choices of what it may do.
+/// An application asking to connect, or one connected being changed (`app` set, `key` empty):
+/// the choices of what it may do, and the access the sheet starts with.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ConnectRequest {
     pub key: String,
+    #[serde(default)]
+    pub app: Option<String>,
     pub client: String,
     pub verified: bool,
     pub publisher: String,
     pub back_to: String,
     pub on_device: bool,
     pub accounts: Vec<AccessChoice>,
+    /// What it always reads, shown locked.
+    pub always: AccessChoice,
+    pub reads: Vec<AccessChoice>,
     pub roles: Vec<AccessChoice>,
     pub privileges: Vec<AccessChoice>,
+    pub access: Access,
 }
 
-/// An account, a role or a privilege to choose; `symbol` is a Lucide name, `color` an account's.
+/// An account, a part to read, a role or a privilege to choose; `symbol` is a Lucide name,
+/// `color` an account's.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct AccessChoice {
     pub id: String,
@@ -299,6 +308,106 @@ pub struct AccessChoice {
     pub symbol: Option<String>,
     #[serde(default)]
     pub color: Option<String>,
+}
+
+/// What an access comes to: the access to keep (tidied), the sentence that says it, how much
+/// it reaches and each line's chips. `problem` is why it can't be approved yet.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AccessSummary {
+    pub access: Access,
+    pub sentence: Vec<SentencePart>,
+    pub reach: String,
+    pub fraction: f64,
+    pub only: Vec<FilterChip>,
+    pub never: Vec<FilterChip>,
+    pub only_empty: String,
+    pub never_empty: String,
+    #[serde(default)]
+    pub warning: Option<String>,
+    #[serde(default)]
+    pub problem: Option<String>,
+}
+
+impl AccessSummary {
+    pub fn chips(&self, line: FilterLine) -> &[FilterChip] {
+        match line {
+            FilterLine::Only => &self.only,
+            FilterLine::Never => &self.never,
+        }
+    }
+}
+
+/// A run of the sentence, in bold when `strong`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct SentencePart {
+    pub text: String,
+    pub strong: bool,
+}
+
+/// A condition as a chip: its kind's word, its value, the "or" or "and" before it, and how many
+/// messages it matches.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct FilterChip {
+    pub kind: FilterKind,
+    pub value: String,
+    pub label: String,
+    pub text: String,
+    #[serde(default)]
+    pub joiner: Option<String>,
+    pub matches: usize,
+    pub help: String,
+}
+
+impl FilterChip {
+    pub fn filter_value(&self) -> FilterValue {
+        FilterValue { kind: self.kind, value: self.value.clone() }
+    }
+}
+
+/// The filter's menu: the field's placeholder, the kind picked, the options in sections, and a
+/// note when there is nothing to pick.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct FilterOptions {
+    pub placeholder: String,
+    #[serde(default)]
+    pub scope: Option<String>,
+    pub sections: Vec<FilterSection>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl FilterOptions {
+    /// Every option, in order, as the arrow keys go through them.
+    pub fn options(&self) -> impl Iterator<Item = &FilterOption> {
+        self.sections.iter().flat_map(|section| section.options.iter())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct FilterSection {
+    #[serde(default)]
+    pub title: Option<String>,
+    pub options: Vec<FilterOption>,
+}
+
+/// One option of the menu: without a `value` it picks its `kind`; with one it is a condition.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct FilterOption {
+    pub id: String,
+    pub kind: FilterKind,
+    #[serde(default)]
+    pub value: Option<String>,
+    pub title: String,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub symbol: Option<String>,
+    #[serde(default)]
+    pub avatar: Option<Address>,
+    #[serde(default)]
+    pub count: Option<String>,
+    #[serde(default)]
+    pub checked: bool,
 }
 
 /// What a draft being written holds beyond the draft, kept with the UI state so a restart

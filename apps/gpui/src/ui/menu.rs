@@ -222,7 +222,12 @@ fn menu_card(open: &OpenMenu, cx: &App) -> impl IntoElement + use<> {
                     None => div().into_any_element(),
                 })
                 .child(div().flex_1().whitespace_nowrap().child(title.clone()))
-                .when(*checked, |row| row.child(icon(Symbol::Check, 14.)))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(super::CHECK))
+                        .when(*checked, |place| place.child(icon(Symbol::Check, super::CHECK))),
+                )
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(move |_, window, cx| {
                     if disabled {

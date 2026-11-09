@@ -103,6 +103,12 @@ pub struct ConnectAnswer {
     pub access: Option<crate::access::Access>,
 }
 
+/// `PUT /api/connected-apps/{id}`: what a connected application may do from now on.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessChange {
+    pub access: crate::access::Access,
+}
+
 /// `GET /api/connected-apps`: the address applications connect to, and the ones that can reach
 /// the user's mail, newest first. `DELETE /api/connected-apps/{id}` revokes one.
 #[derive(Debug, Clone, Serialize, Deserialize)]

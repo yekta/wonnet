@@ -142,6 +142,8 @@ struct GalleryView: View {
                             }
                             SettingsDivider()
                             MarkRow(title: "Work", detail: "Under the one it belongs to.", dot: Theme.accountColor("account-6").color, kind: .any, indent: Space.xl, checked: false) {}
+                            SettingsDivider()
+                            MarkRow(title: "Who and when", detail: "Locked: always so, never clicked.", symbol: .users, kind: .any, locked: true, checked: true) {}
                         }
                     }
                     FormSection(title: "Chips") {
@@ -154,6 +156,13 @@ struct GalleryView: View {
                             Chip(title: "Unread", symbol: .listFilter, remove: {})
                             Chip(title: "Verified", symbol: .shieldCheck, variant: .success)
                             Chip(title: "Unverified", symbol: .circleAlert, variant: .warning)
+                        }
+                        FlowLayout(stretchesLast: false) {
+                            ConditionChip(label: "from", text: "@chase.com", action: {}, remove: {})
+                            ConditionChip(label: "labelled", text: "Medical", open: true, action: {}, remove: {})
+                            ConditionChip(label: "from", text: "“zebra”", empty: true, action: {}, remove: {})
+                            AddChip(title: "Add") {}
+                            AddChip(title: "Narrow it", open: true) {}
                         }
                     }
                     FormSection(title: "Attachments") {
@@ -186,6 +195,8 @@ struct GalleryView: View {
                             ChoiceRow(title: "Highlighted", detail: "Detail", symbol: .clock, highlighted: true) {}
                             ChoiceRow(title: "A choice", detail: "⌘K", symbol: .command) {}
                             ChoiceRow(title: "Ada Lovelace", detail: "ada@example.com", avatar: Address(name: "Ada Lovelace", email: "ada@example.com")) {}
+                            ChoiceRow(title: "Ada Lovelace", subtitle: "ada@example.com", detail: "1,204", avatar: Address(name: "Ada Lovelace", email: "ada@example.com"), checked: true) {}
+                            ChoiceRow(title: "Charles Babbage", subtitle: "charles@example.com", detail: "980", avatar: Address(name: "Charles Babbage", email: "charles@example.com")) {}
                             ChoiceRow(title: "Sam Lee", detail: "sam@acme.example", dot: Tokens.account2.color, checked: true) {}
                             ChoiceRow(title: "Plain") {}
                         }

@@ -1,5 +1,6 @@
 //! Everything a client draws, ready to draw: thread rows, dates, message HTML and drafts.
 
+pub mod access;
 pub mod compose;
 pub mod connected;
 pub mod dark;

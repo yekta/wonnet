@@ -71,7 +71,9 @@ fun Modifier.listKeys(move: (Int) -> Unit, escape: () -> Unit): Modifier = onPre
 
 /**
  * A field that narrows a list: the search icon, the words, and a way to clear them. It takes the
- * keys that move through the list (↑, ↓, Enter to pick, Esc to leave).
+ * keys that move through the list (↑, ↓, Enter to pick, Esc to leave). `tag` is what the search
+ * is narrowed to, a chip before the words; `clearTag` gives it an × and Backspace in the empty
+ * field takes it away.
  */
 @Composable
 fun SearchField(
@@ -83,6 +85,8 @@ fun SearchField(
     symbol: Symbol = Symbol.Search,
     autofocus: Boolean = false,
     focusTrigger: Int = 0,
+    tag: String? = null,
+    clearTag: (() -> Unit)? = null,
     submit: () -> Unit = {},
     move: (Int) -> Unit = {},
     escape: () -> Unit = {},
@@ -102,13 +106,22 @@ fun SearchField(
         horizontalArrangement = Arrangement.spacedBy(Space.s),
     ) {
         Icon(symbol, 14f, Tokens.mutedStrongerForeground.color)
+        tag?.let { Chip(it, remove = clearTag) }
         val textStyle = (if (style == SearchStyle.Sheet) TextStyle.Body else TextStyle.Label).compose(Tokens.foreground.color)
         BasicTextField(
             text, onText,
-            Modifier.weight(1f).focusRequester(focus).listKeys(move) {
-                escape()
-                if (style == SearchStyle.Bar) onText("")
-            },
+            Modifier
+                .weight(1f)
+                .focusRequester(focus)
+                .onPreviewKeyEvent { event ->
+                    val untag = clearTag?.takeIf { text.isEmpty() && event.type == KeyEventType.KeyDown && event.key == Key.Backspace }
+                    untag?.invoke()
+                    untag != null
+                }
+                .listKeys(move) {
+                    escape()
+                    if (style == SearchStyle.Bar) onText("")
+                },
             singleLine = true,
             textStyle = textStyle,
             cursorBrush = SolidColor(Tokens.foreground.color),

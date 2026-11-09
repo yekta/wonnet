@@ -108,6 +108,7 @@ pub struct Store {
     path: PathBuf,
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct LocalAccount {
     pub id: String,
     pub provider: String,
@@ -729,21 +730,11 @@ impl Store {
     // ---------- reading ----------
 
     pub fn accounts(&self) -> Result<Vec<LocalAccount>> {
-        let mut statement = self.db.prepare_cached(
-            "SELECT id, provider, address, name, status, color, identities FROM accounts ORDER BY rowid",
-        )?;
-        let rows = statement.query_map([], |row| {
-            Ok(LocalAccount {
-                id: row.get(0)?,
-                provider: row.get(1)?,
-                address: row.get(2)?,
-                name: row.get(3)?,
-                status: row.get(4)?,
-                color: row.get(5)?,
-                identities: serde_json::from_str(&row.get::<_, String>(6)?).unwrap_or_default(),
-            })
-        })?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+        accounts_of(&self.db)
+    }
+
+    pub fn labels(&self) -> Result<Vec<LocalLabel>> {
+        labels_of(&self.db)
     }
 
     pub fn mailboxes(&self) -> Result<(Vec<Mailbox>, Vec<AccountView>)> {
@@ -1350,12 +1341,109 @@ impl Store {
     }
 }
 
+fn accounts_of(db: &Connection) -> Result<Vec<LocalAccount>> {
+    let mut statement = db
+        .prepare_cached("SELECT id, provider, address, name, status, color, identities FROM accounts ORDER BY rowid")?;
+    let rows = statement.query_map([], |row| {
+        Ok(LocalAccount {
+            id: row.get(0)?,
+            provider: row.get(1)?,
+            address: row.get(2)?,
+            name: row.get(3)?,
+            status: row.get(4)?,
+            color: row.get(5)?,
+            identities: serde_json::from_str(&row.get::<_, String>(6)?).unwrap_or_default(),
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+fn labels_of(db: &Connection) -> Result<Vec<LocalLabel>> {
+    let mut statement = db.prepare_cached("SELECT id, account_id, name FROM labels ORDER BY name")?;
+    let rows = statement
+        .query_map([], |row| Ok(LocalLabel { id: row.get(0)?, account_id: row.get(1)?, name: row.get(2)? }))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// A message as a connected app's filter looks at it.
+#[derive(Debug, Clone, Default)]
+pub struct ReachRow {
+    pub thread: String,
+    pub from_email: String,
+    pub from_name: Option<String>,
+    /// To, Cc and Bcc.
+    pub recipients: Vec<Address>,
+    pub cc: Vec<Address>,
+    pub subject: String,
+    pub labels: Vec<String>,
+    /// The attachments' file names.
+    pub attachments: Vec<String>,
+    /// Unix milliseconds.
+    pub date: i64,
+    pub search_id: i64,
+}
+
+/// A label of an account, for the filter's suggestions and chips.
+#[derive(Debug, Clone)]
+pub struct LocalLabel {
+    pub id: String,
+    pub account_id: String,
+    pub name: String,
+}
+
 /// The read-only connection: searches run on it, away from the loop.
 pub struct Reader {
     db: Connection,
 }
 
 impl Reader {
+    pub fn accounts(&self) -> Result<Vec<LocalAccount>> {
+        accounts_of(&self.db)
+    }
+
+    pub fn labels(&self) -> Result<Vec<LocalLabel>> {
+        labels_of(&self.db)
+    }
+
+    /// Every message of these accounts, as the filter looks at it.
+    pub fn reach_rows(&self, accounts: &[String]) -> Result<Vec<ReachRow>> {
+        let mut statement = self.db.prepare_cached(
+            "SELECT m.thread, m.from_email, m.from_name, m.recipients, m.subject, m.labels, m.attachments, m.date,
+                 m.search_id
+             FROM messages m WHERE m.account_id IN (SELECT value FROM json_each(?1))",
+        )?;
+        let wanted = serde_json::to_string(accounts)?;
+        let rows = statement.query_map([wanted], |row| {
+            let recipients: Recipients = serde_json::from_str(&row.get::<_, String>(3)?).unwrap_or_default();
+            let attachments: Vec<Attachment> = serde_json::from_str(&row.get::<_, String>(6)?).unwrap_or_default();
+            Ok(ReachRow {
+                thread: row.get(0)?,
+                from_email: row.get::<_, String>(1)?.to_lowercase(),
+                from_name: row.get(2)?,
+                cc: recipients.cc.clone(),
+                recipients: recipients.to.into_iter().chain(recipients.cc).chain(recipients.bcc).collect(),
+                subject: row.get(4)?,
+                labels: serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or_default(),
+                attachments: attachments.into_iter().map(|attachment| attachment.name).collect(),
+                date: row.get(7)?,
+                search_id: row.get(8)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// The messages whose body (or its start, when the body isn't here yet) has these words, one
+    /// after the other, as `search_id`s.
+    pub fn body_matches(&self, words: &str) -> Result<HashSet<i64>> {
+        let words = words.replace(['"', '*'], " ");
+        if !words.chars().any(char::is_alphanumeric) {
+            return Ok(HashSet::new());
+        }
+        let mut statement = self.db.prepare_cached("SELECT rowid FROM search WHERE search MATCH ?1")?;
+        let rows = statement.query_map([format!("{{snippet body}} : \"{}\"", words.trim())], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// The threads that match, of every account or only of `account`, and their rows.
     pub fn search<Tz: TimeZone>(
         &self,
