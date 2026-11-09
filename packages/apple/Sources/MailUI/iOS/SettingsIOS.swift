@@ -742,15 +742,11 @@ private struct ConnectedAppsPage: View {
 
     var body: some View {
         SettingsListSection("MCP Server", footer: "Use this URL with MCP clients such as Claude or ChatGPT. You can pick what each one can access.") {
-            Group {
-                if let address = model.address {
-                    CopyField(text: address)
-                } else {
-                    Spinner()
-                }
+            if let address = model.address {
+                AddressRow(address: address)
+            } else {
+                Spinner()
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
         }
         .id("connect")
         SettingsListSection(
@@ -809,6 +805,33 @@ private struct ConnectedAppsPage: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// The MCP server's address as a row of the list, with the copy button at its end, which shows a
+/// check for a moment once it has copied.
+private struct AddressRow: View {
+    let address: String
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: Space.m) {
+            Text(address).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+            Spacer(minLength: Space.s)
+            Button {
+                Platform.copy(address)
+                copied = true
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    copied = false
+                }
+            } label: {
+                Image(copied ? .check : .copy, size: 17)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Tokens.primary.color)
+            .accessibilityLabel(copied ? "Copied" : "Copy the address")
+        }
     }
 }
 
@@ -890,7 +913,7 @@ private struct SnippetPage: View {
 // MARK: Parts
 
 /// The settings' list: the system's inset groups, drawn on the theme's colours.
-private struct SettingsList<Content: View>: View {
+struct SettingsList<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -909,7 +932,7 @@ private struct SettingsList<Content: View>: View {
 
 /// A group of the list: its name over it and the muted line under it saying what it does, as
 /// the Mac's. Both are words, so every group looks the same.
-private struct SettingsListSection<Content: View>: View {
+struct SettingsListSection<Content: View>: View {
     let title: String?
     let footer: String?
     @ViewBuilder let content: Content

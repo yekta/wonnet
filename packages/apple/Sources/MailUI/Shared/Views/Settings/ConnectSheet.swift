@@ -66,7 +66,10 @@ struct ConnectSheet: View {
 
     // MARK: Asking
 
-    private func asking(_ request: ConnectRequest) -> some View {
+    @ViewBuilder private func asking(_ request: ConnectRequest) -> some View {
+        #if os(iOS)
+        iosForm(request)
+        #else
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xl) {
@@ -92,7 +95,71 @@ struct ConnectSheet: View {
             .padding(.vertical, Space.m)
             .rule(.top)
         }
+        #endif
     }
+
+    #if os(iOS)
+    /// On iOS the system's own: a list of inset groups, a checkmark on the choice in force,
+    /// switches for the privileges, and the system's buttons under it.
+    private func iosForm(_ request: ConnectRequest) -> some View {
+        SettingsList {
+            Section {
+                Asker(request: request, card: false)
+            }
+            SettingsListSection("Accounts", footer: "Which mail it can reach.") {
+                CheckCell(title: "Every account", detail: "Including the ones you add later.", symbol: .inbox, checked: everyAccount) {
+                    everyAccount = true
+                }
+                CheckCell(title: "Only some accounts", detail: "Only the ones you pick.", symbol: .listFilter, checked: !everyAccount) {
+                    everyAccount = false
+                }
+            }
+            if !everyAccount {
+                SettingsListSection(footer: accounts.isEmpty ? "Pick at least one account." : nil) {
+                    ForEach(request.accounts) { account in
+                        CheckCell(
+                            title: account.title, detail: account.detail, dot: Theme.accountColor(account.color ?? "").color,
+                            checked: accounts.contains(account.id)
+                        ) { toggle(account.id, in: &accounts) }
+                    }
+                }
+            }
+            SettingsListSection("Role", footer: "The most it can do with that mail.") {
+                ForEach(request.roles) { choice in
+                    CheckCell(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), checked: role == choice.id) {
+                        role = choice.id
+                    }
+                }
+            }
+            SettingsListSection("Privileges", footer: "What the role doesn't cover.") {
+                ForEach(request.privileges) { choice in
+                    Toggle(isOn: Binding(get: { privileges.contains(choice.id) }, set: { _ in toggle(choice.id, in: &privileges) })) {
+                        CellLabel(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named))
+                    }
+                }
+            }
+            if let failure {
+                Section {
+                    Label { Text(failure) } icon: { Image(.circleAlert, size: 17) }
+                        .foregroundStyle(Tokens.destructive.color)
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .bottomBar) {
+                Spacer()
+                Button("Deny") { deny(request) }
+                    .tint(Tokens.foreground.color)
+                    .disabled(approving || denying)
+                Button { approve(request) } label: {
+                    if approving { ProgressView() } else { Text("Approve") }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!(everyAccount || !accounts.isEmpty) || denying || approving)
+            }
+        }
+    }
+    #endif
 
     @ViewBuilder private func choices(_ request: ConnectRequest) -> some View {
         FormSection(title: "Accounts", detail: "Which mail it can reach.") {
@@ -187,9 +254,16 @@ struct ConnectSheet: View {
             Text(title).textStyle(.subheading)
             Text(message).textStyle(.label, color: Tokens.mutedForeground.color).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+            #if os(iOS)
+            Button("Done") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(.top, Space.s)
+            #else
             ActionButton(title: "Done", variant: .primary) { dismiss() }
                 .keyboardShortcut(.defaultAction)
                 .padding(.top, Space.s)
+            #endif
         }
         .frame(maxWidth: Theme.formWidth)
         .padding(Space.xl)
@@ -201,28 +275,36 @@ struct ConnectSheet: View {
 /// where it sends the browser back to.
 private struct Asker: View {
     let request: ConnectRequest
+    /// On a card of its own; iOS has it in a group of its list instead.
+    var card = true
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Space.m) {
-                HStack(spacing: Space.s) {
-                    Image(request.verified ? .shieldCheck : .box, size: 20).foregroundStyle(Tokens.foreground.color)
-                    Text(request.client).textStyle(.heading).lineLimit(1)
-                    if request.verified {
-                        Chip(title: "Verified", symbol: .shieldCheck, variant: .success)
-                    } else {
-                        Chip(title: "Unverified", symbol: .circleAlert, variant: .warning)
-                    }
-                    Spacer(minLength: 0)
+        if card {
+            Card { content }
+        } else {
+            content.padding(.vertical, Space.xs)
+        }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.s) {
+                Image(request.verified ? .shieldCheck : .box, size: 20).foregroundStyle(Tokens.foreground.color)
+                Text(request.client).textStyle(.heading).lineLimit(1)
+                if request.verified {
+                    Chip(title: "Verified", symbol: .shieldCheck, variant: .success)
+                } else {
+                    Chip(title: "Unverified", symbol: .circleAlert, variant: .warning)
                 }
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    fact(.globe, request.publisher)
-                    fact(.arrowRight, request.backTo)
-                    if request.onDevice {
-                        fact(.monitor, "Sends you back to an application on this device", warning: true)
-                    }
-                    fact(.circleAlert, "Only approve if you started this yourself", warning: true)
+                Spacer(minLength: 0)
+            }
+            VStack(alignment: .leading, spacing: Space.xs) {
+                fact(.globe, request.publisher)
+                fact(.arrowRight, request.backTo)
+                if request.onDevice {
+                    fact(.monitor, "Sends you back to an application on this device", warning: true)
                 }
+                fact(.circleAlert, "Only approve if you started this yourself", warning: true)
             }
         }
     }
@@ -235,3 +317,59 @@ private struct Asker: View {
         }
     }
 }
+
+#if os(iOS)
+/// A choice as a row of iOS's list: its symbol or an account's dot, its name and a line, and the
+/// system's checkmark at its end when it is in force. The whole row is the button.
+private struct CheckCell: View {
+    let title: String
+    var detail: String?
+    var symbol: Symbol?
+    var dot: Color?
+    let checked: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.m) {
+                CellLabel(title: title, detail: detail, symbol: symbol, dot: dot)
+                Spacer(minLength: Space.s)
+                if checked {
+                    Image(.check, size: 17).foregroundStyle(Tokens.primary.color)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(checked ? .isSelected : [])
+    }
+}
+
+/// A row's words with its picture before them: a symbol in the row's tile, or an account's dot.
+private struct CellLabel: View {
+    let title: String
+    var detail: String?
+    var symbol: Symbol?
+    var dot: Color?
+
+    var body: some View {
+        HStack(spacing: Space.m) {
+            Group {
+                if let dot {
+                    Circle().fill(dot).frame(width: 10, height: 10)
+                } else if let symbol {
+                    Image(symbol, size: 17).foregroundStyle(Tokens.foreground.color)
+                }
+            }
+            .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundStyle(Tokens.foreground.color)
+                if let detail {
+                    Text(detail).textStyle(.caption, color: Tokens.mutedForeground.color).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+#endif
