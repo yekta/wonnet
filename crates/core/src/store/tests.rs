@@ -337,6 +337,23 @@ fn the_inbox_splits_into_important_custom_splits_and_other() {
 }
 
 #[test]
+fn a_label_split_is_a_tab_of_its_own_account_only() {
+    let mut store = store();
+    let other = Account { id: "b".into(), address: "me@home.com".into(), ..account() };
+    let labels = [Label { id: "travel".into(), account_id: "a".into(), name: "Travel".into(), deleted: false, rev: 1 }];
+    store
+        .apply_changes(Batch { accounts: &[account(), other], labels: &labels, cursor: Some(1), ..Default::default() })
+        .unwrap();
+    set(&mut store, "split:trips", json!({ "name": "Trips", "label": "travel" }));
+    set(&mut store, "split:team", json!({ "name": "Team", "from": ["@team.example"] }));
+    set(&mut store, "split_inbox", json!(true));
+    let names = |mailbox| page(&store, mailbox).splits.into_iter().map(|tab| tab.name).collect::<Vec<_>>();
+    assert_eq!(names("inbox"), ["Important", "Team", "Trips", "Other", "All"]);
+    assert_eq!(names("a/inbox"), ["Important", "Team", "Trips", "Other", "All"]);
+    assert_eq!(names("b/inbox"), ["Important", "Team", "Other", "All"]);
+}
+
+#[test]
 fn search_finds_words_by_prefix_in_bodies_too() {
     let mut store = store();
     apply(&mut store, &[account()], &[message("m1", "t1", "Alice", 1_000), message("m2", "t2", "Bob", 2_000)], 1);
