@@ -280,21 +280,18 @@ struct ConnectSheet: View {
                     }
                 }
             }
+            // What it all comes to, at the end of the list: as long as it needs, it moves no row above
+            // it and never covers the list.
+            Section {
+                SentenceText(parts: draft.summary?.sentence ?? [])
+                    .listRowBackground(Color.clear)
+            }
             if let failure = draft.failure {
                 Section {
                     Label { Text(failure) } icon: { Image(.circleAlert, size: 17) }
                         .foregroundStyle(Tokens.destructive.color)
                 }
             }
-        }
-        // What it all comes to, over the buttons that answer: down here it grows into the bar, so
-        // the rows don't move under a finger when it changes.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SentenceText(parts: draft.summary?.sentence ?? [])
-                .padding(.horizontal, Space.xl)
-                .padding(.vertical, Space.m)
-                .background(Tokens.background.color)
-                .rule(.top)
         }
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {

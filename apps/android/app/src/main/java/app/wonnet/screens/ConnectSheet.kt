@@ -240,6 +240,9 @@ private fun ColumnScope.ConnectForm(
                 FilterGroup(summary, open)
                 Reads(request, access) { access = it }
                 Abilities(request, access) { access = it }
+                // What it all comes to, at the end of the list: as long as it needs, it moves no
+                // row above it and never squeezes the list or pushes the buttons off the screen.
+                Sentence(summary.sentence, Modifier.padding(horizontal = Space.l))
                 summaryError?.let { Notice(it, error = true, symbol = Symbol.CircleAlert) }
             }
         }
@@ -248,9 +251,6 @@ private fun ColumnScope.ConnectForm(
             Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = Space.l, vertical = Space.s),
             verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            // What it all comes to, over the buttons that answer: down here it grows into the bar,
-            // so the rows don't move under a finger when it changes.
-            Sentence(summary.sentence, Modifier.padding(top = Space.xs))
             error?.let { Notice(it, Modifier.padding(vertical = Space.xs), error = true, symbol = Symbol.CircleAlert) }
             Row(Modifier.fillMaxWidth().offset(x = Dims.buttonGap / 2), horizontalArrangement = Arrangement.End) {
                 val changing = request.app != null
