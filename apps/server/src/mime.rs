@@ -40,9 +40,10 @@ pub struct File {
 
 pub fn parse(raw: &[u8]) -> Option<Parsed> {
     let message = MessageParser::default().parse(raw)?;
-    let mut html = html_of(&message);
+    // Postgres can't keep a NUL in text.
+    let mut html = html_of(&message).map(|page| page.replace('\0', ""));
     let text = message.text_bodies().find_map(|part| match &part.body {
-        PartType::Text(text) => Some(text.to_string()),
+        PartType::Text(text) => Some(text.replace('\0', "")),
         _ => None,
     });
     let (inline, listed) = split_attachments(&message, html.as_deref());
@@ -401,6 +402,17 @@ mod tests {
         assert_eq!(parsed.attachments.len(), 1);
         assert_eq!(parsed.attachments[0].name, "plan.pdf");
         assert!(parsed.plain.contains("Hello"));
+    }
+
+    #[test]
+    fn leaves_nul_out_of_bodies() {
+        let raw = "From: ann@example.com\r\nContent-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
+            --b\r\nContent-Type: text/plain\r\n\r\nHel\0lo\r\n\
+            --b\r\nContent-Type: text/html\r\n\r\n<p>Hel\0lo</p>\r\n\
+            --b--\r\n";
+        let body = parse(raw.as_bytes()).unwrap().body;
+        assert_eq!(body.text.as_deref().map(str::trim), Some("Hello"));
+        assert!(body.html.unwrap().contains("Hello"));
     }
 
     #[test]
