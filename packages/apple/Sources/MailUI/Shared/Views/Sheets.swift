@@ -9,6 +9,7 @@ enum Modal: Identifiable {
     /// iOS's settings; the Mac's take the window.
     case settings
     case gallery
+    /// An application asking to connect on iOS; on the Mac it takes the window.
     case connect(Connecting)
 
     var id: String {
@@ -26,7 +27,9 @@ enum Modal: Identifiable {
 extension MailStore {
     var modal: Modal? {
         get {
+            #if os(iOS)
             if let connecting { return .connect(connecting) }
+            #endif
             if let palette { return .palette(palette) }
             if let labeling { return .label(labeling) }
             if let snoozing { return .snooze(snoozing) }
@@ -37,7 +40,9 @@ extension MailStore {
         }
         set {
             guard newValue == nil else { return }
+            #if os(iOS)
             if connecting != nil { return connecting = nil }
+            #endif
             palette = nil
             labeling = nil
             snoozing = nil

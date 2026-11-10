@@ -31,11 +31,14 @@ struct SettingsRoute: View {
         }
         .background(Tokens.background.color)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                ActionButton(title: "Back", symbol: .arrowLeft, variant: .ghost) { store.closeSettings() }
-                    .help("Back to the mail (Esc)")
+            // The connect page over the settings has its own.
+            if store.connecting == nil {
+                ToolbarItem(placement: .navigation) {
+                    ActionButton(title: "Back", symbol: .arrowLeft, variant: .ghost) { store.closeSettings() }
+                        .help("Back to the mail (Esc)")
+                }
+                .withoutSystemGlass()
             }
-            .withoutSystemGlass()
         }
     }
 }

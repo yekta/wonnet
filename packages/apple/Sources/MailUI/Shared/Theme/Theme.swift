@@ -179,6 +179,8 @@ enum Theme {
     /// How wide the settings' sections may be dragged, and how wide a page grows.
     static let settingsSidebarWidths: ClosedRange<CGFloat> = 200...360
     static let settingsPageWidth: CGFloat = 640
+    /// Beside the choices of an application asking to connect: who asks, what it comes to, the answer.
+    static let connectPanelWidth: CGFloat = 380
 
     static let accountColors = [
         Tokens.account1, Tokens.account2, Tokens.account3, Tokens.account4, Tokens.account5,

@@ -3,13 +3,13 @@ import SwiftUI
 /// An application asking to reach the mail, opened by the `wonnet://connect` link of the page it
 /// sent the browser to, or a connected app whose access is changed: who it is, which accounts and
 /// which of their mail it reaches (the filter), what it reads of each message and what it can do,
-/// with the sentence that says it all over them. Deny and Approve (Cancel and Save for a connected
-/// app) sit under the choices; closing a request's sheet denies it too, so the browser doesn't
-/// wait on an answer that won't come.
+/// and the sentence that says it all. On the Mac it is a page over the whole window, as the
+/// settings are: the choices in a column of their own, and beside them who asks, the sentence and
+/// the buttons that answer, so neither covers the other. On iOS it is a sheet. Leaving a request
+/// unanswered denies it, so the browser doesn't wait on an answer that won't come.
 struct ConnectSheet: View {
     let connecting: Connecting
     @Environment(MailStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
     @State private var phase: Phase = .loading
     @State private var approving = false
     @State private var denying = false
@@ -23,28 +23,53 @@ struct ConnectSheet: View {
     }
 
     var body: some View {
-        Sheet(title: title, size: .large, background: Tokens.background) {
-            switch phase {
-            case .loading:
-                Spinner(size: 20).frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .failed(let message):
-                ended(symbol: .circleAlert, tint: Tokens.destructive, title: "This request can't go on", message: message)
-            case .asking(let draft):
-                asking(draft)
-            case .approved(let client):
-                ended(
-                    symbol: .circleCheck, tint: Tokens.success, title: "Approved",
-                    message: "Your browser takes you back to \(client). You can change or revoke it in Settings → Connected apps."
-                )
+        shell
+            .task { await load() }
+            .onDisappear {
+                guard !answered, case .asking(let draft) = phase, !draft.editing else { return }
+                store.denyQuietly(draft.request)
             }
+    }
+
+    #if os(macOS)
+    /// The page: its title across the top, Back beside the window's buttons, Esc too.
+    private var shell: some View {
+        VStack(spacing: 0) {
+            HeaderBar(title: title) { EmptyView() } trailing: { EmptyView() }
+            Rule()
+            content
         }
-        .task { await load() }
-        // A swipe would answer the request, or drop the changes, without a word: Deny, Cancel or
-        // the X say it.
-        .interactiveDismissDisabled()
-        .onDisappear {
-            guard !answered, case .asking(let draft) = phase, !draft.editing else { return }
-            store.denyQuietly(draft.request)
+        .background(Tokens.background.color)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                IconButton(symbol: .arrowLeft, help: "Back (Esc)", action: close)
+                    .keyboardShortcut(.cancelAction)
+            }
+            .withoutSystemGlass()
+        }
+    }
+    #else
+    private var shell: some View {
+        Sheet(title: title, size: .large, background: Tokens.background) { content }
+            // A swipe would answer the request, or drop the changes, without a word: Deny, Cancel or
+            // the X say it.
+            .interactiveDismissDisabled()
+    }
+    #endif
+
+    @ViewBuilder private var content: some View {
+        switch phase {
+        case .loading:
+            Spinner(size: 20).frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ended(symbol: .circleAlert, tint: Tokens.destructive, title: "This request can't go on", message: message)
+        case .asking(let draft):
+            asking(draft)
+        case .approved(let client):
+            ended(
+                symbol: .circleCheck, tint: Tokens.success, title: "Approved",
+                message: "Your browser takes you back to \(client). You can change or revoke it in Settings → Connected apps."
+            )
         }
     }
 
@@ -54,6 +79,10 @@ struct ConnectSheet: View {
         case .approved(let client): "Connect \(client)"
         default: connecting.app == nil ? "Connect an application" : "Change an application"
         }
+    }
+
+    private func close() {
+        store.connecting = nil
     }
 
     private func load() async {
@@ -72,41 +101,56 @@ struct ConnectSheet: View {
         #if os(iOS)
         iosForm(draft)
         #else
+        HStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.xxl) {
+                    choices(draft)
+                }
+                .frame(maxWidth: Theme.settingsPageWidth, alignment: .leading)
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.xl)
+                .padding(.bottom, Space.xxl * 2)
+                .frame(maxWidth: .infinity)
+            }
+            .fadesTop()
+            Rule(vertical: true)
+            answer(draft).frame(width: Theme.connectPanelWidth)
+        }
+        #endif
+    }
+
+    #if os(macOS)
+    /// Beside the choices: who asks, what it all comes to, and the buttons that answer. The
+    /// sentence grows as long as it needs, and scrolls here alone.
+    private func answer(_ draft: AccessDraft) -> some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xl) {
                     Asker(request: draft.request)
-                    choices(draft)
+                    SentenceText(parts: draft.summary?.sentence ?? [])
                     if let failure = draft.failure {
                         Notice(text: failure, tone: .error, symbol: .circleAlert)
                     }
                 }
                 .padding(Space.xl)
-                .frame(maxWidth: Theme.settingsPageWidth)
-                .frame(maxWidth: .infinity)
             }
-            // What it all comes to, beside the button that approves it. Down here it grows into the
-            // bar, so nothing on the page moves when it changes.
-            HStack(alignment: .center, spacing: Space.l) {
-                SentenceText(parts: draft.summary?.sentence ?? [])
-                    .padding(.leading, Theme.buttonGap / 2)
-                HStack(spacing: 0) {
-                    ActionButton(title: draft.editing ? "Cancel" : "Deny", variant: .ghost, pending: denying) { deny(draft) }
-                        .disabled(approving)
-                    ActionButton(title: draft.editing ? "Save" : "Approve", symbol: .check, variant: .primary, pending: approving) {
-                        approve(draft)
-                    }
-                    .keyboardShortcut(draft.menuOpen ? nil : .defaultAction)
-                    .disabled(!ready(draft) || denying)
+            .fadesTop()
+            // Half as far apart as they are from the panel's edges; each pads half a button gap itself.
+            HStack(spacing: Space.xl / 2 - Theme.buttonGap) {
+                ActionButton(title: draft.editing ? "Cancel" : "Deny", variant: .outline, pending: denying, wide: true) { deny(draft) }
+                    .disabled(approving)
+                ActionButton(title: draft.editing ? "Save" : "Approve", symbol: .check, variant: .primary, pending: approving, wide: true) {
+                    approve(draft)
                 }
-                .fixedSize()
+                .keyboardShortcut(draft.menuOpen ? nil : .defaultAction)
+                .disabled(!ready(draft) || denying)
             }
             .padding(.horizontal, Space.xl - Theme.buttonGap / 2)
-            .padding(.vertical, Space.m)
+            .padding(.vertical, Space.xl)
             .rule(.top)
         }
-        #endif
     }
+    #endif
 
     private func ready(_ draft: AccessDraft) -> Bool {
         guard let summary = draft.summary else { return false }
@@ -140,14 +184,10 @@ struct ConnectSheet: View {
         FormSection(title: "Filter", detail: "Which of that mail it can find. What's kept out isn't there for it.") {
             FilterCard(draft: draft)
         }
-        FormSection(title: "What it reads", detail: "Of each message it can reach.") {
+        FormSection(title: "What it reads", detail: "It always sees the sender, recipients, date and labels. Pick what else.") {
             SettingsCard {
-                MarkRow(
-                    title: request.always.title, detail: request.always.detail, symbol: request.always.symbol.map(Symbol.named), kind: .any,
-                    locked: true, checked: true
-                ) {}
                 ForEach(request.reads) { choice in
-                    SettingsDivider()
+                    if choice != request.reads.first { SettingsDivider() }
                     MarkRow(
                         title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named), kind: .any,
                         checked: access.reads.contains(choice.id)
@@ -219,12 +259,7 @@ struct ConnectSheet: View {
             } footer: {
                 ReachFooter(summary: draft.summary)
             }
-            SettingsListSection("What it reads", footer: "Of each message it can reach.") {
-                HStack(spacing: Space.m) {
-                    CellLabel(title: request.always.title, detail: request.always.detail, symbol: request.always.symbol.map(Symbol.named))
-                    Spacer(minLength: Space.s)
-                    Image(.lock, size: 15).foregroundStyle(Tokens.mutedStrongerForeground.color)
-                }
+            SettingsListSection("What it reads", footer: "It always sees the sender, recipients, date and labels. Pick what else.") {
                 ForEach(request.reads) { choice in
                     Toggle(isOn: Binding(get: { access.reads.contains(choice.id) }, set: { _ in draft.toggle(choice.id, in: \.reads, store) })) {
                         CellLabel(title: choice.title, detail: choice.detail, symbol: choice.symbol.map(Symbol.named))
@@ -294,7 +329,7 @@ struct ConnectSheet: View {
                     try await store.saveAccess(app, access: draft.access)
                     answered = true
                     store.show("Saved.")
-                    dismiss()
+                    close()
                 } else {
                     try await store.approve(draft.request, access: draft.access)
                     answered = true
@@ -307,7 +342,7 @@ struct ConnectSheet: View {
     }
 
     private func deny(_ draft: AccessDraft) {
-        guard !draft.editing else { return dismiss() }
+        guard !draft.editing else { return close() }
         denying = true
         draft.failure = nil
         Task {
@@ -316,7 +351,7 @@ struct ConnectSheet: View {
                 try await store.deny(draft.request)
                 answered = true
                 store.show("Denied \(draft.request.client).")
-                dismiss()
+                close()
             } catch {
                 draft.failure = error.localizedDescription
             }
@@ -332,12 +367,12 @@ struct ConnectSheet: View {
             Text(message).textStyle(.label, color: Tokens.mutedForeground.color).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             #if os(iOS)
-            Button("Done") { dismiss() }
+            Button("Done", action: close)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.top, Space.s)
             #else
-            ActionButton(title: "Done", variant: .primary) { dismiss() }
+            ActionButton(title: "Done", variant: .primary, action: close)
                 .keyboardShortcut(.defaultAction)
                 .padding(.top, Space.s)
             #endif

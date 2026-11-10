@@ -63,7 +63,6 @@ data class ConnectRequest(
     val backTo: String,
     val onDevice: Boolean,
     val accounts: List<AccessChoice>,
-    val always: AccessChoice,
     val reads: List<AccessChoice>,
     val roles: List<AccessChoice>,
     val privileges: List<AccessChoice>,
@@ -73,7 +72,7 @@ data class ConnectRequest(
         fun read(json: JSON) = ConnectRequest(
             json.string("key"), json.optionalString("app"), json.string("client"), json.bool("verified"), json.string("publisher"),
             json.string("back_to"), json.bool("on_device"), json.objects("accounts").map(AccessChoice::read),
-            AccessChoice.read(json.obj("always") ?: EmptyJSON), json.objects("reads").map(AccessChoice::read),
+            json.objects("reads").map(AccessChoice::read),
             json.objects("roles").map(AccessChoice::read), json.objects("privileges").map(AccessChoice::read), Access(json.obj("access") ?: EmptyJSON),
         )
     }

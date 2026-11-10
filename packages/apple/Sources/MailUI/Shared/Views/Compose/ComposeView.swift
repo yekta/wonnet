@@ -67,7 +67,7 @@ struct ComposeView: View {
                     .disabled(cannotSend)
             }
             .toolbar {
-                if store.settings == nil {
+                if !store.mailCovered {
                     ToolbarItem(placement: .navigation) {
                         IconButton(symbol: .arrowLeft, help: "Back (Esc)", action: close)
                             .keyboardShortcut(.cancelAction)

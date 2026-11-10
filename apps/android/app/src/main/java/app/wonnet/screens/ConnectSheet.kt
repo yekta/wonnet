@@ -230,7 +230,9 @@ private fun ColumnScope.ConnectForm(
     } else {
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll)) {
             Column(
-                Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).padding(Space.l),
+                // Room after the last group, so it doesn't end against the bar under it.
+                Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp)
+                    .padding(start = Space.l, top = Space.l, end = Space.l, bottom = Space.xxl + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(Space.xl),
             ) {
                 WhoIsAsking(request)
@@ -350,17 +352,12 @@ private fun FilterGroup(summary: AccessSummary, open: (FilterLine?) -> Unit) {
     }
 }
 
-/** What it reads of each message: who and when always, locked; the parts as switches. */
+/** What it reads of each message, the parts as switches. */
 @Composable
 private fun Reads(request: ConnectRequest, access: Access, change: (Access) -> Unit) {
-    SettingsGroup("What it reads", "Of each message it can reach.") {
-        val always = request.always
-        SettingsRow(
-            always.title, detail = always.detail, leading = { ChoiceLead(always) }, wrap = true,
-            trailing = { Icon(Symbol.Lock, 14f, Tokens.mutedStrongerForeground.color, Modifier.semantics { contentDescription = "Always" }) },
-        )
-        for (part in request.reads) {
-            SettingsRule()
+    SettingsGroup("What it reads", "It always sees the sender, recipients, date and labels. Pick what else.") {
+        for ((index, part) in request.reads.withIndex()) {
+            if (index > 0) SettingsRule()
             SettingsToggleRow(part.title, part.id in access.reads, part.detail, leading = { ChoiceLead(part) }) { change(access.togglingRead(part.id)) }
         }
     }

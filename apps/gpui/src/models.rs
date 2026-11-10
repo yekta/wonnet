@@ -289,8 +289,6 @@ pub struct ConnectRequest {
     pub back_to: String,
     pub on_device: bool,
     pub accounts: Vec<AccessChoice>,
-    /// What it always reads, shown locked.
-    pub always: AccessChoice,
     pub reads: Vec<AccessChoice>,
     pub roles: Vec<AccessChoice>,
     pub privileges: Vec<AccessChoice>,

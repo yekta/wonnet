@@ -308,8 +308,7 @@ pub enum Mark {
 }
 
 /// A choice on a form's card: its mark, a symbol or a dot, its name and a line about it. A click
-/// anywhere on it picks it. `indent` sets it under the choice it belongs to. A `locked` choice is
-/// always so: a lock stands in its mark's place, and it can't be clicked or hovered.
+/// anywhere on it picks it. `indent` sets it under the choice it belongs to.
 #[derive(IntoElement)]
 pub struct MarkRow {
     id: SharedString,
@@ -318,7 +317,6 @@ pub struct MarkRow {
     lead: super::Lead,
     mark: Mark,
     checked: bool,
-    locked: bool,
     indent: f32,
     /// The first or the last row of its card, whose corners its fill follows: the card's clip is
     /// square.
@@ -341,17 +339,11 @@ impl MarkRow {
             lead: super::Lead::None,
             mark,
             checked: false,
-            locked: false,
             indent: 0.,
             first: false,
             last: false,
             on_click: Rc::new(on_click),
         }
-    }
-
-    pub fn locked(mut self, locked: bool) -> Self {
-        self.locked = locked;
-        self
     }
 
     pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
@@ -397,18 +389,11 @@ impl RenderOnce for MarkRow {
             .py(px(inset))
             .pl(px(space::L + self.indent))
             .pr(px(space::L))
-            .when(!self.locked, |row| {
-                row.cursor_pointer()
-                    .hover(|row| row.bg(cx.color(FORM_CARD_ACCENT)))
-                    .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-                    .on_click(move |event, window, cx| on_click(event, window, cx))
-            })
-            .child(match self.locked {
-                true => {
-                    icon(super::Symbol::Lock, 14.).size(px(size::MARK)).text_color(cx.color(MUTED_STRONGER_FOREGROUND))
-                }
-                false => mark(self.mark, self.checked, group, cx),
-            })
+            .cursor_pointer()
+            .hover(|row| row.bg(cx.color(FORM_CARD_ACCENT)))
+            .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+            .on_click(move |event, window, cx| on_click(event, window, cx))
+            .child(mark(self.mark, self.checked, group, cx))
             .child(label.flex_1().min_w_0())
     }
 }

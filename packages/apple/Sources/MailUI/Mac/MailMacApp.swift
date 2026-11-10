@@ -98,15 +98,23 @@ private struct MacPages: View {
             OnboardingView().overlay(alignment: .bottom) { ToastView() }
         } else {
             ZStack(alignment: .leading) {
-                // The mail stays under the settings, so going back finds it as it was left.
+                // The mail stays under the settings, so going back finds it as it was left; both
+                // stay under an application asking to connect.
                 HStack(spacing: 0) {
                     if store.settings == nil, store.keepSidebar, store.sidebarOpen { panel }
                     content
                 }
-                .opacity(store.settings == nil ? 1 : 0)
-                .allowsHitTesting(store.settings == nil)
+                .opacity(store.mailCovered ? 0 : 1)
+                .allowsHitTesting(!store.mailCovered)
                 if store.settings == nil, !store.keepSidebar { sidebar }
-                if let section = store.settings { SettingsRoute(section: section) }
+                if let section = store.settings {
+                    SettingsRoute(section: section)
+                        .opacity(store.connecting == nil ? 1 : 0)
+                        .allowsHitTesting(store.connecting == nil)
+                }
+                if let connecting = store.connecting {
+                    ConnectSheet(connecting: connecting).id(connecting.id)
+                }
             }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 0) {
@@ -283,8 +291,8 @@ struct MacTopBar: View {
             }
         }
         .toolbar {
-            // The mail stays under the settings, which have their own.
-            if store.settings == nil {
+            // The mail stays under the settings and the connect page, which have their own.
+            if !store.mailCovered {
                 ToolbarItem(placement: .navigation) {
                     HStack(spacing: 0) {
                         IconButton(symbol: .menu, help: "Mailboxes", circled: false, action: toggleSidebar)

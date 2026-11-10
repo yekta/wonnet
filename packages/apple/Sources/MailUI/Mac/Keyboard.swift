@@ -101,6 +101,8 @@ final class KeyCoordinator {
     func handle(_ event: NSEvent) -> Bool {
         guard !Self.recording, let window = view?.window, event.window === window, window.isKeyWindow, window.attachedSheet == nil else { return false }
         guard !(window.firstResponder is NSText) else { return false }
+        // The connect page answers its own keys.
+        guard store.connecting == nil else { return false }
         let plain = event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
         if store.settings != nil {
             guard plain, event.keyCode == 53, store.confirmation == nil else { return false }

@@ -121,12 +121,6 @@ fn sheet(asker: Asker, accounts: &[LocalAccount], access: Access) -> ConnectRequ
         back_to: asker.back_to,
         on_device: asker.on_device,
         accounts: account_choices(accounts),
-        always: choice(
-            "who",
-            "Who and when",
-            "Sender, recipients, date and labels. Always: it can’t sort mail without them.",
-            "users",
-        ),
         reads: vec![
             choice("subject", "Subject", "The line it was sent with.", "type"),
             choice("body", "Body", "The whole text of each message.", "file-text"),

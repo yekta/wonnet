@@ -765,8 +765,6 @@ pub struct ConnectRequestView {
     /// It goes back to an application on this device, not to a website: a warning.
     pub on_device: bool,
     pub accounts: Vec<AccessChoice>,
-    /// What it always reads, shown locked: who and when.
-    pub always: AccessChoice,
     /// The parts it may read: `subject`, `body`, `attachments`.
     pub reads: Vec<AccessChoice>,
     /// `reader` (only looks) and `organizer`.
