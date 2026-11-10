@@ -833,7 +833,16 @@ impl Store {
         let tabs = match &splits {
             Some(splits) if !in_unread && (in_all || label.starts_with("inbox:")) => {
                 let mut tabs = vec![("inbox:important".to_string(), "Important".to_string())];
-                tabs.extend(splits.iter().map(|split| (format!("inbox:{}", split.id), split.name.clone())));
+                let elsewhere = |split: &&Split| match (&split.label, &account) {
+                    (Some(label), Some(account)) => self.label(label).is_some_and(|(owner, _)| owner != *account),
+                    _ => false,
+                };
+                tabs.extend(
+                    splits
+                        .iter()
+                        .filter(|split| !elsewhere(split))
+                        .map(|split| (format!("inbox:{}", split.id), split.name.clone())),
+                );
                 tabs.push(("inbox:other".into(), "Other".into()));
                 tabs.push((ALL_SPLIT.into(), "All".into()));
                 let prefix = account.as_ref().map(|account| format!("{account}/")).unwrap_or_default();
