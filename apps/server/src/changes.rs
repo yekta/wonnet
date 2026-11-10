@@ -11,18 +11,42 @@ use uuid::Uuid;
 
 use crate::db::{ACCOUNT_COLUMNS, AccountRow, DraftRow, LabelRow, MESSAGE_COLUMNS, MessageRow, PreferenceRow};
 
-/// The floor, when a client's cursor means it must get every change again: the cursor is from
-/// before the floor, or above any rev given out, as after the database came back from a backup.
-/// Its catch-up then ends at the floor or above, so it starts over only once.
-pub async fn restart(db: &PgPool, cursor: i64) -> sqlx::Result<Option<i64>> {
-    if cursor == 0 {
-        return Ok(None);
-    }
+/// Revs below the floor are under it by 10^9 (migration 0014), so each fits in this band under it.
+const BAND: i64 = 500_000_000;
+
+/// Where a client's catch-up goes on from. `over` when it must get every change again: its cursor
+/// is from before the floor, or above any rev given out, as after the database came back from a
+/// backup.
+pub struct Start {
+    pub rev: i64,
+    pub floor: i64,
+    pub over: bool,
+}
+
+/// A client catching up from below the floor keeps cursors in the band under it (see
+/// `cursor_of`), so a catch-up cut short goes on where it stopped instead of starting over.
+pub async fn start(db: &PgPool, cursor: i64) -> sqlx::Result<Start> {
     let (floor, highest): (i64, i64) =
         sqlx::query_as("SELECT COALESCE((SELECT max(rev) FROM rev_floor), 0), (SELECT last_value FROM revs)")
             .fetch_one(db)
             .await?;
-    Ok((cursor < floor || cursor > highest).then_some(floor))
+    let band = floor - BAND;
+    let rev = match cursor {
+        0 => Some(0),
+        _ if cursor > highest => None,
+        _ if cursor >= floor => Some(cursor),
+        _ if floor > 0 && cursor >= band => Some(cursor - band),
+        _ => None,
+    };
+    Ok(Start { rev: rev.unwrap_or(0), floor, over: rev.is_none() })
+}
+
+/// The cursor a client keeps once it has seen every rev through `rev`.
+pub fn cursor_of(rev: i64, floor: i64) -> i64 {
+    match rev < floor {
+        true => rev + floor - BAND,
+        false => rev,
+    }
 }
 
 pub async fn read(db: &PgPool, user_id: Uuid, cursor: i64, ahead: i64) -> sqlx::Result<ServerMessage> {
