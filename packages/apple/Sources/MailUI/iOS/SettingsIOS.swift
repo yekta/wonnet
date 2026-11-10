@@ -927,6 +927,8 @@ struct SettingsList<Content: View>: View {
                 .listRowSeparatorTint(Tokens.borderCard.color)
         }
         .listStyle(.insetGrouped)
+        // Room after the last group, so it doesn't end against a bar under the list.
+        .contentMargins(.bottom, Space.xxl + Space.xl, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Tokens.background.color.ignoresSafeArea())
         .font(TextStyle.body.font)

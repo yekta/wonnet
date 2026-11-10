@@ -142,8 +142,6 @@ struct GalleryView: View {
                             }
                             SettingsDivider()
                             MarkRow(title: "Work", detail: "Under the one it belongs to.", dot: Theme.accountColor("account-6").color, kind: .any, indent: Space.xl, checked: false) {}
-                            SettingsDivider()
-                            MarkRow(title: "Who and when", detail: "Locked: always so, never clicked.", symbol: .users, kind: .any, locked: true, checked: true) {}
                         }
                     }
                     FormSection(title: "Chips") {

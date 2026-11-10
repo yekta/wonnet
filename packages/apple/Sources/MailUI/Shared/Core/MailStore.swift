@@ -323,6 +323,12 @@ public final class MailStore {
         return syncing.contains { $0.id == account }
     }
 
+    /// The Mac's mail is under a page over the whole window: the settings, or an application
+    /// asking to connect.
+    var mailCovered: Bool {
+        settings != nil || connecting != nil
+    }
+
     /// Whether a sheet, the palette or a question is up, when the window's keys don't apply.
     var sheetOpen: Bool {
         compose != nil || snoozing != nil || labeling != nil || palette != nil || settings != nil || galleryOpen || confirmation != nil

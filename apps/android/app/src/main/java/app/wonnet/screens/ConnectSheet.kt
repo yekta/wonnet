@@ -230,7 +230,9 @@ private fun ColumnScope.ConnectForm(
     } else {
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll)) {
             Column(
-                Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).padding(Space.l),
+                // Room after the last group, so it doesn't end against the bar under it.
+                Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp)
+                    .padding(start = Space.l, top = Space.l, end = Space.l, bottom = Space.xxl + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(Space.xl),
             ) {
                 WhoIsAsking(request)
@@ -238,6 +240,9 @@ private fun ColumnScope.ConnectForm(
                 FilterGroup(summary, open)
                 Reads(request, access) { access = it }
                 Abilities(request, access) { access = it }
+                // What it all comes to, at the end of the list: as long as it needs, it moves no
+                // row above it and never squeezes the list or pushes the buttons off the screen.
+                Sentence(summary.sentence, Modifier.padding(horizontal = Space.l))
                 summaryError?.let { Notice(it, error = true, symbol = Symbol.CircleAlert) }
             }
         }
@@ -246,9 +251,6 @@ private fun ColumnScope.ConnectForm(
             Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = Space.l, vertical = Space.s),
             verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            // What it all comes to, over the buttons that answer: down here it grows into the bar,
-            // so the rows don't move under a finger when it changes.
-            Sentence(summary.sentence, Modifier.padding(top = Space.xs))
             error?.let { Notice(it, Modifier.padding(vertical = Space.xs), error = true, symbol = Symbol.CircleAlert) }
             Row(Modifier.fillMaxWidth().offset(x = Dims.buttonGap / 2), horizontalArrangement = Arrangement.End) {
                 val changing = request.app != null
@@ -350,17 +352,12 @@ private fun FilterGroup(summary: AccessSummary, open: (FilterLine?) -> Unit) {
     }
 }
 
-/** What it reads of each message: who and when always, locked; the parts as switches. */
+/** What it reads of each message, the parts as switches. */
 @Composable
 private fun Reads(request: ConnectRequest, access: Access, change: (Access) -> Unit) {
-    SettingsGroup("What it reads", "Of each message it can reach.") {
-        val always = request.always
-        SettingsRow(
-            always.title, detail = always.detail, leading = { ChoiceLead(always) }, wrap = true,
-            trailing = { Icon(Symbol.Lock, 14f, Tokens.mutedStrongerForeground.color, Modifier.semantics { contentDescription = "Always" }) },
-        )
-        for (part in request.reads) {
-            SettingsRule()
+    SettingsGroup("What it reads", "It always sees the sender, recipients, date and labels. Pick what else.") {
+        for ((index, part) in request.reads.withIndex()) {
+            if (index > 0) SettingsRule()
             SettingsToggleRow(part.title, part.id in access.reads, part.detail, leading = { ChoiceLead(part) }) { change(access.togglingRead(part.id)) }
         }
     }

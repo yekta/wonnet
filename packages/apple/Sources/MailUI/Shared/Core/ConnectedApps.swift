@@ -32,7 +32,6 @@ struct ConnectRequest: Codable {
     let backTo: String
     let onDevice: Bool
     let accounts: [AccessChoice]
-    let always: AccessChoice
     let reads: [AccessChoice]
     let roles: [AccessChoice]
     let privileges: [AccessChoice]

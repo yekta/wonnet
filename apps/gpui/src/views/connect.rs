@@ -1,8 +1,8 @@
-//! The sheet a `wonnet://connect` link opens over everything, or a connected app's Change: who is
-//! asking, the sentence that says what it may do, which accounts and which of their mail it
-//! reaches (the filter, with its menu under the chip that opened it), what it reads of each
-//! message and what it can do; then Approve or Deny (Save or Cancel). Closed any other way, a
-//! request is denied.
+//! The page a `wonnet://connect` link opens over the whole window, or a connected app's Change:
+//! which accounts and which of their mail it reaches (the filter, with its menu under the chip
+//! that opened it), what it reads of each message and what it can do, in a column of their own;
+//! beside them who is asking, the sentence that says what it may do, and Approve or Deny (Save or
+//! Cancel), so neither covers the other. Left any other way, a request is denied.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -21,8 +21,8 @@ use crate::models::{
 use crate::store::{ConnectChoices, ConnectState, FilterMenu, Store};
 use crate::theme::*;
 use crate::ui::{
-    self, ActionButton, AddChip, Chip, ChoiceRow, ConditionChip, Lead, Mark, MarkRow, SheetSize, Surface, Symbol, Tone,
-    Variant,
+    self, ActionButton, AddChip, Chip, ChoiceRow, ConditionChip, IconButton, Lead, Mark, MarkRow, Surface, Symbol,
+    Tone, Variant,
 };
 
 /// The most the menu's options take before they scroll.
@@ -146,8 +146,32 @@ impl Render for ConnectView {
             }
             ConnectState::Approved(client) => (format!("Connect {client}"), approved(client, &self.store, cx)),
         };
-        let sheet = ui::sheet("connect", title, SheetSize::Large, BACKGROUND, Vec::new(), content, close.clone(), cx);
-        div().absolute().inset_0().track_focus(&self.focus).child(ui::scrim(sheet, close, cx)).into_any_element()
+        ui::ListKeyTargets::sheet(Rc::new(close.clone()), cx);
+        let back = IconButton::new("connect-back", Symbol::ArrowLeft, "Back (Esc)")
+            .on_click(move |_, window, cx| close(window, cx))
+            .into_any_element();
+        let bar = super::topbar::window_bar(
+            vec![
+                ui::header_bar(Some(title.into()), vec![back], None, Vec::new(), cx)
+                    .flex_1()
+                    .px(px(0.))
+                    .pr(px(space::S))
+                    .into_any_element(),
+            ],
+            cx,
+        );
+        div()
+            .id("connect")
+            .absolute()
+            .inset_0()
+            .occlude()
+            .track_focus(&self.focus)
+            .flex()
+            .flex_col()
+            .bg(cx.color(BACKGROUND))
+            .child(bar)
+            .child(div().flex_1().min_h_0().flex().flex_col().child(content))
+            .into_any_element()
     }
 }
 
@@ -225,7 +249,8 @@ impl ConnectView {
         let deny = store.clone();
         let changing = choices.changing();
         let deny_button = ActionButton::new("connect-deny", if changing { "Cancel" } else { "Deny" })
-            .variant(Variant::Ghost)
+            .variant(Variant::Outline)
+            .wide()
             .disabled(choices.answering)
             .on_click(move |_, _, cx| {
                 deny.update(cx, |store, cx| match changing {
@@ -239,64 +264,82 @@ impl ConnectView {
             .symbol(Symbol::Check)
             .variant(Variant::Primary)
             .tooltip(tooltip)
+            .wide()
             .pending(choices.answering)
             .disabled(!choices.ready())
             .on_click(move |_, _, cx| approve.update(cx, |store, cx| store.approve_connect(cx)));
-        div()
-            .flex_1()
-            .min_h_0()
+        let choices_column = div().id("connect-choices").flex_1().min_w_0().h_full().overflow_y_scroll().child(
+            div().w_full().flex().justify_center().px(px(space::XL)).child(
+                div()
+                    .w_full()
+                    .max_w(px(size::SETTINGS_PAGE))
+                    .flex()
+                    .flex_col()
+                    .gap(px(space::XXL))
+                    .pt(px(space::XL))
+                    .pb(px(space::XXL * 2.))
+                    .child(ui::settings_group(
+                        "Accounts",
+                        Some("Whose mail it can reach."),
+                        vec![ui::mark_list(account_rows(choices, store), cx).into_any_element()],
+                        cx,
+                    ))
+                    .child(ui::settings_group(
+                        "Filter",
+                        Some("Which of that mail it can find. What's kept out isn't there for it."),
+                        self.filter_rows(choices, summary, cx),
+                        cx,
+                    ))
+                    .child(ui::settings_group(
+                        "What it reads",
+                        Some("It always sees the sender, recipients, date and labels. Pick what else."),
+                        vec![ui::mark_list(read_rows(choices, store), cx).into_any_element()],
+                        cx,
+                    ))
+                    .child(ui::settings_group(
+                        "What it can do",
+                        Some("With the mail it reaches."),
+                        vec![ui::mark_list(ability_rows(choices, store), cx).into_any_element()],
+                        cx,
+                    )),
+            ),
+        );
+        // Who asks, what it all comes to and the buttons that answer, beside the choices: the
+        // sentence grows as long as it needs, and scrolls here alone.
+        let panel = div()
+            .flex_none()
+            .w(px(size::CONNECT_PANEL))
+            .h_full()
             .flex()
             .flex_col()
+            .border_l_1()
+            .border_color(cx.color(BORDER))
             .child(
-                div().id("connect-choices").flex_1().min_h_0().overflow_y_scroll().child(
+                div().id("connect-answer").flex_1().min_h_0().overflow_y_scroll().child(
                     div()
                         .flex()
                         .flex_col()
                         .gap(px(space::XL))
                         .p(px(space::XL))
                         .child(asker(request, cx))
-                        .child(ui::settings_group(
-                            "Accounts",
-                            Some("Whose mail it can reach."),
-                            vec![ui::mark_list(account_rows(choices, store), cx).into_any_element()],
-                            cx,
-                        ))
-                        .child(ui::settings_group(
-                            "Filter",
-                            Some("Which of that mail it can find. What's kept out isn't there for it."),
-                            self.filter_rows(choices, summary, cx),
-                            cx,
-                        ))
-                        .child(ui::settings_group(
-                            "What it reads",
-                            Some("Of each message it can reach."),
-                            vec![ui::mark_list(read_rows(choices, store), cx).into_any_element()],
-                            cx,
-                        ))
-                        .child(ui::settings_group(
-                            "What it can do",
-                            Some("With the mail it reaches."),
-                            vec![ui::mark_list(ability_rows(choices, store), cx).into_any_element()],
-                            cx,
-                        ))
+                        .child(sentence(&summary.sentence, cx))
                         .children(error),
                 ),
             )
-            // What it all comes to, beside the button that approves it: down here it grows into the
-            // bar, so nothing on the page moves when it changes.
+            // Half as far apart as they are from the panel's edges; each pads half a button gap itself.
             .child(
                 div()
                     .flex_none()
                     .flex()
-                    .items_center()
-                    .gap(px(space::L))
+                    .gap(px(space::XL / 2. - size::BUTTON_GAP))
                     .px(px(space::XL - size::BUTTON_GAP / 2.))
-                    .py(px(space::M))
+                    .py(px(space::XL))
                     .border_t_1()
                     .border_color(cx.color(BORDER))
-                    .child(sentence(&summary.sentence, cx).flex_1().min_w_0().pl(px(size::BUTTON_GAP / 2.)))
-                    .child(div().flex_none().flex().child(deny_button).child(approve_button)),
-            )
+                    .child(div().flex_1().child(deny_button))
+                    .child(div().flex_1().child(approve_button)),
+            );
+        div().flex_1().min_h_0().flex().child(choices_column).child(panel)
     }
 
     // MARK: The filter
@@ -737,14 +780,16 @@ fn account_rows(choices: &ConnectChoices, store: &Entity<Store>) -> Vec<MarkRow>
 
 fn read_rows(choices: &ConnectChoices, store: &Entity<Store>) -> Vec<MarkRow> {
     let request = &choices.request;
-    let always = choice_row("connect-read", &request.always, Mark::Check, |_, _, _| {}).checked(true).locked(true);
-    let reads = request.reads.iter().filter_map(|choice| {
-        let part = Part::ALL.into_iter().find(|part| part.as_str() == choice.id)?;
-        let row =
-            choice_row("connect-read", choice, Mark::Check, changing(store, move |a| toggle(&mut a.reads, &part)));
-        Some(row.checked(choices.access.reads.contains(&part)))
-    });
-    std::iter::once(always).chain(reads).collect()
+    request
+        .reads
+        .iter()
+        .filter_map(|choice| {
+            let part = Part::ALL.into_iter().find(|part| part.as_str() == choice.id)?;
+            let row =
+                choice_row("connect-read", choice, Mark::Check, changing(store, move |a| toggle(&mut a.reads, &part)));
+            Some(row.checked(choices.access.reads.contains(&part)))
+        })
+        .collect()
 }
 
 fn ability_rows(choices: &ConnectChoices, store: &Entity<Store>) -> Vec<MarkRow> {

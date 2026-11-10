@@ -152,6 +152,8 @@ pub mod size {
     pub const SETTINGS_SIDEBAR_MIN: f32 = 200.0;
     pub const SETTINGS_SIDEBAR_MAX: f32 = 360.0;
     pub const SETTINGS_PAGE: f32 = 640.0;
+    /// Beside the choices of an application asking to connect: who asks, what it comes to, the answer.
+    pub const CONNECT_PANEL: f32 = 380.0;
     /// The width a divider is grabbed by, over its hairline.
     pub const DIVIDER_GRAB: f32 = 9.0;
     pub const BANNER_WIDTH: f32 = 400.0;
