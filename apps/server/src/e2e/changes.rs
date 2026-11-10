@@ -225,7 +225,7 @@ async fn preferences_and_drafts_sync_and_leave_tombstones(db: PgPool) {
 }
 
 #[sqlx::test]
-async fn a_cursor_the_database_never_gave_out_starts_over_once(db: PgPool) {
+async fn a_cursor_the_database_never_gave_out_starts_over_and_a_catch_up_goes_on(db: PgPool) {
     let server = Server::start(db.clone()).await;
     let user = db::create_user(&db).await.unwrap();
     let account = NewAccount {
@@ -240,11 +240,21 @@ async fn a_cursor_the_database_never_gave_out_starts_over_once(db: PgPool) {
     let (_, _, current, _) = changes(&server, user, 0).await;
     let floor: i64 = sqlx::query_scalar("SELECT rev FROM rev_floor").fetch_one(&db).await.unwrap();
 
+    let start = async |cursor| {
+        let start = crate::changes::start(&db, cursor).await.unwrap();
+        (start.rev, start.over)
+    };
+
     // A new app and one that is up to date carry on where they are.
-    assert_eq!(crate::changes::restart(&db, 0).await.unwrap(), None);
-    assert_eq!(crate::changes::restart(&db, current).await.unwrap(), None);
-    assert_eq!(crate::changes::restart(&db, floor).await.unwrap(), None);
+    assert_eq!(start(0).await, (0, false));
+    assert_eq!(start(current).await, (current, false));
+    assert_eq!(start(floor).await, (floor, false));
     // One that saw revs from before the floor, or revs this database never gave out, starts over.
-    assert_eq!(crate::changes::restart(&db, 5).await.unwrap(), Some(floor));
-    assert_eq!(crate::changes::restart(&db, current + 1_000).await.unwrap(), Some(floor));
+    assert_eq!(start(5).await, (0, true));
+    assert_eq!(start(current + 1_000).await, (0, true));
+    // One cut short while catching up on mail from before the floor goes on where it stopped.
+    sqlx::query("UPDATE messages SET rev = 7").execute(&db).await.unwrap();
+    let kept = crate::changes::cursor_of(7, floor);
+    assert!(kept < floor);
+    assert_eq!(start(kept).await, (7, false));
 }

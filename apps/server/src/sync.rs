@@ -40,17 +40,17 @@ async fn run(state: AppState, socket: WebSocket) {
         return;
     }
     let Ok(Some(user_id)) = api::user_of_token(&state, &token).await else { return };
-    let (cursor, floor) = match changes::restart(&state.db, cursor).await {
-        Ok(Some(floor)) => {
-            tracing::info!("a client of {user_id} at rev {cursor} gets every change again");
-            (0, floor)
-        }
-        Ok(None) => (cursor, 0),
+    let start = match changes::start(&state.db, cursor).await {
+        Ok(start) => start,
         Err(error) => {
             tracing::error!("couldn't check a cursor: {error}");
             return;
         }
     };
+    if start.over {
+        tracing::info!("a client of {user_id} at rev {cursor} gets every change again");
+    }
+    let (cursor, floor) = (start.rev, start.floor);
 
     let (out, mut outbox) = mpsc::channel::<ServerMessage>(256);
     let writer = tokio::spawn(async move {
@@ -115,7 +115,7 @@ struct Session {
     cursor: i64,
     /// The rev the accounts, labels and preferences were sent through, ahead of `cursor`.
     ahead: i64,
-    /// Where a client that starts over ends its catch-up, at least.
+    /// Where a catch-up ends, at least. Revs below it reach the client as `changes::cursor_of` them.
     floor: i64,
     /// Sends this client is waiting to hear about.
     waiting_sends: HashSet<String>,
@@ -151,6 +151,8 @@ impl Session {
             if raised {
                 *cursor = self.floor;
             }
+            let rev = *cursor;
+            *cursor = changes::cursor_of(rev, self.floor);
             let empty = accounts.is_empty()
                 && labels.is_empty()
                 && messages.is_empty()
@@ -162,7 +164,7 @@ impl Session {
                 .chain(labels.iter().map(|label| label.rev))
                 .chain(preferences.iter().map(|preference| preference.rev))
                 .max();
-            let (cursor, more) = (*cursor, *more);
+            let (cursor, more) = (rev, *more);
             sent_messages += messages.len();
             if (!empty || !self.caught_up || raised) && !self.send(batch).await {
                 return false;
