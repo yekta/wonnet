@@ -61,6 +61,7 @@ fun <T> BottomTabs(
     count: (T) -> Int,
     pick: (T) -> Unit,
     reorder: (List<String>) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var width by remember { mutableStateOf(0f) }
     var dragging by remember { mutableStateOf<String?>(null) }
@@ -72,7 +73,7 @@ fun <T> BottomTabs(
     val from = tabs.indexOfFirst { key(it) == dragging }
     val to = if (from < 0 || share == 0f) -1 else (from + (offset / share).roundToInt()).coerceIn(0, tabs.size - 1)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .rule(Edge.Top)
             .background(Tokens.background.color)

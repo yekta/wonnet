@@ -87,6 +87,7 @@ import app.wonnet.ui.Rule
 import app.wonnet.ui.Sheet
 import app.wonnet.ui.Spinner
 import app.wonnet.ui.StarButton
+import app.wonnet.ui.underToast
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -202,7 +203,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, 
                 }
             }
         }
-        CommandBar(store, listOf(thread), Modifier.align(Alignment.BottomCenter), reply = true)
+        CommandBar(store, listOf(thread), Modifier.align(Alignment.BottomCenter).underToast(), reply = true)
     }
     }
 }
