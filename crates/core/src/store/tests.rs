@@ -833,6 +833,11 @@ fn fill_and_time(messages_count: usize, accounts_count: usize) -> Vec<(&'static 
     timings.push(("person", time(&|| drop(store.person("p1@x.com", &now).unwrap()))));
     timings.push(("search, common word", time(&|| drop(store.search("budget", None, &now).unwrap()))));
     timings.push(("search, operators", time(&|| drop(store.search("from:p12 is:unread", None, &now).unwrap()))));
+    timings.push(("one account's search", time(&|| drop(store.search("budget", Some("a1"), &now).unwrap()))));
+    timings.push((
+        "one account's operators",
+        time(&|| drop(store.search("from:p12 is:unread", Some("a1"), &now).unwrap())),
+    ));
     let start = Instant::now();
     let ids: Vec<String> = (0..500).map(|index| format!("m{}", index * 10)).collect();
     store.apply_local("archive", &Op::Archive { ids }).unwrap();
