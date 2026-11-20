@@ -1486,7 +1486,8 @@ fn find(db: &Connection, query: &Query, account: Option<&str>, limit: usize) -> 
         conditions.push(format!("search MATCH {}", bind(text.clone().into(), &mut values)));
     }
     if let Some(account) = account {
-        conditions.push(format!("m.account_id = {}", bind(account.to_string().into(), &mut values)));
+        // `+` keeps SQLite off the account's index, which would run the FTS match per message.
+        conditions.push(format!("+m.account_id = {}", bind(account.to_string().into(), &mut values)));
     }
     if !query.includes_trash() {
         conditions.push("m.labels NOT LIKE '%\"trash\"%' AND m.labels NOT LIKE '%\"spam\"%'".into());
