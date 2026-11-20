@@ -168,7 +168,7 @@ struct MailboxScreen: View {
             store: store, rows: store.rows, editing: editing, checked: store.selection, selectable: true,
             current: store.besideList ? store.conversation?.id : nil, ready: store.listReady,
             loadingMore: store.loadingMore, headerHeight: ListHeader.shows(store) ? ListHeader.height : 0,
-            bottomInset: FloatingButton.side + Space.l * 2,
+            bottomInset: FloatingButton.side + Space.m * 2,
             refresh: store.checkMail, farDown: { farDown = $0 }, toTop: toTop,
             open: { thread in openThread(thread, path: $path, store: store) },
             header: { ListHeader().environment(store) }
@@ -181,7 +181,7 @@ struct MailboxScreen: View {
         .overlay(alignment: .top) { ToTop(shown: farDown) { toTop += 1 } }
         .overlay(alignment: .bottomTrailing) {
             if !editing {
-                FloatingButton(symbol: .squarePen, help: "Compose", action: store.newMessage).padding(Space.l)
+                FloatingButton(symbol: .squarePen, help: "Compose", action: store.newMessage).padding(Space.m)
             }
         }
         .overlay(alignment: .bottom) {
