@@ -111,6 +111,8 @@ async fn a_search_in_one_account_finds_only_its_mail(db: PgPool) {
     let found = search::run(&db, user, Some(accounts[1]), "invoice").await.unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(of(found[0]).await, accounts[1]);
+    let stranger = db::create_user(&db).await.unwrap();
+    assert!(search::run(&db, stranger, Some(accounts[1]), "invoice").await.unwrap().is_empty());
 }
 
 #[sqlx::test]

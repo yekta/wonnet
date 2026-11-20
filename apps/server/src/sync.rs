@@ -232,18 +232,20 @@ impl Session {
                 }
             },
             ClientMessage::Search { request, query, account } => {
-                let account = account.as_deref().map(Uuid::parse_str);
-                let message_ids = match account.transpose() {
-                    Ok(account) => {
-                        search::run(&self.state.db, self.user_id, account, &query).await.unwrap_or_else(|error| {
+                let (state, user_id, out) = (self.state.clone(), self.user_id, self.out.clone());
+                tokio::spawn(async move {
+                    let account = account.as_deref().map(Uuid::parse_str);
+                    let message_ids = match account.transpose() {
+                        Ok(account) => search::run(&state.db, user_id, account, &query).await.unwrap_or_else(|error| {
                             tracing::warn!("search failed: {error}");
                             Vec::new()
-                        })
-                    }
-                    Err(_) => Vec::new(),
-                };
-                let message_ids = message_ids.iter().map(Uuid::to_string).collect();
-                self.send(ServerMessage::SearchResults { request, message_ids }).await
+                        }),
+                        Err(_) => Vec::new(),
+                    };
+                    let message_ids = message_ids.iter().map(Uuid::to_string).collect();
+                    let _ = out.send(ServerMessage::SearchResults { request, message_ids }).await;
+                });
+                true
             }
             ClientMessage::Body { request, message_id } => {
                 let (state, user_id, out) = (self.state.clone(), self.user_id, self.out.clone());

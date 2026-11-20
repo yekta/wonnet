@@ -77,11 +77,17 @@ pub async fn run(db: &PgPool, user_id: Uuid, account: Option<Uuid>, text: &str) 
     if query == Query::default() {
         return Ok(Vec::new());
     }
-    let mut sql = QueryBuilder::<Postgres>::new("SELECT id FROM messages WHERE NOT deleted AND user_id = ");
-    sql.push_bind(user_id);
-    if let Some(account) = account {
-        sql.push(" AND account_id = ").push_bind(account);
-    }
+    let mut sql = QueryBuilder::<Postgres>::new("SELECT id FROM messages WHERE NOT deleted AND ");
+    match account {
+        // Owned through `accounts`, so the walk runs over the account's mail, not all of the user's.
+        Some(account) => sql
+            .push("account_id = (SELECT id FROM accounts WHERE id = ")
+            .push_bind(account)
+            .push(" AND user_id = ")
+            .push_bind(user_id)
+            .push(")"),
+        None => sql.push("user_id = ").push_bind(user_id),
+    };
     narrow(&mut sql, user_id, query);
     sql.push(" ORDER BY date DESC LIMIT ").push_bind(LIMIT);
     sql.build_query_scalar().fetch_all(db).await
