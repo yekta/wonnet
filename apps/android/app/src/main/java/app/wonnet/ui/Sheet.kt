@@ -28,11 +28,18 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -54,6 +61,35 @@ import app.wonnet.theme.shadow
 
 /** What floats over every sheet as over the screen: the toast. */
 val LocalSheetOverlay = compositionLocalOf<@Composable BoxScope.() -> Unit> { {} }
+
+/** The bars along the bottom of the page on screen, by how far up from the window's bottom each reaches. */
+class BottomBars {
+    private val reaches = mutableStateMapOf<Any, Dp>()
+
+    /** How far up the highest reaches. */
+    val height: Dp get() = reaches.values.maxOrNull() ?: 0.dp
+
+    fun set(bar: Any, reach: Dp?) {
+        if (reach == null) reaches.remove(bar) else reaches[bar] = reach
+    }
+}
+
+val LocalBottomBars = staticCompositionLocalOf { BottomBars() }
+
+/** A bar along the bottom of the page that the toast stays clear of, while it is `shown`. */
+@Composable
+fun Modifier.underToast(shown: Boolean = true): Modifier {
+    val bars = LocalBottomBars.current
+    val bar = remember { Any() }
+    val density = LocalDensity.current
+    DisposableEffect(bars, shown) { onDispose { bars.set(bar, null) } }
+    if (!shown) return this
+    return onGloballyPositioned { coordinates ->
+        val window = coordinates.findRootCoordinates()
+        val top = window.localPositionOf(coordinates, Offset.Zero).y
+        bars.set(bar, with(density) { (window.size.height - top).toDp() })
+    }
+}
 
 /**
  * What every sheet is made of: a bar with its title and a way to close it, and its content, over
@@ -110,7 +146,8 @@ fun Sheet(
                 Column(Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) { content() }
             }
         }
-        overlay()
+        // The page's bars are under the sheet.
+        CompositionLocalProvider(LocalBottomBars provides remember { BottomBars() }) { overlay() }
         }
     }
 }

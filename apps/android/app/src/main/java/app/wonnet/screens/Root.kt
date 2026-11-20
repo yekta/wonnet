@@ -61,6 +61,7 @@ import app.wonnet.ui.ActionButton
 import app.wonnet.ui.Banner
 import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.ConfirmDialog
+import app.wonnet.ui.LocalBottomBars
 import app.wonnet.ui.LocalSheetOverlay
 import app.wonnet.ui.Pressable
 import app.wonnet.ui.Spinner
@@ -78,7 +79,9 @@ val LocalSearchFocus = compositionLocalOf { 0 }
 fun Root(store: MailStore) {
     val notes: @Composable BoxScope.() -> Unit = {
         // Over the bars along the bottom, so it hides none of their buttons.
-        Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = Dims.barHeight + Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
+        val bars = LocalBottomBars.current.height
+        val place = if (bars > 0.dp) Modifier.padding(bottom = bars + Space.m) else Modifier.navigationBarsPadding().padding(bottom = Space.xl)
+        Column(Modifier.align(Alignment.BottomCenter).then(place), horizontalAlignment = Alignment.CenterHorizontally) {
             if (store.booted) UpdateBanner(store.updater)
             ToastView(store)
         }

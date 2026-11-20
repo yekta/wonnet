@@ -70,6 +70,7 @@ import app.wonnet.ui.SearchStyle
 import app.wonnet.ui.Spinner
 import app.wonnet.ui.TabStrip
 import app.wonnet.ui.rule
+import app.wonnet.ui.underToast
 import kotlinx.coroutines.launch
 
 /** Opens a thread as a page over the list; a draft opens in compose instead. */
@@ -85,7 +86,7 @@ private fun openThread(store: MailStore, thread: String, push: (Route) -> Unit) 
  * left selected. Search is a page of its own.
  */
 @Composable
-fun MailboxScreen(store: MailStore, list: LazyListState, openDrawer: () -> Unit, push: (Route) -> Unit) {
+fun MailboxScreen(store: MailStore, list: LazyListState, covered: Boolean, openDrawer: () -> Unit, push: (Route) -> Unit) {
     val editing = store.selection.isNotEmpty()
     var farDown by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -105,10 +106,10 @@ fun MailboxScreen(store: MailStore, list: LazyListState, openDrawer: () -> Unit,
             if (!editing) {
                 FloatingButton(Symbol.SquarePen, "Compose", Modifier.align(Alignment.BottomEnd).padding(Space.l), onClick = store::newMessage)
             } else {
-                CommandBar(store, store.selection.toList(), Modifier.align(Alignment.BottomCenter))
+                CommandBar(store, store.selection.toList(), Modifier.align(Alignment.BottomCenter).underToast(!covered))
             }
         }
-        if (!editing) MailboxTabBar(store) else Spacer(Modifier.navigationBarsPadding())
+        if (!editing) MailboxTabBar(store, Modifier.underToast(!covered)) else Spacer(Modifier.navigationBarsPadding())
     }
 }
 
@@ -204,11 +205,12 @@ fun ToTop(shown: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
 
 /** The mailboxes kept as tabs, along the bottom. One held and dragged moves; the order is the `tabs` preference, so every device shows the same. */
 @Composable
-fun MailboxTabBar(store: MailStore) {
+fun MailboxTabBar(store: MailStore, modifier: Modifier = Modifier) {
     val tabs = store.tabs
     if (tabs.isEmpty()) return Spacer(Modifier.navigationBarsPadding())
     BottomTabs(
         tabs, { it.id }, store.baseMailbox, { Symbol.named(it.symbol) }, { store.tabName(it, store.listAccount) }, { it.unread },
+        modifier = modifier,
         pick = { store.select(it.id) }, reorder = { ids -> store.setTabs(ids.map(store::savedTab)) },
     )
 }

@@ -110,7 +110,7 @@ fun Shell(store: MailStore) = BoxWithConstraints(Modifier.fillMaxSize()) {
     BackHandler(drawerOpen) { drawerOpen = false }
 
     val lists: @Composable () -> Unit = {
-        MailboxScreen(store, list, openDrawer = { drawerOpen = true }, push = push)
+        MailboxScreen(store, list, covered = path.isNotEmpty(), openDrawer = { drawerOpen = true }, push = push)
         AnimatedVisibility(Route.Search in path, Modifier.zIndex(1f), enter = slideInHorizontally(tween(220)) { it }, exit = slideOutHorizontally(tween(200)) { it }) {
             SearchScreen(store, back = { path = path.filter { it != Route.Search } }, push = push)
         }

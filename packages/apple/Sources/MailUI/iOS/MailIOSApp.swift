@@ -63,7 +63,7 @@ struct IOSRoot: View {
                     .ignoresSafeArea()
             }
         }
-        .overlay(alignment: .bottom) { ToastView() }
+        .toast()
         .sheet(item: $store.compose) { compose in ComposeView(compose: compose).environment(store) }
         .mailSheets(store)
     }
@@ -185,11 +185,11 @@ struct MailboxScreen: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if editing { CommandBar(threads: Array(store.selection)) }
+            if editing { CommandBar(threads: Array(store.selection)).underToast(path.isEmpty) }
         }
         .safeAreaInset(edge: .top, spacing: 0) { top }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !editing { MailboxTabBar() }
+            if !editing { MailboxTabBar().underToast(path.isEmpty) }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationTitle(store.baseMailboxName)
@@ -412,7 +412,7 @@ struct ThreadScreenIOS: View {
         .gesture(ThreadSwipe(canTurn: { store.sibling($0, of: thread) != nil }, moved: follow, released: release))
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true).underToast() }
         .task(id: store.sides) { await store.peekAround() }
         .onChange(of: store.conversation?.id) { _, open in
             guard let open else {

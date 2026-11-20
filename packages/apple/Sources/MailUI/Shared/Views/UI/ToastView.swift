@@ -4,9 +4,11 @@ import SwiftUI
 /// a message being sent starts with its mark: a ring that fills as the undo delay runs out, then a
 /// spinner in `process` while it goes, then a check in `success`. The mark and the action are
 /// capsules inset from the toast's edge by as much on every side, so their ends are concentric
-/// with the toast's.
+/// with the toast's. It floats `Space.m` over the bars along the bottom that are `underToast()`.
 struct ToastView: View {
     @Environment(MailStore.self) private var store
+    /// How far the bars along the bottom reach up from the safe area.
+    var bars: CGFloat = 0
 
     private static let height = Theme.searchHeight * Platform.scale
     private static let inset = Space.xs * Platform.scale
@@ -32,7 +34,7 @@ struct ToastView: View {
             .background(Capsule().fill(Tokens.popover.color).shadow(.md))
             .overlay(Capsule().strokeBorder(Tokens.borderPopover.color, lineWidth: Theme.hairline))
             .environment(\.onPopover, true)
-            .padding(.bottom, Space.xl)
+            .padding(.bottom, bars > 0 ? bars + Space.m : Space.xl)
             .task(id: toast.id) {
                 try? await Task.sleep(for: .seconds(toast.duration))
                 store.dismissToast(toast)
@@ -101,5 +103,26 @@ struct ToastView: View {
         }
 
         private static let line: CGFloat = 2.5
+    }
+}
+
+/// The tallest of the bars along the bottom of the page on screen.
+struct BottomBarsHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+extension View {
+    /// A bar along the bottom of the page that the toast stays clear of, while it is `shown`.
+    func underToast(_ shown: Bool = true) -> some View {
+        background(GeometryReader { Color.clear.preference(key: BottomBarsHeight.self, value: shown ? $0.size.height : 0) })
+    }
+
+    /// The toast, clear of the bars along the bottom.
+    func toast() -> some View {
+        overlayPreferenceValue(BottomBarsHeight.self, alignment: .bottom) { bars in ToastView(bars: bars) }
     }
 }
