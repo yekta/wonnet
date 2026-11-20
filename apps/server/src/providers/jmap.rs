@@ -157,7 +157,7 @@ impl Jmap {
     /// Never returns: a closed stream is opened again, and a server without one is waited on.
     pub async fn push(&self, wake: &Notify) -> Infallible {
         if self.session.event_source_url.is_empty() {
-            return std::future::pending().await;
+            match std::future::pending::<Infallible>().await {}
         }
         let mut backoff = Duration::from_secs(2);
         loop {
