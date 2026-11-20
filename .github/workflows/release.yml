@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   macos:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -266,7 +266,7 @@ jobs:
             --generate-notes release/*
 
   ios:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
