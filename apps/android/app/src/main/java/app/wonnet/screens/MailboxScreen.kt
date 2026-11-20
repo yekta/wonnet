@@ -97,14 +97,14 @@ fun MailboxScreen(store: MailStore, list: LazyListState, covered: Boolean, openD
         Box(Modifier.weight(1f)) {
             ThreadList(
                 store, store.rows, list, Modifier.fillMaxSize(), editing, store.selection, selectable = true, ready = store.listReady,
-                loadingMore = store.loadingMore, bottomInset = if (editing) Dims.barHeight + Space.l * 2 else Dims.floatingButton + Space.l * 2,
+                loadingMore = store.loadingMore, bottomInset = if (editing) Dims.barHeight + Space.l * 2 else Dims.floatingButton + Space.m * 2,
                 refresh = store::checkMail, farDown = { farDown = it },
                 header = if (ListHeader.shows(store)) ({ ListHeader(store) }) else null,
             ) { openThread(store, it, push) }
             if (store.rows.isEmpty() && store.listReady) EmptyList(store)
             ToTop(farDown, Modifier.align(Alignment.TopCenter)) { scope.launch { list.animateScrollToItem(0) } }
             if (!editing) {
-                FloatingButton(Symbol.SquarePen, "Compose", Modifier.align(Alignment.BottomEnd).padding(Space.l), onClick = store::newMessage)
+                FloatingButton(Symbol.SquarePen, "Compose", Modifier.align(Alignment.BottomEnd).padding(Space.m), onClick = store::newMessage)
             } else {
                 CommandBar(store, store.selection.toList(), Modifier.align(Alignment.BottomCenter).underToast(!covered))
             }
