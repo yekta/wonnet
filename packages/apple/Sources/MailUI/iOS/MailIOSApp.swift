@@ -96,6 +96,7 @@ struct IOSShell: View {
             HStack(spacing: 0) {
                 NavigationStack(path: $path) {
                     MailboxScreen(path: $path, openDrawer: { drawerOpen = true })
+                        .background(SwipeBack())
                         .navigationDestination(for: Route.self) { route in
                             switch route {
                             case .search: SearchScreen(path: $path)
@@ -411,6 +412,11 @@ struct ThreadScreenIOS: View {
         .background(Tokens.background.color)
         .gesture(ThreadSwipe(canTurn: { store.sibling($0, of: thread) != nil }, moved: follow, released: release))
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !beside { top }
+        }
+        // Our own bar, as the list's: the system's would slide out with the page on a swipe back.
+        .toolbar(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) { CommandBar(threads: [thread], reply: true).underToast() }
         .task(id: store.sides) { await store.peekAround() }
@@ -426,6 +432,16 @@ struct ThreadScreenIOS: View {
             guard !beside, !store.besideList, store.conversation?.id == thread else { return }
             store.close()
         }
+    }
+
+    /// Back, where the list's menu sits.
+    private var top: some View {
+        HeaderBar(inset: Space.s) {
+            IconButton(symbol: .arrowLeft, help: "Back", circled: false) { dismiss() }
+        } trailing: {
+            EmptyView()
+        }
+        .background(Tokens.background.color.ignoresSafeArea(edges: .top))
     }
 
     /// How far apart the pages are.
