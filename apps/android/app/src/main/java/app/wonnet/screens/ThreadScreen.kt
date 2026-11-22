@@ -136,7 +136,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, 
 
     Column(Modifier.fillMaxSize().background(Tokens.background.color)) {
     Box(Modifier.statusBarsPadding()) {
-        HeaderBar(leading = { dismiss?.let { IconButton(Symbol.ArrowLeft, "Back", circled = false, onClick = it) } })
+        HeaderBar(leading = { dismiss?.let { IconButton(Symbol.ArrowLeft, "Back", onClick = it) } })
     }
     BoxWithConstraints(Modifier.weight(1f)) {
         val width = with(density) { maxWidth.toPx() }
