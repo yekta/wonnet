@@ -437,7 +437,7 @@ struct ThreadScreenIOS: View {
     /// Back, where the list's menu sits.
     private var top: some View {
         HeaderBar(inset: Space.s) {
-            IconButton(symbol: .arrowLeft, help: "Back", circled: false) { dismiss() }
+            IconButton(symbol: .arrowLeft, help: "Back") { dismiss() }
         } trailing: {
             EmptyView()
         }
