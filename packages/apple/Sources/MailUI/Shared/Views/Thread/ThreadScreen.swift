@@ -10,6 +10,8 @@ import SwiftUI
 struct ThreadScreen: View {
     @Environment(MailStore.self) private var store
     let conversation: Conversation
+    /// Told whether it is scrolled off its top.
+    var scrolled: (Bool) -> Void = { _ in }
     /// A sender clicked, shown in the pane beside the thread; it outlives the thread.
     @State private var paneEmail: String?
     @State private var sheetEmail: String?
@@ -116,6 +118,9 @@ struct ThreadScreen: View {
                         store.noteThreadScroll(scrolled)
                     })
             }
+            #if os(iOS)
+            .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y + $0.contentInsets.top > 0.5 }) { _, down in scrolled(down) }
+            #endif
             .onAppear {
                 // The message it was left on, else the first unread one; where it was scrolled to,
                 // the top too, wins over both.
