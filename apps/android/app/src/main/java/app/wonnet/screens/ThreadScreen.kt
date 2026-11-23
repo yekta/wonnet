@@ -74,6 +74,7 @@ import app.wonnet.ui.AttachmentCard
 import app.wonnet.ui.Avatar
 import app.wonnet.ui.ButtonVariant
 import app.wonnet.ui.Chip
+import app.wonnet.ui.Edge
 import app.wonnet.ui.FoldedCount
 import app.wonnet.ui.HeaderBar
 import app.wonnet.ui.IconButton
@@ -87,6 +88,7 @@ import app.wonnet.ui.Rule
 import app.wonnet.ui.Sheet
 import app.wonnet.ui.Spinner
 import app.wonnet.ui.StarButton
+import app.wonnet.ui.rule
 import app.wonnet.ui.underToast
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
@@ -114,6 +116,8 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, 
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val current by rememberUpdatedState(thread)
+    /** The threads scrolled off their top: the bar has its hairline over them. */
+    val scrolled = remember { mutableStateMapOf<String, Boolean>() }
 
     LaunchedEffect(store.sides) { store.peekAround() }
     LaunchedEffect(opened) {
@@ -135,7 +139,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, 
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.background.color)) {
-    Box(Modifier.statusBarsPadding()) {
+    Box(Modifier.statusBarsPadding().then(if (scrolled[thread] == true) Modifier.rule(Edge.Bottom) else Modifier)) {
         HeaderBar(leading = { dismiss?.let { IconButton(Symbol.ArrowLeft, "Back", onClick = it) } })
     }
     BoxWithConstraints(Modifier.weight(1f)) {
@@ -197,7 +201,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, 
                         if (conversation == null) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                         } else {
-                            ThreadPage(store, conversation, live = side == 0 && open?.id == id, beside = dismiss == null)
+                            ThreadPage(store, conversation, live = side == 0 && open?.id == id, beside = dismiss == null) { scrolled[id] = it }
                         }
                     }
                 }
@@ -214,7 +218,7 @@ fun ThreadScreenStack(store: MailStore, opened: String, dismiss: (() -> Unit)?, 
  * them tucked into one line with their count, as Gmail does. It opens on the first unread message.
  */
 @Composable
-private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boolean, beside: Boolean) {
+private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boolean, beside: Boolean, scrolled: (Boolean) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -251,6 +255,9 @@ private fun ThreadPage(store: MailStore, conversation: Conversation, live: Boole
         val focused = store.focusedMessage ?: return@LaunchedEffect
         if (!live || focused == opensOn) return@LaunchedEffect
         places[focused]?.let { scroll.animateScrollTo(it.roundToInt()) }
+    }
+    LaunchedEffect(Unit) {
+        snapshotFlow { scroll.value > 0 }.collect(scrolled)
     }
     LaunchedEffect(live) {
         if (!live) return@LaunchedEffect

@@ -288,9 +288,12 @@ struct SearchScreen: View {
 
 extension View {
     /// A bar of ours at the top of a page: on the page's colour, up to the top of the screen, with
-    /// a hairline under it.
-    func topBar() -> some View {
-        background(Tokens.background.color.ignoresSafeArea(edges: .top)).rule(.bottom)
+    /// a hairline under it when `ruled`.
+    func topBar(ruled: Bool = true) -> some View {
+        background(Tokens.background.color.ignoresSafeArea(edges: .top))
+            .overlay(alignment: .bottom) {
+                if ruled { Rule() }
+            }
     }
 }
 
@@ -385,6 +388,8 @@ struct ThreadScreenIOS: View {
     /// How far a swipe has the pages aside.
     @State private var slide: CGFloat = 0
     @State private var width: CGFloat = 0
+    /// The threads scrolled off their top: the bar has its hairline over them.
+    @State private var scrolled: Set<String> = []
     private let beside: Bool
 
     init(thread: String, beside: Bool = false) {
@@ -397,7 +402,9 @@ struct ThreadScreenIOS: View {
             ForEach(pages, id: \.thread) { page in
                 Group {
                     if let conversation = conversation(page.thread) {
-                        ThreadScreen(conversation: conversation)
+                        ThreadScreen(conversation: conversation) { down in
+                            if down { scrolled.insert(page.thread) } else { scrolled.remove(page.thread) }
+                        }
                     } else {
                         Spinner().frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -441,7 +448,7 @@ struct ThreadScreenIOS: View {
         } trailing: {
             EmptyView()
         }
-        .background(Tokens.background.color.ignoresSafeArea(edges: .top))
+        .topBar(ruled: scrolled.contains(thread))
     }
 
     /// How far apart the pages are.
