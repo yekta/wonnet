@@ -93,6 +93,13 @@ pub struct Label {
     pub rev: i64,
 }
 
+/// Characters that draw nothing, like `&zwnj;` and the left-to-right mark.
+pub fn invisible(c: char) -> bool {
+    matches!(c, '\u{00AD}' | '\u{034F}' | '\u{115F}' | '\u{1160}' | '\u{17B4}' | '\u{17B5}' | '\u{180E}')
+        || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}')
+        || matches!(c, '\u{3164}' | '\u{FEFF}' | '\u{FFA0}')
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Address {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -102,7 +109,10 @@ pub struct Address {
 
 impl Address {
     pub fn new(name: Option<&str>, email: &str) -> Self {
-        let name = name.map(str::trim).filter(|name| !name.is_empty() && *name != email).map(String::from);
+        let name = name
+            .map(str::trim)
+            .filter(|name| !name.chars().all(|c| c.is_whitespace() || invisible(c)) && *name != email)
+            .map(String::from);
         Self { name, email: email.trim().to_lowercase() }
     }
 
@@ -279,5 +289,12 @@ mod tests {
         assert_eq!(Address::new(Some("Ada King Lovelace"), "ada@x.com").initials(), "AL");
         assert_eq!(Address::new(None, "grace.hopper@navy.mil").initials(), "GH");
         assert_eq!(Address::new(None, "x@y.z").initials(), "X");
+    }
+
+    #[test]
+    fn invisible_names_fall_back_to_the_address() {
+        assert_eq!(Address::new(Some("\u{200E}"), "ann@x.com").display(), "ann");
+        assert_eq!(Address::new(Some(" \u{200B}\u{FEFF} "), "ann@x.com").name, None);
+        assert_eq!(Address::new(Some("\u{200E}Ann"), "ann@x.com").display(), "\u{200E}Ann");
     }
 }

@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use mail_protocol::Address;
+use mail_protocol::{Address, invisible};
 
 /// The thread's senders in the order they first wrote, "me" for the user's own addresses, first
 /// names when there are several, with the number of messages when there is more than one.
@@ -81,11 +81,6 @@ pub fn participants(from: &[Address], to: &[Address], me: &HashSet<String>) -> (
 /// A snippet without the invisible words newsletters pad their preview with (`&#847;&zwnj;`
 /// and the like), which macOS stretches a line's spaces over.
 pub fn snippet(text: &str) -> String {
-    let invisible = |c: char| {
-        matches!(c, '\u{00AD}' | '\u{034F}' | '\u{115F}' | '\u{1160}' | '\u{17B4}' | '\u{17B5}' | '\u{180E}')
-            || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}')
-            || matches!(c, '\u{3164}' | '\u{FEFF}' | '\u{FFA0}')
-    };
     text.split_whitespace().filter(|word| !word.chars().all(invisible)).collect::<Vec<_>>().join(" ")
 }
 
